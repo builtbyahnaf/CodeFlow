@@ -6,7 +6,7 @@
 
 **Understand code through interactive, progressively detailed visualizations.**
 
-CodeFlow is a developer-focused code understanding tool designed to make complex programs easier to explore. It turns the relationships inside a codebase—functions, calls, control flow, and data movement—into a visual model you can navigate from the project level down to individual statements.
+CodeFlow is a developer-focused code understanding tool designed to make complex programs easier to explore, built by Muhammad Tahmid Ahnaf (@builtbyahnaf). It turns the relationships inside a codebase—functions, calls, control flow, and data movement—into a visual model you can navigate from the project level down to individual statements.
 
 <br/>
 
@@ -33,7 +33,7 @@ Instead of treating source code as a collection of isolated text files, CodeFlow
 
 The goal is not to replace the source code. It is to make the source code easier to understand.
 
-## What CodeFlow is — and isn't
+## What CodeFlow is and isn't
 
 | CodeFlow is | CodeFlow is not |
 |---|---|
