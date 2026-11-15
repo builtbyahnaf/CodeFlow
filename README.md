@@ -93,11 +93,11 @@ The intended source-navigation experience includes:
 
 The visualization helps you navigate and understand. The source remains authoritative.
 
-### 4. Project indexing — optional by design
+### 4. Project indexing is optional by design
 
 CodeFlow is planned to support optional project indexing.
 
-When enabled, it can build a local representation of functions, variables, and their relationships. This makes it possible to explore connections across files—for example, where a function is called, what it calls, and how a value moves through the project.
+When enabled, it can build a local representation of functions, variables, and their relationships. This makes it possible to explore connections across files, for example, where a function is called, what it calls, and how a value moves through the project.
 
 The intended indexing design includes:
 
@@ -110,7 +110,7 @@ Indexing should be a deliberate choice, not a requirement for opening a project.
 
 ### 5. Explanations without mandatory AI
 
-CodeFlow's foundation is intended to be based on deterministic program analysis—not on an AI model guessing what the code does.
+CodeFlow's foundation is intended to be based on deterministic program analysis, not on an AI model guessing what the code does.
 
 The long-term direction is to provide explanations at different levels of depth, from concise overviews to detailed walkthroughs. Optional local AI assistance and bring-your-own-key integrations may be considered in later stages, but AI is not a prerequisite for the core product.
 
