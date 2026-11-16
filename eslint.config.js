@@ -8,6 +8,7 @@ const nodeGlobals = {
   clearTimeout: 'readonly',
   process: 'readonly',
   queueMicrotask: 'readonly',
+  setImmediate: 'readonly',
   setInterval: 'readonly',
   setTimeout: 'readonly',
   structuredClone: 'readonly',
