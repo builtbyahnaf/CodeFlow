@@ -17,21 +17,26 @@ test('builds a graph from CSR without language knowledge', () => {
   const graph = buildGraph(createMockAnalysis());
 
   assert.equal(graph.language, 'mock');
-  assert.equal(graph.nodes.length, 6, 'five declared symbols plus one unresolved target');
-  assert.equal(graph.edges.length, 4);
+  assert.equal(graph.nodes.length, 13, 'eleven declared symbols plus two external targets');
+  assert.equal(graph.edges.length, 10);
 
   // Deterministic ordering by id.
   const ids = graph.nodes.map((node) => node.id);
   assert.deepEqual(ids, [...ids].sort());
 
-  const external = graph.nodes.find((node) => node.external);
-  assert.ok(external);
-  assert.equal(external.id, 'external:logger.info');
-  assert.equal(external.status, 'unresolved');
+  const external = graph.nodes.filter((node) => node.external);
+  assert.equal(external.length, 2);
+  assert.ok(external.some((node) => node.id === 'external:logger.info'));
+  assert.ok(external.every((node) => node.status === 'unresolved'));
 
   const unresolved = graph.edges.filter((edge) => edge.status === 'unresolved');
-  assert.equal(unresolved.length, 1);
-  assert.equal(unresolved[0].reasonCode, 'unknown_import_target');
+  assert.equal(unresolved.length, 2);
+  assert.ok(unresolved.some((edge) => edge.reasonCode === 'unknown_import_target'));
+
+  const statuses = new Set(graph.edges.map((edge) => edge.status));
+  for (const status of ['resolved', 'inferred', 'possible', 'unresolved', 'stale']) {
+    assert.ok(statuses.has(status), `mock must exercise the "${status}" status`);
+  }
 });
 
 test('degradations surface partial completeness and warnings but not info', () => {
@@ -53,7 +58,7 @@ test('edges without a declared source are skipped rather than invented', () => {
   });
 
   const graph = buildGraph(run);
-  assert.equal(graph.edges.length, 4);
+  assert.equal(graph.edges.length, 10);
   assert.ok(!graph.nodes.some((node) => node.id === 'symbol:does-not-exist'));
   assert.ok(
     graph.degradations.some((entry) => entry.includes('rel:ghost')),
@@ -88,7 +93,7 @@ test('DTO validates and carries positions for every node', () => {
 test('DTO never contains source text', () => {
   const json = JSON.stringify(toDto(buildGraph(createMockAnalysis())));
   for (const forbidden of [
-    '// Phase 0 mock fixture',
+    '// Phase 1 mock fixture',
     'class DBHandler {',
     'check_db_exists(path)',
   ]) {
