@@ -71,10 +71,7 @@ test('rejects a kind that is not in the allowlist for the direction', () => {
 
 test('rejects malformed kinds', () => {
   for (const kind of ['Graph.Load', 'graphload', 'graph..load', '', 'graph.load.']) {
-    const result = validateEnvelope(
-      { protocolVersion: 1, kind, payload: {} },
-      WEBVIEW_TO_HOST,
-    );
+    const result = validateEnvelope({ protocolVersion: 1, kind, payload: {} }, WEBVIEW_TO_HOST);
     assert.equal(result.ok, false, `expected "${kind}" to be rejected`);
     assert.equal(result.reason, 'invalid_kind');
   }

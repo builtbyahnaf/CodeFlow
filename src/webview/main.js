@@ -103,9 +103,7 @@ function showNodeDetails(nodeId, node) {
     list.append(...detailPair('origin', 'external target (not declared in the analysis)'));
   }
   if (node.range) {
-    list.append(
-      ...detailPair('lines', `${node.range.startLine + 1}–${node.range.endLine + 1}`),
-    );
+    list.append(...detailPair('lines', `${node.range.startLine + 1}–${node.range.endLine + 1}`));
     list.append(...detailPair('file', node.range.fileId));
   }
   if (node.badge) {
@@ -189,14 +187,6 @@ function handleGraph(payload) {
   setBanner(degradations.length > 0 ? degradations.join(' · ') : '', false);
 }
 
-bridge.on('graph.data', (payload) => {
-  handleGraph(payload);
-});
-
-bridge.on('capabilities.data', (payload) => {
-  showCapabilities(payload);
-});
-
 bridge.on('protocol.error', (payload) => {
   const code = typeof payload.code === 'string' ? payload.code : 'E_PROTOCOL';
   const message = typeof payload.message === 'string' ? payload.message : 'Unknown error.';
@@ -208,7 +198,10 @@ async function loadGraph() {
   setStatus('Loading graph…');
   setBanner('');
   try {
-    await bridge.request('graph.load', { demo: true });
+    // A request resolves with its correlated response. The response is not
+    // dispatched to `bridge.on`, so handle it here.
+    const response = await bridge.request('graph.load', { demo: true });
+    handleGraph(response.payload);
   } catch (error) {
     setBanner(`Could not load graph: ${error?.message ?? String(error)}`, true);
     setStatus('Load failed');
@@ -230,10 +223,11 @@ window.addEventListener('unhandledrejection', (event) => {
 
 async function boot() {
   try {
-    await bridge.request('webview.ready', {
+    const response = await bridge.request('webview.ready', {
       client: 'webview',
       protocolVersion: PROTOCOL_VERSION,
     });
+    showCapabilities(response.payload);
   } catch {
     // Capabilities are informational; graph load can still succeed.
   }

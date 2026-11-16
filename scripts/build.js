@@ -53,11 +53,32 @@ const webviewOptions = {
   target: ['chrome110'],
 };
 
-const ASSETS = [
-  { from: 'src/webview/styles.css', to: 'dist/webview/styles.css' },
-];
+const ASSETS = [{ from: 'src/webview/styles.css', to: 'dist/webview/styles.css' }];
 
 /**
+ * Copy webview assets and write the build report. Called once per finished
+ * build, never once per bundle, so the report is not written twice.
+ */
+async function finalizeBuild() {
+  await fs.mkdir(webviewDir, { recursive: true });
+  for (const asset of ASSETS) {
+    await fs.copyFile(path.join(root, asset.from), path.join(root, asset.to));
+  }
+  const report = await buildReport();
+  await fs.writeFile(
+    path.join(distDir, 'build-report.json'),
+    `${JSON.stringify(report, null, 2)}\n`,
+    'utf8',
+  );
+  console.log(
+    `[build] extension ${report.extensionBytes} bytes · webview ${report.webviewBytes} bytes · css ${report.stylesBytes} bytes${production ? ' · production' : ''}`,
+  );
+}
+
+/**
+ * In watch mode nothing else can run after a rebuild, so assets are refreshed
+ * from the extension-bundle hook.
+ *
  * @returns {import('esbuild').Plugin}
  */
 function assetPlugin() {
@@ -65,22 +86,9 @@ function assetPlugin() {
     name: 'codeflow-assets',
     setup(build) {
       build.onEnd(async (result) => {
-        if (result.errors.length > 0) {
-          return;
+        if (result.errors.length === 0) {
+          await finalizeBuild();
         }
-        await fs.mkdir(webviewDir, { recursive: true });
-        for (const asset of ASSETS) {
-          await fs.copyFile(path.join(root, asset.from), path.join(root, asset.to));
-        }
-        const report = await buildReport();
-        await fs.writeFile(
-          path.join(distDir, 'build-report.json'),
-          `${JSON.stringify(report, null, 2)}\n`,
-          'utf8',
-        );
-        console.log(
-          `[build] extension ${report.extensionBytes} bytes · webview ${report.webviewBytes} bytes · css ${report.stylesBytes} bytes${production ? ' · production' : ''}`,
-        );
       });
     },
   };
@@ -115,28 +123,20 @@ async function main() {
 
   const extensionContext = await esbuild.context({
     ...extensionOptions,
-    plugins: [assetPlugin()],
+    plugins: watch ? [assetPlugin()] : [],
   });
   const webviewContext = await esbuild.context(webviewOptions);
 
   if (watch) {
     await Promise.all([extensionContext.watch(), webviewContext.watch()]);
+    await finalizeBuild();
     console.log('[build] watching src/ — press Ctrl+C to stop');
     return;
   }
 
   await Promise.all([extensionContext.rebuild(), webviewContext.rebuild()]);
   await Promise.all([extensionContext.dispose(), webviewContext.dispose()]);
-  await fs.copyFile(path.join(root, 'src/webview/styles.css'), path.join(webviewDir, 'styles.css'));
-  const report = await buildReport();
-  await fs.writeFile(
-    path.join(distDir, 'build-report.json'),
-    `${JSON.stringify(report, null, 2)}\n`,
-    'utf8',
-  );
-  console.log(
-    `[build] extension ${report.extensionBytes} bytes · webview ${report.webviewBytes} bytes · css ${report.stylesBytes} bytes${production ? ' · production' : ''}`,
-  );
+  await finalizeBuild();
 }
 
 main().catch((error) => {

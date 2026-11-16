@@ -14,7 +14,10 @@ const base = {
 test('embeds the nonce in both the CSP and the script tag', () => {
   const html = renderPanelHtml(base);
   assert.match(html, /script-src 'nonce-nonce-abc123'/);
-  assert.match(html, /<script nonce="nonce-abc123" src="vscode-webview:\/\/abc\/main.js"><\/script>/);
+  assert.match(
+    html,
+    /<script nonce="nonce-abc123" src="vscode-webview:\/\/abc\/main.js"><\/script>/,
+  );
 });
 
 test('locks the CSP down to the webview source and the nonce', () => {

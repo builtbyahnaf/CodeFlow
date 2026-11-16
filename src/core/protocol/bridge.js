@@ -162,10 +162,14 @@ export function createBridge(options) {
       const timer = setTimeout(() => {
         pending.delete(requestId);
         reject(
-          new ProtocolError('E_TIMEOUT', `No response to "${kind}" within ${effectiveTimeout} ms.`, {
-            kind,
-            requestId,
-          }),
+          new ProtocolError(
+            'E_TIMEOUT',
+            `No response to "${kind}" within ${effectiveTimeout} ms.`,
+            {
+              kind,
+              requestId,
+            },
+          ),
         );
       }, effectiveTimeout);
       pending.set(requestId, { resolve, reject, timer });
@@ -219,7 +223,9 @@ export function createBridge(options) {
           pending.delete(requestId);
           const code = typeof payload.code === 'string' ? payload.code : 'E_PROTOCOL';
           const message =
-            typeof payload.message === 'string' ? payload.message : 'The other side reported an error.';
+            typeof payload.message === 'string'
+              ? payload.message
+              : 'The other side reported an error.';
           entry.reject(new ProtocolError(code, message, { requestId }));
         }
       }
@@ -251,7 +257,7 @@ export function createBridge(options) {
       const code =
         error instanceof ProtocolError
           ? error.code
-          : /** @type {{code?: string}} */ (error)?.code ?? 'E_PROTOCOL';
+          : (/** @type {{code?: string}} */ (error)?.code ?? 'E_PROTOCOL');
       logger.error('protocol.handler_failed', { kind, error: message });
       sendError(code, message, requestId);
       return { ok: false, code };

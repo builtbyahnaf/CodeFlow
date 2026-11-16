@@ -80,15 +80,23 @@ export function toDto(graph) {
     adapterId: graph.adapterId,
     completeness: graph.completeness,
     nodes,
-    edges: graph.edges.map((edge) => ({
-      id: edge.id,
-      from: edge.from,
-      to: edge.to,
-      type: edge.type,
-      status: edge.status,
-      label: edge.label,
-      reasonCode: edge.reasonCode,
-    })),
+    edges: graph.edges.map((edge) => {
+      /** @type {{id: string, from: string, to: string, type: string, status: string, label: string, reasonCode?: string}} */
+      const dtoEdge = {
+        id: edge.id,
+        from: edge.from,
+        to: edge.to,
+        type: edge.type,
+        status: edge.status,
+        label: edge.label,
+      };
+      // Omit the key entirely when absent so the DTO survives a JSON round-trip
+      // unchanged (JSON cannot represent `undefined`).
+      if (edge.reasonCode) {
+        dtoEdge.reasonCode = edge.reasonCode;
+      }
+      return dtoEdge;
+    }),
     diagnostics: graph.diagnostics,
     degradations: graph.degradations,
     extent: { width: layout.width, height: layout.height },

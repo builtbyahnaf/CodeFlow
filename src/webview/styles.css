@@ -13,8 +13,8 @@
   --cf-status-unresolved: var(--vscode-errorForeground, #f14c4c);
   --cf-status-stale: var(--vscode-disabledForeground, #8a8a8a);
 
-  --cf-font: var(--vscode-font-family, "Segoe UI", sans-serif);
-  --cf-mono: var(--vscode-editor-font-family, "Consolas", monospace);
+  --cf-font: var(--vscode-font-family, 'Segoe UI', sans-serif);
+  --cf-mono: var(--vscode-editor-font-family, 'Consolas', monospace);
 }
 
 * {
@@ -127,8 +127,8 @@ body {
   height: 100%;
   display: block;
   cursor: grab;
-  background:
-    radial-gradient(circle at 1px 1px, var(--cf-border) 1px, transparent 0) 0 0 / 24px 24px;
+  background: radial-gradient(circle at 1px 1px, var(--cf-border) 1px, transparent 0) 0 0 / 24px
+    24px;
 }
 
 .cf-graph:active {
@@ -211,7 +211,31 @@ body {
   height: 0;
   border-top-width: 2px;
   border-top-style: solid;
+  border-top-color: var(--cf-muted);
   display: inline-block;
+}
+
+.cf-swatch.cf-edge--resolved {
+  border-top-color: var(--cf-status-resolved);
+}
+
+.cf-swatch.cf-edge--inferred {
+  border-top-color: var(--cf-status-inferred);
+  border-top-style: dashed;
+}
+
+.cf-swatch.cf-edge--possible {
+  border-top-color: var(--cf-status-possible);
+  border-top-style: dotted;
+}
+
+.cf-swatch.cf-edge--unresolved {
+  border-top-color: var(--cf-status-unresolved);
+  border-top-style: dotted;
+}
+
+.cf-swatch.cf-edge--stale {
+  border-top-color: var(--cf-status-stale);
 }
 
 .cf-footer {
@@ -299,7 +323,7 @@ body {
 
 .cf-node--external .cf-node-box {
   fill: transparent;
-  stroke-style: dotted;
+  stroke-dasharray: 2 4;
 }
 
 .cf-node:focus .cf-node-box,

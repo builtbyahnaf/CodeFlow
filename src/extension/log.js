@@ -19,7 +19,9 @@ const LEVEL_RANK = { off: 0, error: 1, warn: 2, info: 3, debug: 4 };
  * @returns {LogLevel}
  */
 function coerceLevel(value) {
-  return typeof value === 'string' && value in LEVEL_RANK ? /** @type {LogLevel} */ (value) : 'warn';
+  return typeof value === 'string' && value in LEVEL_RANK
+    ? /** @type {LogLevel} */ (value)
+    : 'warn';
 }
 
 /**
@@ -36,15 +38,11 @@ function coerceLevel(value) {
  */
 export function createLogger(context) {
   const channel = vscode.window.createOutputChannel('CodeFlow');
-  let level = coerceLevel(
-    vscode.workspace.getConfiguration('codeflow').get('logLevel', 'warn'),
-  );
+  let level = coerceLevel(vscode.workspace.getConfiguration('codeflow').get('logLevel', 'warn'));
 
   const configListener = vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration('codeflow.logLevel')) {
-      level = coerceLevel(
-        vscode.workspace.getConfiguration('codeflow').get('logLevel', 'warn'),
-      );
+      level = coerceLevel(vscode.workspace.getConfiguration('codeflow').get('logLevel', 'warn'));
     }
   });
   context.subscriptions.push(channel, configListener);

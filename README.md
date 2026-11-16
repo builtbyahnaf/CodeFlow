@@ -35,12 +35,12 @@ The goal is not to replace the source code. It is to make the source code easier
 
 ## What CodeFlow is and isn't
 
-| CodeFlow is | CodeFlow is not |
-|---|---|
-| A code understanding and exploration tool | A debugging environment |
-| A visual way to explore program structure | A replacement for your editor |
-| A way to follow calls and data relationships | An automatic bug-fixing system |
-| A source-connected visualization layer | An AI chatbot wrapped around code |
+| CodeFlow is                                                | CodeFlow is not                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------- |
+| A code understanding and exploration tool                  | A debugging environment                                 |
+| A visual way to explore program structure                  | A replacement for your editor                           |
+| A way to follow calls and data relationships               | An automatic bug-fixing system                          |
+| A source-connected visualization layer                     | An AI chatbot wrapped around code                       |
 | A tool for both learning and professional code exploration | A promise that every program can be explained perfectly |
 
 CodeFlow may help developers notice suspicious paths, unexpected dependencies, or opportunities for improvement while exploring a program. Those observations are incidental benefits of understanding the code—not a promise of automated debugging or optimization.
@@ -120,12 +120,12 @@ The long-term direction is to provide explanations at different levels of depth,
 
 CodeFlow is being developed as a multi-language tool, but language support will be introduced deliberately.
 
-| Release target | Languages |
-|---|---|
-| **V1** | C++, JavaScript |
-| **V2** | C, Java |
-| **V3** | Python, Rust |
-| **Future** | Additional languages based on demand and engineering feasibility |
+| Release target | Languages                                                        |
+| -------------- | ---------------------------------------------------------------- |
+| **V1**         | C++, JavaScript                                                  |
+| **V2**         | C, Java                                                          |
+| **V3**         | Python, Rust                                                     |
+| **Future**     | Additional languages based on demand and engineering feasibility |
 
 The extension itself is being implemented in **JavaScript**.
 
@@ -159,7 +159,6 @@ CodeFlow is being shaped around a few non-negotiable principles.
 
 ---
 
-
 ## Current status
 
 <div align="center">
@@ -172,12 +171,18 @@ CodeFlow is currently a project under development. The product direction and int
 
 At this stage:
 
+- The engineering foundation (Phase 0) is implemented: the extension activates,
+  commands work, and a mock adapter feeds a validated host-to-webview protocol
+  and an SVG graph view.
+- The demo graph is synthetic and labelled as mock data. No real C++ or
+  JavaScript analysis exists yet.
 - V1 scope is focused on C++ and JavaScript.
-- The extension implementation is planned in JavaScript.
-- Core analysis and visualization foundations are the priority.
+- The extension implementation is JavaScript.
 - No stable public release is claimed here.
 
-Installation instructions, screenshots, release downloads, and usage examples will be added when they reflect a working, reproducible build.
+Installation instructions, screenshots, release downloads, and usage examples
+will be added when they reflect a working, reproducible build. Development setup
+is documented in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ---
 

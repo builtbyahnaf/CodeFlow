@@ -76,6 +76,8 @@ export function buildGraph(run) {
   /** @type {GraphEdge[]} */
   const edges = [];
   const edgeIds = new Set();
+  /** @type {string[]} */
+  const skippedRelationships = [];
 
   for (const relationship of run.relationships) {
     if (!nodes.has(relationship.to)) {
@@ -94,6 +96,7 @@ export function buildGraph(run) {
     if (!nodes.has(relationship.from)) {
       // An edge with no source symbol cannot be shown truthfully. Skip it and
       // record it as a degradation instead of inventing a node.
+      skippedRelationships.push(relationship.relationshipId);
       continue;
     }
 
@@ -118,6 +121,11 @@ export function buildGraph(run) {
   const degradations = [];
   if (run.completeness !== 'full') {
     degradations.push(`Analysis completeness: ${run.completeness}`);
+  }
+  for (const relationshipId of skippedRelationships) {
+    degradations.push(
+      `Skipped relationship ${relationshipId}: its source symbol was not declared.`,
+    );
   }
   for (const diagnostic of run.diagnostics) {
     if (diagnostic.severity !== 'info') {

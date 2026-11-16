@@ -40,7 +40,10 @@ test('rejects duplicate ids and malformed descriptors', () => {
 
   const fresh = createAdapterRegistry();
   assert.throws(() => fresh.register({ ...mockAdapter, id: '' }), /non-empty id/);
-  assert.throws(() => fresh.register({ ...mockAdapter, extensions: [] }), /at least one file extension/);
+  assert.throws(
+    () => fresh.register({ ...mockAdapter, extensions: [] }),
+    /at least one file extension/,
+  );
   assert.throws(() => fresh.register({ ...mockAdapter, extensions: ['.JS'] }), /lower case/);
   assert.throws(() => fresh.register({ ...mockAdapter, extensions: ['js'] }), /leading dot/);
   assert.throws(() => fresh.register({ ...mockAdapter, analyze: undefined }), /analyze function/);

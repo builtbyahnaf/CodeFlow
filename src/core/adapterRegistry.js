@@ -109,7 +109,11 @@ export function createAdapterRegistry() {
       throw new TypeError(`Adapter "${descriptor.id}" must declare at least one file extension.`);
     }
     for (const extension of descriptor.extensions) {
-      if (typeof extension !== 'string' || !extension.startsWith('.') || extension !== extension.toLowerCase()) {
+      if (
+        typeof extension !== 'string' ||
+        !extension.startsWith('.') ||
+        extension !== extension.toLowerCase()
+      ) {
         throw new TypeError(
           `Adapter "${descriptor.id}" has an invalid extension "${String(extension)}"; use lower case with a leading dot.`,
         );

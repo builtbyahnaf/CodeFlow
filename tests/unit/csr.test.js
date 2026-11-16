@@ -111,7 +111,9 @@ test('rejects negative positions and inverted ranges', () => {
   inverted.symbols[0].declaration.endLine = 5;
   const invertedResult = validateAnalysisRun(inverted);
   assert.equal(invertedResult.ok, false);
-  assert.ok(invertedResult.issues.some((issue) => /endLine must be >= startLine/.test(issue.message)));
+  assert.ok(
+    invertedResult.issues.some((issue) => /endLine must be >= startLine/.test(issue.message)),
+  );
 });
 
 test('rejects a range that references a file not in the run', () => {

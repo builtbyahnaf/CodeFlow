@@ -42,15 +42,21 @@ test('isAbsoluteAnywhere recognises Windows and POSIX absolute paths', () => {
 
 test('toWorkspaceRelative produces forward-slash relative paths', () => {
   assert.equal(toWorkspaceRelative('/ws', '/ws/src/a.js', 'linux'), 'src/a.js');
-  assert.equal(toWorkspaceRelative('C:\\ws', 'C:\\ws\\src\\deep\\a.cpp', 'win32'), 'src/deep/a.cpp');
+  assert.equal(
+    toWorkspaceRelative('C:\\ws', 'C:\\ws\\src\\deep\\a.cpp', 'win32'),
+    'src/deep/a.cpp',
+  );
 });
 
 test('toWorkspaceRelative refuses to escape the workspace', () => {
-  assert.throws(() => toWorkspaceRelative('/ws', '/etc/passwd', 'linux'), (error) => {
-    assert.ok(error instanceof PathSafetyError);
-    assert.equal(error.code, 'E_PATH');
-    return true;
-  });
+  assert.throws(
+    () => toWorkspaceRelative('/ws', '/etc/passwd', 'linux'),
+    (error) => {
+      assert.ok(error instanceof PathSafetyError);
+      assert.equal(error.code, 'E_PATH');
+      return true;
+    },
+  );
   assert.throws(() => toWorkspaceRelative('C:\\ws', 'D:\\x', 'win32'), PathSafetyError);
 });
 

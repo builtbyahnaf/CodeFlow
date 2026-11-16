@@ -10,13 +10,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-const SKIP_DIRECTORIES = new Set([
-  '.git',
-  '.vscode-test',
-  'node_modules',
-  'dist',
-  'context',
-]);
+const SKIP_DIRECTORIES = new Set(['.git', '.vscode-test', 'node_modules', 'dist', 'context']);
 
 const OFFENDING = ['.ts', '.tsx', '.mts', '.cts'];
 

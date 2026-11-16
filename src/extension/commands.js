@@ -31,10 +31,7 @@ export function registerCommands({ context, logger, panelManager, registry, exte
         const message = error instanceof Error ? error.message : String(error);
         const code = /** @type {{code?: string}} */ (error)?.code ?? 'E_INTERNAL';
         logger.error('command.failed', { commandId, code, error: message });
-        const choice = await vscode.window.showErrorMessage(
-          `CodeFlow: ${message}`,
-          'Show log',
-        );
+        const choice = await vscode.window.showErrorMessage(`CodeFlow: ${message}`, 'Show log');
         if (choice === 'Show log') {
           logger.show();
         }

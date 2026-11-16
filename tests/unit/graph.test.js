@@ -55,6 +55,10 @@ test('edges without a declared source are skipped rather than invented', () => {
   const graph = buildGraph(run);
   assert.equal(graph.edges.length, 4);
   assert.ok(!graph.nodes.some((node) => node.id === 'symbol:does-not-exist'));
+  assert.ok(
+    graph.degradations.some((entry) => entry.includes('rel:ghost')),
+    'a skipped relationship must be reported as a degradation',
+  );
 });
 
 test('graph construction is deterministic', () => {
@@ -83,7 +87,11 @@ test('DTO validates and carries positions for every node', () => {
 
 test('DTO never contains source text', () => {
   const json = JSON.stringify(toDto(buildGraph(createMockAnalysis())));
-  for (const forbidden of ['// Phase 0 mock fixture', 'class DBHandler {', 'check_db_exists(path)']) {
+  for (const forbidden of [
+    '// Phase 0 mock fixture',
+    'class DBHandler {',
+    'check_db_exists(path)',
+  ]) {
     assert.ok(!json.includes(forbidden), `DTO leaked source text: ${forbidden}`);
   }
 });
@@ -121,11 +129,7 @@ test('layout is deterministic and cycle-safe', () => {
   assert.deepEqual(first.positions, second.positions);
 
   const cyclic = {
-    nodes: [
-      { id: 'a' },
-      { id: 'b' },
-      { id: 'c' },
-    ],
+    nodes: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
     edges: [
       { from: 'a', to: 'b' },
       { from: 'b', to: 'a' },

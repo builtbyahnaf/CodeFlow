@@ -253,7 +253,10 @@ export function validateAnalysisRun(run) {
     symbolIds.add(symbolId);
 
     if (!SYMBOL_KINDS.includes(String(record.kind))) {
-      issues.push({ path: `${path}.kind`, message: `Unknown symbol kind "${String(record.kind)}".` });
+      issues.push({
+        path: `${path}.kind`,
+        message: `Unknown symbol kind "${String(record.kind)}".`,
+      });
     }
 
     const declaration = record.declaration;
@@ -393,7 +396,10 @@ function validateRange(range, path, fileById) {
   }
   for (const field of ['startLine', 'startColumn', 'endLine', 'endColumn']) {
     if (!Number.isInteger(record[field]) || Number(record[field]) < 0) {
-      issues.push({ path: `${path}.${field}`, message: `${field} must be a non-negative integer.` });
+      issues.push({
+        path: `${path}.${field}`,
+        message: `${field} must be a non-negative integer.`,
+      });
     }
   }
   if (
@@ -414,7 +420,11 @@ function validateRange(range, path, fileById) {
     issues.push({ path: `${path}.endColumn`, message: 'endColumn must be >= startColumn.' });
   }
   const file = typeof fileId === 'string' ? fileById.get(fileId) : undefined;
-  if (file && Number.isInteger(record.endLine) && Number(record.endLine) >= Number(file.lineCount)) {
+  if (
+    file &&
+    Number.isInteger(record.endLine) &&
+    Number(record.endLine) >= Number(file.lineCount)
+  ) {
     issues.push({
       path: `${path}.endLine`,
       message: `endLine ${String(record.endLine)} exceeds lineCount ${String(file.lineCount)}.`,

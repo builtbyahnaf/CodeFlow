@@ -71,7 +71,10 @@ export function createSvgRenderer({ svg, onSelect }) {
 
   function nodePoint(node, side) {
     if (side === 'out') {
-      return { x: node.position.x + node.position.width, y: node.position.y + node.position.height / 2 };
+      return {
+        x: node.position.x + node.position.width,
+        y: node.position.y + node.position.height / 2,
+      };
     }
     return { x: node.position.x, y: node.position.y + node.position.height / 2 };
   }
@@ -107,8 +110,7 @@ export function createSvgRenderer({ svg, onSelect }) {
     }
     for (const [, element] of edgeElements) {
       const active =
-        nodeId !== null &&
-        (element.dataset.from === nodeId || element.dataset.to === nodeId);
+        nodeId !== null && (element.dataset.from === nodeId || element.dataset.to === nodeId);
       element.classList.toggle('is-active', active);
     }
     if (selectedId && nodeElements.has(selectedId)) {
@@ -279,8 +281,10 @@ export function createSvgRenderer({ svg, onSelect }) {
       if (!forward) {
         continue;
       }
-      const primary = direction === 'ArrowRight' || direction === 'ArrowLeft' ? Math.abs(dx) : Math.abs(dy);
-      const secondary = direction === 'ArrowRight' || direction === 'ArrowLeft' ? Math.abs(dy) : Math.abs(dx);
+      const primary =
+        direction === 'ArrowRight' || direction === 'ArrowLeft' ? Math.abs(dx) : Math.abs(dy);
+      const secondary =
+        direction === 'ArrowRight' || direction === 'ArrowLeft' ? Math.abs(dy) : Math.abs(dx);
       const score = primary + secondary * 2.2;
       if (score < bestScore) {
         bestScore = score;

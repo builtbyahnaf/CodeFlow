@@ -58,7 +58,10 @@ test('errors, functions, and bigints are rendered safely', () => {
     name: 'Error',
     message: 'failed with token gh*_***',
   });
-  assert.equal(redactValue(() => {}), '[function]');
+  assert.equal(
+    redactValue(() => {}),
+    '[function]',
+  );
   assert.equal(redactValue(10n), '10n');
 });
 

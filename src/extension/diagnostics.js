@@ -21,9 +21,7 @@ import { PROTOCOL_VERSION } from '../core/protocol/envelope.js';
 export function buildDiagnosticsReport({ registry, panelManager, logger, extensionVersion }) {
   const versions = process.versions ?? {};
   const configuration = vscode.workspace.getConfiguration('codeflow');
-  const workspaceFolders = (vscode.workspace.workspaceFolders ?? []).map(
-    (folder) => folder.name,
-  );
+  const workspaceFolders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.name);
 
   const lines = [
     '# CodeFlow diagnostics',

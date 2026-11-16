@@ -24,7 +24,12 @@
   ],
   "main": "./dist/extension.cjs",
   "type": "module",
-  "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "CodeFlow activates in Restricted Mode and can render its built-in demonstration graph. It does not read workspace files or start processes in this phase."
+    }
+  },
   "contributes": {
     "commands": [
       {
@@ -71,6 +76,10 @@
       }
     }
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/builtbyahnaf/CodeFlow.git"
+  },
   "scripts": {
     "clean": "node scripts/clean.js",
     "build": "node scripts/build.js",
@@ -78,12 +87,14 @@
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,cjs,json,md,yml,css,html}\"",
     "format:check": "prettier --check \"**/*.{js,cjs,json,md,yml,css,html}\"",
-    "test": "node --test tests/unit",
-    "test:unit": "node --test tests/unit",
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
+    "check:vsix": "node scripts/checkVsixInstall.js",
     "package": "vsce package --no-dependencies --out codeflow.vsix",
+    "vscode:prepublish": "node scripts/build.js --production",
     "verify": "npm run lint && npm run check:no-typescript && npm run test:unit && npm run build && npm run check:licenses"
   },
   "devDependencies": {

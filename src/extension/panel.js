@@ -62,9 +62,7 @@ export function createPanelManager({ context, logger, registry, extensionVersion
     webview.options = {
       enableScripts: true,
       retainContextWhenHidden: Boolean(
-        vscode.workspace
-          .getConfiguration('codeflow')
-          .get('explorer.retainContext', false),
+        vscode.workspace.getConfiguration('codeflow').get('explorer.retainContext', false),
       ),
       localResourceRoots: [root],
     };

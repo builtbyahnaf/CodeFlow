@@ -192,7 +192,7 @@ export function createMockAnalysis() {
 
 export const MOCK_FILE_TEXT = [
   '// Phase 0 mock fixture — not real project source.',
-  "class DBHandler {",
+  'class DBHandler {',
   '  async check_db_exists(path) {',
   '    // ...',
   '  }',

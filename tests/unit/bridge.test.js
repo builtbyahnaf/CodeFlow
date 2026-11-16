@@ -155,8 +155,11 @@ test('the in-flight cap is enforced', async () => {
 test('handlers cannot respond with a kind from the wrong direction', async () => {
   const { host } = createLink();
 
-  assert.throws(() => host.respond('graph.load', {}), (error) => {
-    assert.equal(error.code, 'E_PROTOCOL');
-    return true;
-  });
+  assert.throws(
+    () => host.respond('graph.load', {}),
+    (error) => {
+      assert.equal(error.code, 'E_PROTOCOL');
+      return true;
+    },
+  );
 });

@@ -29,8 +29,6 @@ const ALLOWED = new Set([
   'Zlib',
 ]);
 
-const REVIEW = new Set(['UNKNOWN', 'SEE LICENSE IN LICENSE', 'UNLICENSED', 'CC-BY-NC-4.0']);
-
 /**
  * @param {string} expression
  * @returns {boolean}
@@ -48,7 +46,9 @@ function isAllowed(expression) {
   if (parts.length === 0) {
     return false;
   }
-  return hasAnd ? parts.every((part) => ALLOWED.has(part)) : parts.some((part) => ALLOWED.has(part));
+  return hasAnd
+    ? parts.every((part) => ALLOWED.has(part))
+    : parts.some((part) => ALLOWED.has(part));
 }
 
 const lockPath = path.join(process.cwd(), 'package-lock.json');
