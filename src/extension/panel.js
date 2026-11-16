@@ -11,11 +11,8 @@
 
 import * as vscode from 'vscode';
 import crypto from 'node:crypto';
-import { createBridge } from '../core/protocol/bridge.js';
 import { renderPanelHtml } from './panelTemplate.js';
-import { buildGraph } from '../core/graph/model.js';
-import { toDto } from '../core/graph/dto.js';
-import { DIRECTIONS, PROTOCOL_VERSION, createErrorPayload } from '../core/protocol/envelope.js';
+import { createPanelWire } from './panelWire.js';
 
 /**
  * @param {{
@@ -32,15 +29,25 @@ export function createPanelManager({ context, logger, registry, extensionVersion
   let bridge = null;
   let runCounter = 0;
 
+  const wire = createPanelWire({
+    logger,
+    registry,
+    extensionVersion,
+    loadRun: (path) => analyzeRun(path),
+  });
+
   function webviewRoot() {
     return vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview');
   }
 
   /**
    * @param {string} path
-   * @returns {{ok: true, dto: object} | {ok: false, code: string, message: string, issues?: unknown}}
+   * @returns {Promise<
+   *   {ok: true, run: import('../core/csr/entities.js').AnalysisRun} |
+   *   {ok: false, code: string, message: string, issues?: unknown}
+   * >}
    */
-  async function buildGraphDto(path) {
+  async function analyzeRun(path) {
     runCounter += 1;
     const runId = `run:${Date.now().toString(36)}-${runCounter}`;
     const analysis = await registry.analyze({ path, runId });
@@ -52,7 +59,7 @@ export function createPanelManager({ context, logger, registry, extensionVersion
         issues: analysis.issues,
       };
     }
-    return { ok: true, dto: toDto(buildGraph(analysis.run)) };
+    return { ok: true, run: analysis.run };
   }
 
   function applyHtml(target) {
@@ -75,92 +82,6 @@ export function createPanelManager({ context, logger, registry, extensionVersion
     });
   }
 
-  function wire(target) {
-    const loggerProxy = {
-      debug: /** @param {string} message @param {Record<string, unknown>} [fields] */ (
-        message,
-        fields,
-      ) => logger.debug(message, fields),
-      warn: (message, fields) => logger.warn(message, fields),
-      error: (message, fields) => logger.error(message, fields),
-    };
-
-    const nextBridge = createBridge({
-      post: (message) => {
-        void Promise.resolve(target.webview.postMessage(message)).then(
-          (delivered) => {
-            if (!delivered) {
-              logger.debug('panel.post_undelivered', { kind: message.kind });
-            }
-          },
-          (error) => {
-            logger.debug('panel.post_failed', {
-              kind: message.kind,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          },
-        );
-      },
-      inboundDirection: DIRECTIONS.WEBVIEW_TO_HOST,
-      logger: loggerProxy,
-    });
-
-    nextBridge.on('webview.ready', async (_payload, { requestId }) => {
-      nextBridge.respond(
-        'capabilities.data',
-        {
-          protocolVersion: PROTOCOL_VERSION,
-          extensionVersion,
-          adapters: registry.capabilityMatrix(),
-          capabilities: {
-            cfp: false,
-            callGraph: false,
-            dataFlow: false,
-            hoverPreview: false,
-            projectIndex: false,
-          },
-          demoMode: true,
-        },
-        requestId,
-      );
-    });
-
-    nextBridge.on('graph.load', async (_payload, { requestId }) => {
-      const result = await buildGraphDto('sample.mock');
-      if (!result.ok) {
-        nextBridge.respond(
-          'protocol.error',
-          createErrorPayload(result.code, result.message, { issues: result.issues }),
-          requestId,
-        );
-        return;
-      }
-      nextBridge.respond('graph.data', { dto: result.dto }, requestId);
-    });
-
-    nextBridge.on('node.select', async (payload) => {
-      logger.debug('panel.node_selected', { nodeId: payload.nodeId ?? null });
-    });
-
-    nextBridge.on('panel.ping', async (_payload, { requestId }) => {
-      nextBridge.respond('panel.pong', { at: Date.now() }, requestId);
-    });
-
-    target.onDidReceiveMessage((message) => {
-      void nextBridge.handleMessage(message);
-    });
-
-    target.onDidDispose(() => {
-      nextBridge.dispose('panel_disposed');
-      if (panel === target) {
-        panel = null;
-        bridge = null;
-      }
-    });
-
-    return nextBridge;
-  }
-
   function show() {
     if (panel) {
       panel.reveal(undefined, false);
@@ -179,6 +100,12 @@ export function createPanelManager({ context, logger, registry, extensionVersion
     panel = created;
     applyHtml(created);
     bridge = wire(created);
+    created.onDidDispose(() => {
+      if (panel === created) {
+        panel = null;
+        bridge = null;
+      }
+    });
     return created;
   }
 
