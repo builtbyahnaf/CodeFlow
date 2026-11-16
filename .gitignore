@@ -1,19 +1,2 @@
-# Local planning notes (Roadmap, phase plans) are not part of the product.
+/node_modules
 context/*
-
-# Build output and packaged artifacts
-dist/
-codeflow.vsix
-*.vsix
-*.map
-
-# Dependencies
-node_modules/
-
-# VS Code integration-test runtime
-.vscode-test/
-
-# Editor and OS noise
-.DS_Store
-Thumbs.db
-*.log

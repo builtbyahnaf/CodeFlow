@@ -87,8 +87,13 @@
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,cjs,json,md,yml,css,html}\"",
     "format:check": "prettier --check \"**/*.{js,cjs,json,md,yml,css,html}\"",
+<<<<<<< HEAD
     "test": "node --test \"tests/unit/*.test.js\"",
     "test:unit": "node --test \"tests/unit/*.test.js\"",
+=======
+    "test": "node --test tests/unit",
+    "test:unit": "node --test tests/unit/*.test.js",
+>>>>>>> 1ed645584de11b28079753b345c141f488087e2a
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
