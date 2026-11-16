@@ -151,3 +151,33 @@ test('messageSize is stable and total for unserializable values', () => {
   cyclic.self = cyclic;
   assert.equal(messageSize(cyclic), Number.POSITIVE_INFINITY);
 });
+
+test('Phase 1 CSR and query kinds are sendable in their own direction only', () => {
+  const webviewKinds = [
+    'csr.load',
+    'query.symbol',
+    'query.symbols',
+    'query.callers',
+    'query.callees',
+    'query.constructs',
+    'query.capabilities',
+  ];
+  const hostKinds = ['csr.data', 'query.data', 'analysis.progress'];
+
+  for (const kind of webviewKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+  for (const kind of hostKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+});
