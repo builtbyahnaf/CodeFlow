@@ -1,32 +1,39 @@
 /**
- * CSR entity factories and draft validation.
+ * CSR entity factories.
  *
- * DRAFT (Phase 0). The point of this module is to prove two things early:
- * 1. Entities can be created without any language knowledge.
- * 2. Invalid adapter output can be rejected with an actionable message.
+ * Every factory is total: it accepts a partial object and returns a complete,
+ * JSON-shaped entity with documented defaults. Factories never invent certainty:
+ * a relationship without a `reasonCode` stays without one so validation rejects
+ * it, and an omitted declaration becomes the zero range at the start of an
+ * unnamed file rather than a plausible-looking guess.
  *
- * Phase 1 replaces this with the normative model. Behaviour that Phase 1 keeps:
- * validation returns structured errors instead of throwing, and provenance is
- * mandatory for every symbol.
+ * Validation lives in `validate.js` and is re-exported here for callers that
+ * already import the entity module.
  */
 
-import {
-  COMPLETENESS_LEVELS,
-  CSR_VERSION,
-  DIAGNOSTIC_SEVERITIES,
-  REASON_CODES,
-  RELATIONSHIP_TYPES,
-  RESOLUTION_STATUSES,
-  SYMBOL_KINDS,
-} from './types.js';
+import { CSR_VERSION } from './types.js';
 
 /**
  * @typedef {Object} SourceRange
  * @property {string} fileId
- * @property {number} startLine   0-based
- * @property {number} startColumn 0-based, UTF-16 code units
- * @property {number} endLine     0-based, inclusive
- * @property {number} endColumn   0-based, exclusive
+ * @property {number} startLine
+ * @property {number} startColumn
+ * @property {number} endLine
+ * @property {number} endColumn
+ * @property {number} [startOffset]
+ * @property {number} [endOffset]
+ */
+
+/**
+ * @typedef {Object} FileRecord
+ * @property {string} fileId
+ * @property {string} path
+ * @property {string} language
+ * @property {string} contentHash
+ * @property {number} sizeBytes
+ * @property {number} lineCount
+ * @property {boolean} generated
+ * @property {Record<string, unknown>} [extensions]
  */
 
 /**
@@ -35,8 +42,23 @@ import {
  * @property {string} kind
  * @property {string} name
  * @property {string} qualifiedName
+ * @property {string} language
  * @property {SourceRange} declaration
+ * @property {string} [signature]
+ * @property {string} [parentId]
+ * @property {'public'|'protected'|'private'|'internal'|'package'|'local'|'unknown'} [visibility]
+ * @property {string} [disambiguator]
  * @property {Record<string, unknown>} [extensions]
+ */
+
+/**
+ * @typedef {Object} Evidence
+ * @property {'source_range'|'symbol'|'relationship'|'diagnostic'|'macro_expansion'|'import'|'heuristic'} kind
+ * @property {SourceRange} [range]
+ * @property {string} [symbolId]
+ * @property {string} [relationshipId]
+ * @property {string} [diagnosticCode]
+ * @property {string} [note]
  */
 
 /**
@@ -47,16 +69,33 @@ import {
  * @property {string} to
  * @property {'resolved'|'inferred'|'possible'|'unresolved'|'stale'} status
  * @property {string} [reasonCode]
+ * @property {Evidence[]} evidence
  * @property {SourceRange} [site]
+ * @property {Record<string, unknown>} [extensions]
  */
 
 /**
- * @typedef {Object} FileRecord
- * @property {string} fileId
- * @property {string} path       workspace-relative, forward slashes
- * @property {string} language
- * @property {string} contentHash
- * @property {number} lineCount
+ * @typedef {Object} ControlConstruct
+ * @property {string} constructId
+ * @property {string} kind
+ * @property {string} [parentId]
+ * @property {string[]} children
+ * @property {string} [symbolId]
+ * @property {SourceRange} [condition]
+ * @property {SourceRange} sourceRange
+ * @property {Record<string, unknown>} [extensions]
+ */
+
+/**
+ * @typedef {Object} DataFact
+ * @property {string} factId
+ * @property {string} kind
+ * @property {string} symbolId
+ * @property {SourceRange} at
+ * @property {string} [relatedSymbolId]
+ * @property {'resolved'|'inferred'|'possible'|'unresolved'|'stale'} status
+ * @property {string} [reasonCode]
+ * @property {Record<string, unknown>} [extensions]
  */
 
 /**
@@ -64,60 +103,134 @@ import {
  * @property {'info'|'warning'|'error'} severity
  * @property {string} code
  * @property {string} message
- * @property {string[]} [affects]
+ * @property {SourceRange} [sourceRange]
+ * @property {string[]} affects
+ */
+
+/**
+ * @typedef {Object} AnalysisScope
+ * @property {'file'|'workspace'} kind
+ * @property {string} [path]
  */
 
 /**
  * @typedef {Object} AnalysisRun
  * @property {string} runId
  * @property {string} adapterId
+ * @property {string} adapterVersion
  * @property {string} language
  * @property {string} csrVersion
+ * @property {string} [startedAt]
+ * @property {number} [durationMs]
+ * @property {AnalysisScope} scope
  * @property {'full'|'partial'|'syntactic_only'} completeness
  * @property {FileRecord[]} files
  * @property {SymbolRecord[]} symbols
  * @property {Relationship[]} relationships
+ * @property {ControlConstruct[]} controlConstructs
+ * @property {DataFact[]} dataFacts
  * @property {Diagnostic[]} diagnostics
+ * @property {Record<string, unknown>} [extensions]
  */
 
 /**
- * @param {Partial<SourceRange>} input
+ * @param {Partial<SourceRange>} [input]
  * @returns {SourceRange}
  */
-export function createSourceRange(input) {
-  return {
+export function createSourceRange(input = {}) {
+  /** @type {SourceRange} */
+  const range = {
     fileId: String(input.fileId ?? ''),
     startLine: Number(input.startLine ?? 0),
     startColumn: Number(input.startColumn ?? 0),
     endLine: Number(input.endLine ?? 0),
     endColumn: Number(input.endColumn ?? 0),
   };
+  if (Number.isInteger(input.startOffset)) {
+    range.startOffset = Number(input.startOffset);
+  }
+  if (Number.isInteger(input.endOffset)) {
+    range.endOffset = Number(input.endOffset);
+  }
+  return range;
 }
 
 /**
- * @param {Partial<SymbolRecord> & {declaration: SourceRange}} input
+ * @param {Partial<FileRecord>} [input]
+ * @returns {FileRecord}
+ */
+export function createFileRecord(input = {}) {
+  /** @type {FileRecord} */
+  const file = {
+    fileId: String(input.fileId ?? ''),
+    path: String(input.path ?? ''),
+    language: String(input.language ?? ''),
+    contentHash: String(input.contentHash ?? ''),
+    sizeBytes: Number(input.sizeBytes ?? 0),
+    lineCount: Number(input.lineCount ?? 1),
+    generated: input.generated === true,
+  };
+  if (isPlainObject(input.extensions)) {
+    file.extensions = cloneJson(input.extensions);
+  }
+  return file;
+}
+
+/**
+ * @param {Partial<SymbolRecord> & {declaration?: SourceRange}} [input]
  * @returns {SymbolRecord}
  */
-export function createSymbol(input) {
+export function createSymbol(input = {}) {
   /** @type {SymbolRecord} */
   const symbol = {
     symbolId: String(input.symbolId ?? ''),
     kind: String(input.kind ?? 'unknown'),
     name: String(input.name ?? ''),
     qualifiedName: String(input.qualifiedName ?? input.name ?? ''),
-    declaration: input.declaration,
+    language: String(input.language ?? ''),
+    declaration: createSourceRange(input.declaration),
   };
-  if (input.extensions) {
-    symbol.extensions = input.extensions;
+  if (typeof input.signature === 'string' && input.signature.length > 0) {
+    symbol.signature = input.signature;
+  }
+  if (typeof input.parentId === 'string' && input.parentId.length > 0) {
+    symbol.parentId = input.parentId;
+  }
+  if (typeof input.visibility === 'string' && input.visibility.length > 0) {
+    symbol.visibility = /** @type {SymbolRecord['visibility']} */ (input.visibility);
+  }
+  if (typeof input.disambiguator === 'string') {
+    symbol.disambiguator = input.disambiguator;
+  }
+  if (isPlainObject(input.extensions)) {
+    symbol.extensions = cloneJson(input.extensions);
   }
   return symbol;
 }
 
 /**
- * @param {Partial<Relationship>} input
+ * @param {Partial<Evidence>} [input]
+ * @returns {Evidence}
+ */
+export function createEvidence(input = {}) {
+  /** @type {Evidence} */
+  const evidence = { kind: /** @type {Evidence['kind']} */ (input.kind ?? 'source_range') };
+  if (input.range) {
+    evidence.range = createSourceRange(input.range);
+  }
+  for (const field of ['symbolId', 'relationshipId', 'diagnosticCode', 'note']) {
+    if (typeof input[field] === 'string' && input[field].length > 0) {
+      evidence[field] = input[field];
+    }
+  }
+  return evidence;
+}
+
+/**
+ * @param {Partial<Relationship>} [input]
  * @returns {Relationship}
  */
-export function createRelationship(input) {
+export function createRelationship(input = {}) {
   /** @type {Relationship} */
   const relationship = {
     relationshipId: String(input.relationshipId ?? ''),
@@ -125,310 +238,190 @@ export function createRelationship(input) {
     from: String(input.from ?? ''),
     to: String(input.to ?? ''),
     status: /** @type {Relationship['status']} */ (input.status ?? 'unresolved'),
+    evidence: Array.isArray(input.evidence) ? input.evidence.map(createEvidence) : [],
   };
-  if (input.reasonCode) {
+  if (typeof input.reasonCode === 'string' && input.reasonCode.length > 0) {
     relationship.reasonCode = input.reasonCode;
   }
   if (input.site) {
-    relationship.site = input.site;
+    relationship.site = createSourceRange(input.site);
+  }
+  if (isPlainObject(input.extensions)) {
+    relationship.extensions = cloneJson(input.extensions);
   }
   return relationship;
 }
 
 /**
- * @param {Partial<AnalysisRun>} input
+ * @param {Partial<ControlConstruct>} [input]
+ * @returns {ControlConstruct}
+ */
+export function createControlConstruct(input = {}) {
+  /** @type {ControlConstruct} */
+  const construct = {
+    constructId: String(input.constructId ?? ''),
+    kind: String(input.kind ?? 'unknown'),
+    children: Array.isArray(input.children) ? input.children.map(String) : [],
+    sourceRange: createSourceRange(input.sourceRange),
+  };
+  if (typeof input.parentId === 'string' && input.parentId.length > 0) {
+    construct.parentId = input.parentId;
+  }
+  if (typeof input.symbolId === 'string' && input.symbolId.length > 0) {
+    construct.symbolId = input.symbolId;
+  }
+  if (input.condition) {
+    construct.condition = createSourceRange(input.condition);
+  }
+  if (isPlainObject(input.extensions)) {
+    construct.extensions = cloneJson(input.extensions);
+  }
+  return construct;
+}
+
+/**
+ * @param {Partial<DataFact>} [input]
+ * @returns {DataFact}
+ */
+export function createDataFact(input = {}) {
+  /** @type {DataFact} */
+  const fact = {
+    factId: String(input.factId ?? ''),
+    kind: String(input.kind ?? 'use'),
+    symbolId: String(input.symbolId ?? ''),
+    at: createSourceRange(input.at),
+    status: /** @type {DataFact['status']} */ (input.status ?? 'resolved'),
+  };
+  if (typeof input.relatedSymbolId === 'string' && input.relatedSymbolId.length > 0) {
+    fact.relatedSymbolId = input.relatedSymbolId;
+  }
+  if (typeof input.reasonCode === 'string' && input.reasonCode.length > 0) {
+    fact.reasonCode = input.reasonCode;
+  }
+  if (isPlainObject(input.extensions)) {
+    fact.extensions = cloneJson(input.extensions);
+  }
+  return fact;
+}
+
+/**
+ * @param {Partial<Diagnostic>} [input]
+ * @returns {Diagnostic}
+ */
+export function createDiagnostic(input = {}) {
+  /** @type {Diagnostic} */
+  const diagnostic = {
+    severity: /** @type {Diagnostic['severity']} */ (input.severity ?? 'warning'),
+    code: String(input.code ?? ''),
+    message: String(input.message ?? ''),
+    affects: Array.isArray(input.affects) ? input.affects.map(String) : [],
+  };
+  if (input.sourceRange) {
+    diagnostic.sourceRange = createSourceRange(input.sourceRange);
+  }
+  return diagnostic;
+}
+
+/**
+ * @param {Partial<AnalysisRun>} [input]
  * @returns {AnalysisRun}
  */
-export function createAnalysisRun(input) {
-  return {
+export function createAnalysisRun(input = {}) {
+  /** @type {AnalysisRun} */
+  const run = {
     runId: String(input.runId ?? ''),
     adapterId: String(input.adapterId ?? ''),
+    adapterVersion: String(input.adapterVersion ?? 'unknown'),
     language: String(input.language ?? ''),
     csrVersion: String(input.csrVersion ?? CSR_VERSION),
+    scope: {
+      kind: input.scope?.kind === 'file' ? 'file' : 'workspace',
+    },
     completeness: /** @type {AnalysisRun['completeness']} */ (input.completeness ?? 'partial'),
-    files: Array.isArray(input.files) ? input.files : [],
-    symbols: Array.isArray(input.symbols) ? input.symbols : [],
-    relationships: Array.isArray(input.relationships) ? input.relationships : [],
-    diagnostics: Array.isArray(input.diagnostics) ? input.diagnostics : [],
+    files: Array.isArray(input.files) ? input.files.map(createFileRecord) : [],
+    symbols: Array.isArray(input.symbols) ? input.symbols.map(createSymbol) : [],
+    relationships: Array.isArray(input.relationships)
+      ? input.relationships.map(createRelationship)
+      : [],
+    controlConstructs: Array.isArray(input.controlConstructs)
+      ? input.controlConstructs.map(createControlConstruct)
+      : [],
+    dataFacts: Array.isArray(input.dataFacts) ? input.dataFacts.map(createDataFact) : [],
+    diagnostics: Array.isArray(input.diagnostics) ? input.diagnostics.map(createDiagnostic) : [],
   };
+  if (typeof input.scope?.path === 'string' && input.scope.path.length > 0) {
+    run.scope.path = input.scope.path;
+  }
+  if (typeof input.startedAt === 'string' && input.startedAt.length > 0) {
+    run.startedAt = input.startedAt;
+  }
+  if (Number.isFinite(input.durationMs)) {
+    run.durationMs = Number(input.durationMs);
+  }
+  if (isPlainObject(input.extensions)) {
+    run.extensions = cloneJson(input.extensions);
+  }
+  return run;
 }
 
 /**
- * @typedef {Object} ValidationIssue
- * @property {string} path
- * @property {string} message
+ * Build a degraded run from an adapter failure. The run is valid CSR with
+ * `completeness: 'partial'` and an error diagnostic, so consumers can render an
+ * honest empty state instead of crashing.
+ *
+ * @param {{runId: string, adapterId: string, adapterVersion?: string, language?: string, scope?: AnalysisScope, code: string, message: string, reasonCode?: string}} input
+ * @returns {AnalysisRun}
  */
+export function createDegradedRun(input) {
+  return createAnalysisRun({
+    runId: input.runId,
+    adapterId: input.adapterId,
+    adapterVersion: input.adapterVersion ?? 'unknown',
+    language: input.language ?? 'unknown',
+    scope: input.scope,
+    completeness: 'partial',
+    diagnostics: [
+      createDiagnostic({
+        severity: 'error',
+        code: input.code,
+        message: input.message,
+        affects: [],
+      }),
+    ],
+  });
+}
 
 /**
- * Validate an analysis run at the adapter boundary.
- *
- * Rules enforced in this draft:
- * - Required scalars are present.
- * - Enums are closed.
- * - Symbol IDs are unique and every symbol has a valid range inside a known file.
- * - Non-`resolved` relationships carry a reason code from the closed list.
- * - A `resolved` relationship must point at a declared symbol.
- *
- * @param {unknown} run
- * @returns {{ok: true, run: AnalysisRun} | {ok: false, issues: ValidationIssue[]}}
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
  */
-export function validateAnalysisRun(run) {
-  /** @type {ValidationIssue[]} */
-  const issues = [];
+export function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-  if (typeof run !== 'object' || run === null || Array.isArray(run)) {
-    return { ok: false, issues: [{ path: '$', message: 'Analysis run must be an object.' }] };
+/**
+ * JSON-shaped deep clone that preserves `undefined`-free structure. Faster and
+ * more predictable than `structuredClone` for plain CSR data.
+ *
+ * @template T
+ * @param {T} value
+ * @returns {T}
+ */
+export function cloneJson(value) {
+  if (Array.isArray(value)) {
+    return /** @type {T} */ (value.map((entry) => cloneJson(entry)));
   }
-
-  const candidate = /** @type {Record<string, unknown>} */ (run);
-
-  for (const field of ['runId', 'adapterId', 'language', 'csrVersion']) {
-    if (typeof candidate[field] !== 'string' || candidate[field].length === 0) {
-      issues.push({ path: field, message: `${field} must be a non-empty string.` });
-    }
-  }
-
-  if (!COMPLETENESS_LEVELS.includes(String(candidate.completeness))) {
-    issues.push({
-      path: 'completeness',
-      message: `completeness must be one of ${COMPLETENESS_LEVELS.join(', ')}.`,
-    });
-  }
-
-  const files = Array.isArray(candidate.files) ? candidate.files : [];
-  if (!Array.isArray(candidate.files)) {
-    issues.push({ path: 'files', message: 'files must be an array.' });
-  }
-
-  /** @type {Map<string, Record<string, unknown>>} */
-  const fileById = new Map();
-  files.forEach((file, index) => {
-    const path = `files[${index}]`;
-    if (typeof file !== 'object' || file === null) {
-      issues.push({ path, message: 'File record must be an object.' });
-      return;
-    }
-    const record = /** @type {Record<string, unknown>} */ (file);
-    const fileId = record.fileId;
-    if (typeof fileId !== 'string' || fileId.length === 0) {
-      issues.push({ path: `${path}.fileId`, message: 'fileId must be a non-empty string.' });
-      return;
-    }
-    if (fileById.has(fileId)) {
-      issues.push({ path: `${path}.fileId`, message: `Duplicate fileId "${fileId}".` });
-      return;
-    }
-    fileById.set(fileId, record);
-    if (typeof record.path !== 'string' || record.path.length === 0) {
-      issues.push({ path: `${path}.path`, message: 'path must be a non-empty string.' });
-    }
-    if (!Number.isInteger(record.lineCount) || Number(record.lineCount) < 1) {
-      issues.push({ path: `${path}.lineCount`, message: 'lineCount must be a positive integer.' });
-    }
-  });
-
-  const symbols = Array.isArray(candidate.symbols) ? candidate.symbols : [];
-  if (!Array.isArray(candidate.symbols)) {
-    issues.push({ path: 'symbols', message: 'symbols must be an array.' });
-  }
-
-  /** @type {Set<string>} */
-  const symbolIds = new Set();
-  symbols.forEach((symbol, index) => {
-    const path = `symbols[${index}]`;
-    if (typeof symbol !== 'object' || symbol === null) {
-      issues.push({ path, message: 'Symbol must be an object.' });
-      return;
-    }
-    const record = /** @type {Record<string, unknown>} */ (symbol);
-    const symbolId = record.symbolId;
-    if (typeof symbolId !== 'string' || symbolId.length === 0) {
-      issues.push({ path: `${path}.symbolId`, message: 'symbolId must be a non-empty string.' });
-      return;
-    }
-    if (symbolIds.has(symbolId)) {
-      issues.push({ path: `${path}.symbolId`, message: `Duplicate symbolId "${symbolId}".` });
-      return;
-    }
-    symbolIds.add(symbolId);
-
-    if (!SYMBOL_KINDS.includes(String(record.kind))) {
-      issues.push({
-        path: `${path}.kind`,
-        message: `Unknown symbol kind "${String(record.kind)}".`,
-      });
-    }
-
-    const declaration = record.declaration;
-    if (typeof declaration !== 'object' || declaration === null) {
-      issues.push({ path: `${path}.declaration`, message: 'declaration range is required.' });
-      return;
-    }
-    issues.push(...validateRange(declaration, `${path}.declaration`, fileById));
-  });
-
-  const relationships = Array.isArray(candidate.relationships) ? candidate.relationships : [];
-  if (!Array.isArray(candidate.relationships)) {
-    issues.push({ path: 'relationships', message: 'relationships must be an array.' });
-  }
-
-  /** @type {Set<string>} */
-  const relationshipIds = new Set();
-  relationships.forEach((relationship, index) => {
-    const path = `relationships[${index}]`;
-    if (typeof relationship !== 'object' || relationship === null) {
-      issues.push({ path, message: 'Relationship must be an object.' });
-      return;
-    }
-    const record = /** @type {Record<string, unknown>} */ (relationship);
-    const id = record.relationshipId;
-    if (typeof id !== 'string' || id.length === 0) {
-      issues.push({
-        path: `${path}.relationshipId`,
-        message: 'relationshipId must be a non-empty string.',
-      });
-      return;
-    }
-    if (relationshipIds.has(id)) {
-      issues.push({ path: `${path}.relationshipId`, message: `Duplicate relationshipId "${id}".` });
-      return;
-    }
-    relationshipIds.add(id);
-
-    if (!RELATIONSHIP_TYPES.includes(String(record.type))) {
-      issues.push({
-        path: `${path}.type`,
-        message: `Unknown relationship type "${String(record.type)}".`,
-      });
-    }
-
-    const status = String(record.status);
-    if (!RESOLUTION_STATUSES.includes(status)) {
-      issues.push({
-        path: `${path}.status`,
-        message: `status must be one of ${RESOLUTION_STATUSES.join(', ')}.`,
-      });
-    } else if (status !== 'resolved') {
-      const reason = record.reasonCode;
-      if (typeof reason !== 'string' || reason.length === 0) {
-        issues.push({
-          path: `${path}.reasonCode`,
-          message: `A "${status}" relationship must carry a reasonCode.`,
-        });
-      } else if (!REASON_CODES.includes(reason)) {
-        issues.push({
-          path: `${path}.reasonCode`,
-          message: `Unknown reasonCode "${reason}".`,
-        });
+  if (isPlainObject(value)) {
+    /** @type {Record<string, unknown>} */
+    const copy = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry !== undefined) {
+        copy[key] = cloneJson(entry);
       }
     }
-
-    const from = record.from;
-    const to = record.to;
-    if (typeof from !== 'string' || from.length === 0) {
-      issues.push({ path: `${path}.from`, message: 'from must be a symbolId.' });
-    } else if (!symbolIds.has(from)) {
-      issues.push({ path: `${path}.from`, message: `Unknown source symbol "${from}".` });
-    }
-    if (typeof to !== 'string' || to.length === 0) {
-      issues.push({ path: `${path}.to`, message: 'to must be a symbolId or external target id.' });
-    } else if (status === 'resolved' && !symbolIds.has(to)) {
-      issues.push({
-        path: `${path}.to`,
-        message: `A resolved relationship must target a declared symbol; "${to}" is unknown.`,
-      });
-    }
-
-    if (record.site !== undefined) {
-      if (typeof record.site !== 'object' || record.site === null) {
-        issues.push({ path: `${path}.site`, message: 'site must be a range object.' });
-      } else {
-        issues.push(...validateRange(record.site, `${path}.site`, fileById));
-      }
-    }
-  });
-
-  const diagnostics = Array.isArray(candidate.diagnostics) ? candidate.diagnostics : [];
-  if (!Array.isArray(candidate.diagnostics)) {
-    issues.push({ path: 'diagnostics', message: 'diagnostics must be an array.' });
+    return /** @type {T} */ (copy);
   }
-  diagnostics.forEach((diagnostic, index) => {
-    const path = `diagnostics[${index}]`;
-    if (typeof diagnostic !== 'object' || diagnostic === null) {
-      issues.push({ path, message: 'Diagnostic must be an object.' });
-      return;
-    }
-    const record = /** @type {Record<string, unknown>} */ (diagnostic);
-    if (!DIAGNOSTIC_SEVERITIES.includes(String(record.severity))) {
-      issues.push({ path: `${path}.severity`, message: 'Unknown diagnostic severity.' });
-    }
-    if (typeof record.code !== 'string' || record.code.length === 0) {
-      issues.push({ path: `${path}.code`, message: 'Diagnostic code is required.' });
-    }
-    if (typeof record.message !== 'string' || record.message.length === 0) {
-      issues.push({ path: `${path}.message`, message: 'Diagnostic message is required.' });
-    }
-  });
-
-  if (issues.length > 0) {
-    return { ok: false, issues };
-  }
-
-  return { ok: true, run: createAnalysisRun(candidate) };
+  return value;
 }
 
-/**
- * @param {unknown} range
- * @param {string} path
- * @param {Map<string, Record<string, unknown>>} fileById
- * @returns {ValidationIssue[]}
- */
-function validateRange(range, path, fileById) {
-  /** @type {ValidationIssue[]} */
-  const issues = [];
-  if (typeof range !== 'object' || range === null) {
-    return [{ path, message: 'Range must be an object.' }];
-  }
-  const record = /** @type {Record<string, unknown>} */ (range);
-  const fileId = record.fileId;
-  if (typeof fileId !== 'string' || !fileById.has(fileId)) {
-    issues.push({ path: `${path}.fileId`, message: `Unknown fileId "${String(fileId)}".` });
-  }
-  for (const field of ['startLine', 'startColumn', 'endLine', 'endColumn']) {
-    if (!Number.isInteger(record[field]) || Number(record[field]) < 0) {
-      issues.push({
-        path: `${path}.${field}`,
-        message: `${field} must be a non-negative integer.`,
-      });
-    }
-  }
-  if (
-    Number.isInteger(record.startLine) &&
-    Number.isInteger(record.endLine) &&
-    Number(record.endLine) < Number(record.startLine)
-  ) {
-    issues.push({ path: `${path}.endLine`, message: 'endLine must be >= startLine.' });
-  }
-  if (
-    Number.isInteger(record.startLine) &&
-    Number.isInteger(record.endLine) &&
-    Number(record.startLine) === Number(record.endLine) &&
-    Number.isInteger(record.startColumn) &&
-    Number.isInteger(record.endColumn) &&
-    Number(record.endColumn) < Number(record.startColumn)
-  ) {
-    issues.push({ path: `${path}.endColumn`, message: 'endColumn must be >= startColumn.' });
-  }
-  const file = typeof fileId === 'string' ? fileById.get(fileId) : undefined;
-  if (
-    file &&
-    Number.isInteger(record.endLine) &&
-    Number(record.endLine) >= Number(file.lineCount)
-  ) {
-    issues.push({
-      path: `${path}.endLine`,
-      message: `endLine ${String(record.endLine)} exceeds lineCount ${String(file.lineCount)}.`,
-    });
-  }
-  return issues;
-}
+export { validateAnalysisRun } from './validate.js';
