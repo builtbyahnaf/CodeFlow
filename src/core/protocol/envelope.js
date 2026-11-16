@@ -23,14 +23,24 @@ export const REQUEST_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 export const WEBVIEW_TO_HOST = Object.freeze([
   'webview.ready',
   'graph.load',
+  'csr.load',
   'node.select',
   'panel.ping',
+  'query.symbol',
+  'query.symbols',
+  'query.callers',
+  'query.callees',
+  'query.constructs',
+  'query.capabilities',
 ]);
 
 /** Kinds the host may send to the webview. */
 export const HOST_TO_WEBVIEW = Object.freeze([
   'graph.data',
   'capabilities.data',
+  'csr.data',
+  'query.data',
+  'analysis.progress',
   'protocol.error',
   'protocol.ack',
   'panel.pong',
