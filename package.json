@@ -1,0 +1,97 @@
+{
+  "name": "codeflow",
+  "displayName": "CodeFlow",
+  "description": "Understand unfamiliar C++ and JavaScript code through progressive, source-linked visualization.",
+  "version": "0.0.1",
+  "publisher": "builtbyahnaf",
+  "license": "GPL-3.0-only",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=20.0.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "code understanding",
+    "control flow",
+    "call graph",
+    "visualization",
+    "cpp",
+    "javascript"
+  ],
+  "main": "./dist/extension.cjs",
+  "type": "module",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeflow.openExplorer",
+        "title": "Open Explorer",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.showDiagnostics",
+        "title": "Show Diagnostics",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.showLog",
+        "title": "Show Log",
+        "category": "CodeFlow"
+      }
+    ],
+    "configuration": {
+      "title": "CodeFlow",
+      "properties": {
+        "codeflow.logLevel": {
+          "type": "string",
+          "enum": [
+            "off",
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "default": "warn",
+          "description": "Verbosity of the CodeFlow output channel. Debug adds timings and protocol traces but never source text."
+        },
+        "codeflow.protocol.traceMessages": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log webview protocol message kinds and sizes at debug level. Payload contents are never logged."
+        },
+        "codeflow.explorer.retainContext": {
+          "type": "boolean",
+          "default": false,
+          "description": "Keep the CodeFlow webview alive when hidden. Disabled by default to reduce memory use; re-rendering is cheap."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node scripts/clean.js",
+    "build": "node scripts/build.js",
+    "watch": "node scripts/build.js --watch",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{js,cjs,json,md,yml,css,html}\"",
+    "format:check": "prettier --check \"**/*.{js,cjs,json,md,yml,css,html}\"",
+    "test": "node --test tests/unit",
+    "test:unit": "node --test tests/unit",
+    "test:integration": "node tests/integration/runTest.js",
+    "check:licenses": "node scripts/checkLicenses.js",
+    "check:no-typescript": "node scripts/checkNoTypeScript.js",
+    "package": "vsce package --no-dependencies --out codeflow.vsix",
+    "verify": "npm run lint && npm run check:no-typescript && npm run test:unit && npm run build && npm run check:licenses"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.13.0",
+    "prettier": "^3.3.3"
+  }
+}

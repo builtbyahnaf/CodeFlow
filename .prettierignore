@@ -1,0 +1,6 @@
+dist/
+node_modules/
+.vscode-test/
+context/
+codeflow.vsix
+package-lock.json

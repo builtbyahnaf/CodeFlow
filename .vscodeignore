@@ -1,0 +1,17 @@
+.vscode/**
+.github/**
+.vscode-test/**
+node_modules/**
+src/**
+tests/**
+scripts/**
+docs/**
+context/**
+eslint.config.js
+.prettierrc.json
+.prettierignore
+.gitignore
+package-lock.json
+codeflow.vsix
+*.vsix
+**/*.map
