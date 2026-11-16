@@ -1,0 +1,330 @@
+:root {
+  --cf-bg: var(--vscode-editor-background, #1e1e1e);
+  --cf-fg: var(--vscode-editor-foreground, #cccccc);
+  --cf-muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --cf-border: var(--vscode-panel-border, #3c3c3c);
+  --cf-surface: var(--vscode-sideBar-background, #252526);
+  --cf-accent: var(--vscode-focusBorder, #007fd4);
+  --cf-selection: var(--vscode-editor-selectionBackground, #264f78);
+
+  --cf-status-resolved: var(--vscode-testing-iconPassed, #3fb950);
+  --cf-status-inferred: var(--vscode-charts-blue, #4aa3ff);
+  --cf-status-possible: var(--vscode-charts-yellow, #d7ba7d);
+  --cf-status-unresolved: var(--vscode-errorForeground, #f14c4c);
+  --cf-status-stale: var(--vscode-disabledForeground, #8a8a8a);
+
+  --cf-font: var(--vscode-font-family, "Segoe UI", sans-serif);
+  --cf-mono: var(--vscode-editor-font-family, "Consolas", monospace);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--cf-bg);
+  color: var(--cf-fg);
+  font-family: var(--cf-font);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+body {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  height: 100vh;
+}
+
+.cf-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--cf-surface);
+}
+
+.cf-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cf-mark {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--cf-accent);
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.cf-meta {
+  color: var(--cf-muted);
+  font-size: 12px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cf-button {
+  background: var(--vscode-button-secondaryBackground, #3a3d41);
+  color: var(--vscode-button-secondaryForeground, #ffffff);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cf-button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+.cf-button:focus-visible {
+  outline: 1px solid var(--cf-accent);
+  outline-offset: 2px;
+}
+
+.cf-banner {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--vscode-inputValidation-warningBackground, #352a05);
+  color: var(--vscode-inputValidation-warningForeground, #f0e6c8);
+  font-size: 12px;
+}
+
+.cf-banner.is-error {
+  background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+  color: var(--vscode-inputValidation-errorForeground, #f5d6d6);
+}
+
+.cf-main {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  min-height: 0;
+}
+
+.cf-canvas-wrap {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cf-graph {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  background:
+    radial-gradient(circle at 1px 1px, var(--cf-border) 1px, transparent 0) 0 0 / 24px 24px;
+}
+
+.cf-graph:active {
+  cursor: grabbing;
+}
+
+.cf-graph:focus-visible {
+  outline: 2px solid var(--cf-accent);
+  outline-offset: -2px;
+}
+
+.cf-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cf-muted);
+  pointer-events: none;
+}
+
+.cf-detail {
+  border-left: 1px solid var(--cf-border);
+  background: var(--cf-surface);
+  padding: 12px;
+  overflow: auto;
+}
+
+.cf-detail-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cf-muted);
+  margin: 12px 0 8px;
+}
+
+.cf-detail-title:first-child {
+  margin-top: 0;
+}
+
+.cf-detail-body dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.cf-detail-body dt {
+  color: var(--cf-muted);
+}
+
+.cf-detail-body dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--cf-mono);
+}
+
+.cf-muted {
+  color: var(--cf-muted);
+}
+
+.cf-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.cf-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-swatch {
+  width: 18px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+  display: inline-block;
+}
+
+.cf-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--cf-border);
+  color: var(--cf-muted);
+  font-size: 11px;
+  background: var(--cf-surface);
+}
+
+/* SVG graph */
+
+.cf-edge {
+  fill: none;
+  stroke-width: 1.6;
+  stroke: var(--cf-muted);
+}
+
+.cf-edge--resolved {
+  stroke: var(--cf-status-resolved);
+}
+
+.cf-edge--inferred {
+  stroke: var(--cf-status-inferred);
+  stroke-dasharray: 8 4;
+}
+
+.cf-edge--possible {
+  stroke: var(--cf-status-possible);
+  stroke-dasharray: 3 3;
+}
+
+.cf-edge--unresolved {
+  stroke: var(--cf-status-unresolved);
+  stroke-dasharray: 2 5;
+}
+
+.cf-edge--stale {
+  stroke: var(--cf-status-stale);
+  stroke-dasharray: 1 4;
+}
+
+.cf-edge.is-active {
+  stroke-width: 2.6;
+}
+
+.cf-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.cf-node-box {
+  fill: var(--cf-bg);
+  stroke: var(--cf-border);
+  stroke-width: 1.4;
+  rx: 6;
+}
+
+.cf-node--resolved .cf-node-box {
+  stroke: var(--cf-status-resolved);
+}
+
+.cf-node--inferred .cf-node-box {
+  stroke: var(--cf-status-inferred);
+  stroke-dasharray: 8 4;
+}
+
+.cf-node--possible .cf-node-box {
+  stroke: var(--cf-status-possible);
+  stroke-dasharray: 3 3;
+}
+
+.cf-node--unresolved .cf-node-box {
+  stroke: var(--cf-status-unresolved);
+  stroke-dasharray: 2 5;
+}
+
+.cf-node--stale .cf-node-box {
+  stroke: var(--cf-status-stale);
+  stroke-dasharray: 1 4;
+}
+
+.cf-node--external .cf-node-box {
+  fill: transparent;
+  stroke-style: dotted;
+}
+
+.cf-node:focus .cf-node-box,
+.cf-node.is-selected .cf-node-box {
+  stroke-width: 2.6;
+  stroke: var(--cf-accent);
+}
+
+.cf-node-label {
+  fill: var(--cf-fg);
+  font-family: var(--cf-font);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.cf-node-kind {
+  fill: var(--cf-muted);
+  font-family: var(--cf-font);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.cf-node-badge {
+  fill: var(--cf-status-unresolved);
+  font-family: var(--cf-font);
+  font-size: 9px;
+  pointer-events: none;
+}

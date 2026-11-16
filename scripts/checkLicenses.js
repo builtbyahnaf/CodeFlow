@@ -29,8 +29,6 @@ const ALLOWED = new Set([
   'Zlib',
 ]);
 
-const REVIEW = new Set(['UNKNOWN', 'SEE LICENSE IN LICENSE', 'UNLICENSED', 'CC-BY-NC-4.0']);
-
 /**
  * @param {string} expression
  * @returns {boolean}

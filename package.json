@@ -79,7 +79,7 @@
     "format": "prettier --write \"**/*.{js,cjs,json,md,yml,css,html}\"",
     "format:check": "prettier --check \"**/*.{js,cjs,json,md,yml,css,html}\"",
     "test": "node --test tests/unit",
-    "test:unit": "node --test tests/unit",
+    "test:unit": "node --test tests/unit/*.test.js",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",

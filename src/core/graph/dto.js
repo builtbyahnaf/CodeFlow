@@ -87,7 +87,7 @@ export function toDto(graph) {
       type: edge.type,
       status: edge.status,
       label: edge.label,
-      reasonCode: edge.reasonCode,
+      reasonCode: edge.reasonCode ?? null,
     })),
     diagnostics: graph.diagnostics,
     degradations: graph.degradations,
