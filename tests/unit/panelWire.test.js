@@ -58,7 +58,9 @@ function createFakePanel() {
     async request(kind, payload = {}, requestId) {
       const id = requestId ?? `req-${(this.sequence = (this.sequence ?? 0) + 1)}`;
       await this.receive(createEnvelope(kind, payload, id));
-      return posted.find((message) => message.requestId === id && message.kind !== 'protocol.error');
+      return posted.find(
+        (message) => message.requestId === id && message.kind !== 'protocol.error',
+      );
     },
   };
 }
@@ -85,7 +87,9 @@ function createHarness(
       error() {},
     },
     registry: {
-      capabilityMatrix: () => [{ id: 'mock', languages: ['mock'], capabilities: { ...capabilities } }],
+      capabilityMatrix: () => [
+        { id: 'mock', languages: ['mock'], capabilities: { ...capabilities } },
+      ],
       query: (run) => createQueryLayer(run, { capabilities }),
     },
     extensionVersion: '0.0.1',

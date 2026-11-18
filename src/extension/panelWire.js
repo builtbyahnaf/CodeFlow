@@ -15,13 +15,14 @@ import { createBridge } from '../core/protocol/bridge.js';
 import { DIRECTIONS, PROTOCOL_VERSION, createErrorPayload } from '../core/protocol/envelope.js';
 import { buildGraph } from '../core/graph/model.js';
 import { toDto } from '../core/graph/dto.js';
-import { createQueryLayer } from '../core/csr/query.js';
 import { hashRun } from '../core/csr/serialize.js';
+
+/** @typedef {ReturnType<typeof import('../core/csr/query.js').createQueryLayer>} QueryLayer */
 
 /**
  * @typedef {Object} WireOptions
  * @property {{debug: Function, warn: Function, error: Function}} logger
- * @property {{capabilityMatrix: () => unknown[], query: (run: object) => ReturnType<typeof createQueryLayer>}} registry
+ * @property {{capabilityMatrix: () => unknown[], query: (run: object) => QueryLayer}} registry
  * @property {string} extensionVersion
  * @property {(path: string) => Promise<
  *   {ok: true, run: import('../core/csr/entities.js').AnalysisRun} |
@@ -67,13 +68,13 @@ export function createPanelWire({ logger, registry, extensionVersion, loadRun })
       logger: loggerProxy,
     });
 
-    /** @type {{path: string, run: import('../core/csr/entities.js').AnalysisRun, query: ReturnType<typeof createQueryLayer>, hash: string} | null} */
+    /** @type {{path: string, run: import('../core/csr/entities.js').AnalysisRun, query: QueryLayer, hash: string} | null} */
     let current = null;
 
     /**
      * @param {string} [path]
      * @returns {Promise<
-     *   {ok: true, run: import('../core/csr/entities.js').AnalysisRun, query: ReturnType<typeof createQueryLayer>} |
+     *   {ok: true, run: import('../core/csr/entities.js').AnalysisRun, query: QueryLayer} |
      *   {ok: false, code: string, message: string, issues?: unknown}
      * >}
      */
@@ -153,7 +154,7 @@ export function createPanelWire({ logger, registry, extensionVersion, loadRun })
      * carried in `query.data`, not as a transport error.
      *
      * @param {string} kind
-     * @param {(payload: Record<string, unknown>, query: ReturnType<typeof createQueryLayer>) => {ok: true, value: unknown} | {ok: false, code: string, message: string}} run
+     * @param {(payload: Record<string, unknown>, query: QueryLayer) => {ok: true, value: unknown} | {ok: false, code: string, message: string}} run
      */
     function queryHandler(kind, run) {
       bridge.on(kind, async (payload, { requestId }) => {
