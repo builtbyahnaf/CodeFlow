@@ -73,26 +73,20 @@ export async function runConformanceSuite(options) {
   // C-01 — shape ---------------------------------------------------------------
   const registry = createAdapterRegistry();
   registry.register(adapter);
-  const analyzed = await registry.analyze(
-    { path: fixturePath, runId },
-    { mode: 'strict' },
-  );
+  const analyzed = await registry.analyze({ path: fixturePath, runId }, { mode: 'strict' });
   record(
     'C-01',
     'Output validates against the CSR schema',
     analyzed.ok === true,
     analyzed.ok
       ? 'strict validation passed'
-      : rawError ?? `${analyzed.code}: ${analyzed.message} ${JSON.stringify(analyzed.issues ?? [])}`,
+      : (rawError ??
+          `${analyzed.code}: ${analyzed.message} ${JSON.stringify(analyzed.issues ?? [])}`),
   );
 
   // Use the validated run when possible; otherwise run structural checks on the
   // raw fixture so a hostile adapter still gets specific citations.
-  const run = analyzed.ok
-    ? analyzed.run
-    : rawObject
-      ? analyzeRaw(rawObject)
-      : null;
+  const run = analyzed.ok ? analyzed.run : rawObject ? analyzeRaw(rawObject) : null;
 
   // C-02 — provenance ----------------------------------------------------------
   if (run) {
@@ -182,24 +176,21 @@ export async function runConformanceSuite(options) {
       problems.slice(0, 3).join('; '),
     );
   } else {
-    record(
-      'C-04',
-      'Non-resolved facts carry a reason code from the closed enum',
-      false,
-      'no run',
-    );
+    record('C-04', 'Non-resolved facts carry a reason code from the closed enum', false, 'no run');
   }
 
   // C-05 — inverse consistency -------------------------------------------------
   if (run) {
     const query = createQueryLayer(run, { capabilities });
+    const declared = new Set(run.symbols.map((symbol) => symbol.symbolId));
     /** @type {string[]} */
     const problems = [];
     for (const relationship of run.relationships) {
       if (DERIVED_SET.has(relationship.type)) {
         problems.push(`stored derived relationship ${relationship.relationshipId}`);
       }
-      if (relationship.type !== 'calls') {
+      if (relationship.type !== 'calls' || !declared.has(relationship.to)) {
+        // External targets have no symbol record to query from.
         continue;
       }
       const incoming = query.incoming(relationship.to, { types: ['calls'] });
@@ -230,8 +221,7 @@ export async function runConformanceSuite(options) {
   // C-06 — determinism ---------------------------------------------------------
   if (analyzed.ok) {
     const second = await registry.analyze({ path: fixturePath, runId }, { mode: 'strict' });
-    const passed =
-      second.ok === true && serializeRun(analyzed.run) === serializeRun(second.run);
+    const passed = second.ok === true && serializeRun(analyzed.run) === serializeRun(second.run);
     record(
       'C-06',
       'Two runs on identical input serialize identically',
@@ -379,7 +369,12 @@ export async function runConformanceSuite(options) {
       hits.join('; '),
     );
   } else {
-    record('C-11', 'Adapter never executes analysed code or spawns processes', true, 'skipped: no sourceFile supplied');
+    record(
+      'C-11',
+      'Adapter never executes analysed code or spawns processes',
+      true,
+      'skipped: no sourceFile supplied',
+    );
   }
 
   // C-12 — encoding ------------------------------------------------------------
@@ -389,10 +384,12 @@ export async function runConformanceSuite(options) {
     const start = text.indexOf('函数');
     const range = rangeFromOffsets('file:encoding', index, start, start + 2);
     const slice = sliceRange(index, range);
-    const nonAscii = run ? run.symbols.filter((symbol) => /[^\u0000-\u007f]/.test(symbol.name)) : [];
+    const nonAscii = run ? run.symbols.filter((symbol) => hasNonAscii(symbol.name)) : [];
     const names =
       run && nonAscii.length > 0
-        ? nonAscii.every((symbol) => run.symbols.some((entry) => entry.symbolId === symbol.symbolId))
+        ? nonAscii.every((symbol) =>
+            run.symbols.some((entry) => entry.symbolId === symbol.symbolId),
+          )
         : true;
     const passed = slice === '函数' && range.startColumn === 6 && names;
     record(
@@ -433,6 +430,24 @@ function analyzeRaw(raw) {
     files: /** @type {Array<Record<string, unknown>>} */ (asArray(raw.files)),
     symbols: /** @type {Array<Record<string, unknown>>} */ (asArray(raw.symbols)),
     relationships: /** @type {Array<Record<string, unknown>>} */ (asArray(raw.relationships)),
+    controlConstructs: /** @type {Array<Record<string, unknown>>} */ (
+      asArray(raw.controlConstructs)
+    ),
     dataFacts: /** @type {Array<Record<string, unknown>>} */ (asArray(raw.dataFacts)),
   };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function hasNonAscii(value) {
+  const text = String(value ?? '');
+  for (const character of text) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint > 0x7f) {
+      return true;
+    }
+  }
+  return false;
 }
