@@ -74,7 +74,9 @@ export function createCapabilities(input = {}) {
   const capabilities = {};
   for (const key of CAPABILITY_KEYS) {
     const value = input[key];
-    capabilities[key] = CAPABILITY_VALUES.has(value) ? /** @type {boolean|'partial'} */ (value) : false;
+    capabilities[key] = CAPABILITY_VALUES.has(value)
+      ? /** @type {boolean|'partial'} */ (value)
+      : false;
   }
   return /** @type {CapabilitySet} */ (capabilities);
 }
@@ -242,9 +244,7 @@ export function createAdapterRegistry() {
         input,
         startedAt,
         'E_ADAPTER',
-        `Adapter "${adapter.id}" failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Adapter "${adapter.id}" failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 

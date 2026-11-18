@@ -146,7 +146,10 @@ test('strict validation rejects the same output', async () => {
     },
   });
 
-  const result = await registry.analyze({ path: 'x.sloppystrict', runId: 'run:test' }, { mode: 'strict' });
+  const result = await registry.analyze(
+    { path: 'x.sloppystrict', runId: 'run:test' },
+    { mode: 'strict' },
+  );
   assert.equal(result.ok, false);
   assert.equal(result.code, 'E_VALIDATION');
   assert.ok(result.issues.length >= 2);
