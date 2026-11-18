@@ -80,7 +80,6 @@ export function toDto(graph) {
     adapterId: graph.adapterId,
     completeness: graph.completeness,
     nodes,
-<<<<<<< HEAD
     edges: graph.edges.map((edge) => {
       /** @type {{id: string, from: string, to: string, type: string, status: string, label: string, reasonCode?: string}} */
       const dtoEdge = {
@@ -98,17 +97,6 @@ export function toDto(graph) {
       }
       return dtoEdge;
     }),
-=======
-    edges: graph.edges.map((edge) => ({
-      id: edge.id,
-      from: edge.from,
-      to: edge.to,
-      type: edge.type,
-      status: edge.status,
-      label: edge.label,
-      reasonCode: edge.reasonCode ?? null,
-    })),
->>>>>>> 1ed645584de11b28079753b345c141f488087e2a
     diagnostics: graph.diagnostics,
     degradations: graph.degradations,
     extent: { width: layout.width, height: layout.height },
