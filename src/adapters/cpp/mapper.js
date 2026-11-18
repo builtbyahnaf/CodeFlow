@@ -172,6 +172,9 @@ export function mapClangAst(options) {
    * @returns {SymbolRecord}
    */
   function declare(input) {
+    // Every declaration implies its file exists, even when the file carries no
+    // header symbol otherwise. This makes include edges resolvable later.
+    fileSymbol(input.file);
     const qualifiedName = input.parent
       ? `${input.parent.qualifiedName}::${input.name}`
       : input.name;
