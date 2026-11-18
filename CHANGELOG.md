@@ -14,33 +14,36 @@ CodeFlow has not been published. Every entry below is unreleased.
 
 Project initialized with foundational Phase 0 and Phase 1 architecture:
 
-- **CSR (CodeFlow Semantic Representation) 1.1 Normative Specification**:
-  - Closed normative vocabulary for symbol kinds, relationship types, resolution statuses, reason codes, evidence kinds, and language-neutral control constructs.
-  - Semantic and schema validator supporting strict and defensive modes (`validateAnalysisRun`).
-  - Total entity factories with safe defaults and JSON-shaped object cloning.
-  - FNV-1a non-cryptographic content hashing and stable canonical serialization (`canonicalRun`, `hashRun`).
-  - Line indexing and coordinate mapping with UTF-16 code unit resolution and multi-line CRLF tolerance.
-  - Multi-version migration pipeline with non-mutating transforms (`migrateRun`).
-  - Stable symbol identity generation, hierarchical scope disambiguation, and relationship ID allocators.
-  - In-memory query engine supporting typed lookups (`query.symbol`, `query.callers`, `query.callees`, `query.constructs`, `query.capabilities`) and derived inverse relationships.
-  - Cooperative cancellation source and token propagation.
-  - Payloads and collection budget thresholds enforcing configurable memory and size limits (`E_LIMIT`).
+- **CSR (CodeFlow Semantic Representation) 1.1 Normative Specification**
+  (`docs/CSR_SPECIFICATION.md`):
+  - Closed vocabulary for symbol kinds, relationship types, resolution statuses, reason codes, evidence kinds, control constructs, and data facts.
+  - Semantic and schema validator supporting strict and defensive modes (`validateAnalysisRun`), with JSON-path issues, duplicate-identity detection, parent/child cycle checks, and defensive per-record dropping that lowers completeness and emits diagnostics.
+  - Total entity factories with safe defaults and JSON-shaped cloning.
+  - Deterministic FNV-1a hashing and canonical serialization (`canonicalRun`, `serializeRun`, `hashRun`) that is byte-identical across processes and excludes timing metadata.
+  - Line indexing and coordinate mapping with 0-based UTF-16 columns, BOM handling, and LF/CRLF/CR tolerance (`createLineIndex`, `rangeFromOffsets`, `sliceRange`).
+  - Explicit, non-mutating version migration (`migrateRun`); the `1.0.0 → 1.1.0` step is implemented and a missing step is `E_MIGRATION_MISSING`.
+  - Stable symbol identity that excludes line numbers, disambiguates overloads by arity and anonymous constructs by ordinal, and allocates deterministic relationship ids.
+  - In-memory query layer with capability gating and derived inverse relationships (`query.symbol`, `query.symbols`, `query.callers`, `query.callees`, `query.constructs`, `query.capabilities`).
+  - Cooperative cancellation tokens (`CancellationSource`, `AbortSignal` bridge) that degrade to a partial run instead of rejecting.
+  - Hard per-run size ceilings (`E_LIMIT`); oversized data is rejected, never truncated.
 
-- **Adapter Registry & Engine**:
-  - Unified adapter registry with capability normalization and file extension dispatch precedence.
-  - Boundary isolation transforming adapter runtime exceptions into degraded partial runs with diagnostic reports.
-  - Dry-run capability (`dryRun`) mapping target files without invocation overhead.
-  - Mock adapter fixture upgraded to emit normative CSR 1.1 data.
-  - Conformance test harness (`runAdapterConformanceSuite`) for adapter implementations.
+- **Adapter Registry & Engine** (`docs/LANGUAGE_ADAPTERS.md`):
+  - Registry with capability normalisation (`true`/`false`/`'partial'`) and longest-extension dispatch.
+  - Fault isolation: thrown errors and cancellations become validated partial runs with `E_ADAPTER`/`E_CANCELLED` diagnostics.
+  - Boundary checks for input, `runId` echo, `adapterId`, version compatibility, and migration.
+  - Dry-run mapping (`dryRun`) that resolves files to adapters without invoking them.
+  - Mock adapter upgraded to normative CSR 1.1: overloads, an anonymous lambda, non-ASCII identifiers, every resolution status, external targets, evidence, control constructs, data facts, and diagnostics.
+  - Reusable conformance harness implementing C-01…C-12 (`tests/conformance/harness.js`), plus a hostile-fixture test proving failures cite specific rules.
 
 - **Extension Host & Webview Protocol**:
-  - Type-safe, bidirectional messaging envelope (`WEBVIEW_TO_HOST` and `HOST_TO_WEBVIEW`).
-  - Decoupled webview wiring bridge (`createPanelWire`) handling asynchronous requests, load failures, progress notifications, and typed query routing.
-  - Nonce-based Content Security Policy (CSP), sub-panel lifecycle management, and disposal cleanup.
+  - Versioned, allowlisted messaging envelope with additive Phase 1 kinds (`csr.load`, `csr.data`, `query.*`, `query.data`, `analysis.progress`).
+  - Decoupled webview wiring bridge (`createPanelWire`) with asynchronous request handling, load-failure correlation, progress pushes, and typed query routing. The host owns the validated run and its query layer.
+  - Nonce-based Content Security Policy (CSP), single-panel lifecycle, and disposal cleanup.
+  - Regression test proving the bridge subscribes on `panel.webview`, not on the panel itself.
 
 - **Quality Assurance & Tooling**:
-  - Over 160 unit tests covering protocol, CSR validation, serialization, queries, migrations, identity, and panel wire messaging.
-  - Architectural constraints enforcement tests (no-TypeScript, host-independent layers, restricted mode declarations).
+  - 173 unit and conformance tests covering protocol, CSR validation, identity, provenance, serialization, migration, queries, the registry, the conformance suite, and panel wiring.
+  - Architectural constraint tests (no-TypeScript, host-independent layers, restricted-mode declarations).
   - ESLint global environment updates for Node.js timers (`setImmediate`).
 
 ## [Unreleased]
