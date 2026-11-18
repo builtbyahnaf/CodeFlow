@@ -142,9 +142,55 @@ test('data facts are gated by generateDFG', () => {
   assert.ok(result.value.length > 0);
 });
 
+test('aggregate queries return deterministic copies for core consumers', () => {
+  const { run, query } = fixture();
+
+  const symbols = query.allSymbols();
+  assert.equal(symbols.ok, true);
+  assert.equal(symbols.value.length, run.symbols.length);
+  const symbolIds = symbols.value.map((symbol) => symbol.symbolId);
+  assert.deepEqual(symbolIds, [...symbolIds].sort());
+
+  const relationships = query.allRelationships();
+  assert.equal(relationships.ok, true);
+  assert.equal(relationships.value.length, run.relationships.length);
+  const keys = relationships.value.map(
+    (relationship) =>
+      `${relationship.type}|${relationship.from}|${relationship.to}|${relationship.relationshipId}`,
+  );
+  assert.deepEqual(keys, [...keys].sort());
+
+  // Copies, not aliases: a consumer cannot mutate the validated run through a
+  // query result.
+  const symbolCount = run.symbols.length;
+  const relationshipCount = run.relationships.length;
+  symbols.value.length = 1;
+  relationships.value.length = 1;
+  assert.equal(run.symbols.length, symbolCount);
+  assert.equal(run.relationships.length, relationshipCount);
+
+  const info = query.runInfo();
+  assert.equal(info.ok, true);
+  assert.equal(info.value.runId, run.runId);
+  assert.equal(info.value.adapterId, run.adapterId);
+  info.value.scope.kind = 'mutated';
+  assert.notEqual(run.scope.kind, 'mutated');
+
+  const diagnostics = query.diagnostics();
+  assert.equal(diagnostics.ok, true);
+  assert.equal(diagnostics.value.length, run.diagnostics.length);
+  const diagnosticCount = run.diagnostics.length;
+  diagnostics.value.length = 0;
+  assert.equal(run.diagnostics.length, diagnosticCount);
+});
+
 test('queries never mutate the run', () => {
   const { run, query, main, check } = fixture();
   const before = JSON.stringify(run);
+  query.allSymbols();
+  query.allRelationships();
+  query.diagnostics();
+  query.runInfo();
   query.symbolById(main.symbolId);
   query.symbolsInFile(run.files[0].fileId);
   query.outgoing(main.symbolId);

@@ -11,8 +11,6 @@
  * query throws across the boundary.
  */
 
-import { DERIVED_RELATIONSHIP_TYPES } from './types.js';
-
 /**
  * @typedef {import('./entities.js').AnalysisRun} AnalysisRun
  * @typedef {import('./entities.js').Relationship} Relationship
@@ -110,6 +108,54 @@ export function createQueryLayer(run, options = {}) {
   }
 
   /**
+   * Every declared symbol in deterministic id order. Consumers that need the
+   * whole set (the graph builder) use this instead of walking `run.symbols`,
+   * so core layers never acquire a second, unvalidated view of CSR.
+   *
+   * @returns {QueryResult<SymbolRecord[]>}
+   */
+  function allSymbols() {
+    return { ok: true, value: [...run.symbols].sort(bySymbolId) };
+  }
+
+  /**
+   * Every stored relationship in deterministic `(type, from, to, id)` order.
+   *
+   * @returns {QueryResult<Relationship[]>}
+   */
+  function allRelationships() {
+    return { ok: true, value: [...run.relationships].sort(byRelationshipKey) };
+  }
+
+  /**
+   * @returns {QueryResult<AnalysisRun['diagnostics']>}
+   */
+  function diagnostics() {
+    return { ok: true, value: [...run.diagnostics] };
+  }
+
+  /**
+   * Run metadata that is not a query result: identity, language, scope, and
+   * completeness. Copying it prevents a consumer from mutating the run.
+   *
+   * @returns {QueryResult<{runId: string, language: string, adapterId: string, adapterVersion: string, csrVersion: string, completeness: string, scope: {kind: string, path?: string}}>}
+   */
+  function runInfo() {
+    return {
+      ok: true,
+      value: {
+        runId: run.runId,
+        language: run.language,
+        adapterId: run.adapterId,
+        adapterVersion: run.adapterVersion,
+        csrVersion: run.csrVersion,
+        completeness: run.completeness,
+        scope: { ...run.scope },
+      },
+    };
+  }
+
+  /**
    * @param {string} symbolId
    * @returns {QueryResult<SymbolRecord>}
    */
@@ -139,7 +185,10 @@ export function createQueryLayer(run, options = {}) {
   function normalizeFilter(filter = {}) {
     const types = filter.types === undefined ? null : filter.types;
     const statuses = filter.statuses === undefined ? null : filter.statuses;
-    if (types !== null && (!Array.isArray(types) || types.some((type) => typeof type !== 'string'))) {
+    if (
+      types !== null &&
+      (!Array.isArray(types) || types.some((type) => typeof type !== 'string'))
+    ) {
       return fail('E_QUERY', 'types must be an array of relationship types.');
     }
     if (
@@ -345,6 +394,10 @@ export function createQueryLayer(run, options = {}) {
   }
 
   return {
+    allSymbols,
+    allRelationships,
+    diagnostics,
+    runInfo,
     symbolById,
     symbolsInFile,
     outgoing,
@@ -392,4 +445,26 @@ function invertRelationship(relationship) {
  */
 function bySymbolId(a, b) {
   return a.symbolId < b.symbolId ? -1 : a.symbolId > b.symbolId ? 1 : 0;
+}
+
+/**
+ * @param {Relationship} a
+ * @param {Relationship} b
+ * @returns {number}
+ */
+function byRelationshipKey(a, b) {
+  for (const [left, right] of [
+    [a.type, b.type],
+    [a.from, b.from],
+    [a.to, b.to],
+    [a.relationshipId, b.relationshipId],
+  ]) {
+    if (left < right) {
+      return -1;
+    }
+    if (left > right) {
+      return 1;
+    }
+  }
+  return 0;
 }
