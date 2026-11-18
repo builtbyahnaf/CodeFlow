@@ -108,12 +108,13 @@ export function createIdentityKey(input) {
  */
 export function createOverloadDisambiguator(parameterKinds) {
   const kinds = Array.isArray(parameterKinds) ? parameterKinds : [];
-  const normalized = kinds.map((kind) =>
-    String(kind ?? 'unknown')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9_]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'unknown',
+  const normalized = kinds.map(
+    (kind) =>
+      String(kind ?? 'unknown')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '') || 'unknown',
   );
   return normalized.length === 0 ? 'arity0' : `arity${normalized.length}.${normalized.join('+')}`;
 }

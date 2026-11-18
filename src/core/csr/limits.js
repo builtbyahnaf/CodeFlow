@@ -96,7 +96,13 @@ export function enforceLimits(run) {
     issues,
   );
   checkArray(candidate.dataFacts, CSR_LIMITS.maxDataFacts, 'dataFacts', 'dataFacts', issues);
-  checkArray(candidate.diagnostics, CSR_LIMITS.maxDiagnostics, 'diagnostics', 'diagnostics', issues);
+  checkArray(
+    candidate.diagnostics,
+    CSR_LIMITS.maxDiagnostics,
+    'diagnostics',
+    'diagnostics',
+    issues,
+  );
 
   checkString(candidate.runId, CSR_LIMITS.maxStringLength, 'runId', 'runId', issues);
   checkString(candidate.adapterId, CSR_LIMITS.maxStringLength, 'adapterId', 'adapterId', issues);

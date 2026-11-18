@@ -36,9 +36,7 @@ export const MIGRATIONS = [
           : 'legacy';
       next.scope = isPlainObject(next.scope) ? next.scope : { kind: 'workspace' };
       next.diagnostics = Array.isArray(next.diagnostics) ? next.diagnostics : [];
-      next.controlConstructs = Array.isArray(next.controlConstructs)
-        ? next.controlConstructs
-        : [];
+      next.controlConstructs = Array.isArray(next.controlConstructs) ? next.controlConstructs : [];
       next.dataFacts = Array.isArray(next.dataFacts) ? next.dataFacts : [];
 
       if (Array.isArray(next.files)) {

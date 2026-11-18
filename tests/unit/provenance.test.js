@@ -57,7 +57,10 @@ test('columns count UTF-16 code units, including astral characters', () => {
   const position = index.positionAt(xOffset);
   assert.equal(position.line, 0);
   assert.equal(position.column, xOffset, 'a surrogate pair is two UTF-16 units');
-  assert.equal(sliceRange(index, rangeFromOffsets('f', index, position.column, position.column + 1)), 'x');
+  assert.equal(
+    sliceRange(index, rangeFromOffsets('f', index, position.column, position.column + 1)),
+    'x',
+  );
 });
 
 test('non-ASCII identifiers preserve their ranges', () => {

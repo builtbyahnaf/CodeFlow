@@ -87,7 +87,20 @@ test('anonymous constructs are distinct and stable within a parent', () => {
   const second = createAnonymousDisambiguator(2);
   assert.equal(first, 'anon.1');
   assert.notEqual(first, second);
-  assert.equal(createSymbolId({ ...base, kind: 'lambda', qualifiedName: 'main.<anonymous>', disambiguator: first }), createSymbolId({ ...base, kind: 'lambda', qualifiedName: 'main.<anonymous>', disambiguator: first }));
+  assert.equal(
+    createSymbolId({
+      ...base,
+      kind: 'lambda',
+      qualifiedName: 'main.<anonymous>',
+      disambiguator: first,
+    }),
+    createSymbolId({
+      ...base,
+      kind: 'lambda',
+      qualifiedName: 'main.<anonymous>',
+      disambiguator: first,
+    }),
+  );
 });
 
 test('a collision without an explicit disambiguator falls back to declaration order', () => {

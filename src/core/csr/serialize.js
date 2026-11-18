@@ -40,9 +40,8 @@ export function canonicalRun(run) {
           relationship.to,
         )}\u0000${String(relationship.relationshipId)}`,
     ),
-    controlConstructs: sortBy(
-      arrayOf(candidate.controlConstructs),
-      (construct) => String(construct.constructId),
+    controlConstructs: sortBy(arrayOf(candidate.controlConstructs), (construct) =>
+      String(construct.constructId),
     ),
     dataFacts: sortBy(arrayOf(candidate.dataFacts), (fact) => String(fact.factId)),
     diagnostics: sortBy(
@@ -89,7 +88,12 @@ export function parseRun(json, options = {}) {
   } catch (error) {
     return {
       ok: false,
-      issues: [{ path: '$', message: `Invalid JSON: ${error instanceof Error ? error.message : String(error)}` }],
+      issues: [
+        {
+          path: '$',
+          message: `Invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
     };
   }
   const validation = validateAnalysisRun(parsed, { mode: options.mode ?? 'strict' });

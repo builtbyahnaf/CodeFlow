@@ -47,7 +47,8 @@ test('1.0.0 migrates to 1.1.0 through the explicit step', () => {
 
   assert.ok(result.run.symbols.every((symbol) => symbol.declaration && !symbol.range));
   const migratedUnknown = result.run.relationships.find(
-    (relationship) => relationship.status === 'unresolved' && relationship.reasonCode === 'parse_error',
+    (relationship) =>
+      relationship.status === 'unresolved' && relationship.reasonCode === 'parse_error',
   );
   assert.ok(migratedUnknown, 'unknown status becomes unresolved with parse_error');
 });
