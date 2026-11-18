@@ -1,0 +1,137 @@
+{
+  "id": "0x2000",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "Widget",
+      "kind": "CXXRecordDecl",
+      "name": "Widget",
+      "tagUsed": "class",
+      "completeDefinition": true,
+      "loc": { "file": "D:/w/include/widget.h", "line": 3, "col": 1 },
+      "range": {
+        "begin": { "line": 3, "col": 1 },
+        "end": { "line": 6, "col": 2 }
+      },
+      "inner": [
+        {
+          "kind": "AccessSpecDecl",
+          "access": "public",
+          "range": {
+            "begin": { "line": 4, "col": 1 },
+            "end": { "line": 4, "col": 7 }
+          }
+        },
+        {
+          "id": "Widget-save",
+          "kind": "CXXMethodDecl",
+          "name": "save",
+          "type": { "qualType": "int ()" },
+          "loc": { "line": 5, "col": 3 },
+          "range": {
+            "begin": { "line": 5, "col": 3 },
+            "end": { "line": 5, "col": 32 }
+          },
+          "inner": [
+            {
+              "kind": "CompoundStmt",
+              "range": {
+                "begin": { "line": 5, "col": 15 },
+                "end": { "line": 5, "col": 32 }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "main",
+      "kind": "FunctionDecl",
+      "name": "main",
+      "type": { "qualType": "int ()" },
+      "loc": { "file": "D:/w/src/main.cpp", "line": 3, "col": 1 },
+      "range": {
+        "begin": { "line": 3, "col": 1 },
+        "end": { "line": 6, "col": 2 }
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 3, "col": 11 },
+            "end": { "line": 6, "col": 2 }
+          },
+          "inner": [
+            {
+              "id": "Widget-widget",
+              "kind": "VarDecl",
+              "name": "widget",
+              "type": { "qualType": "Widget" },
+              "loc": { "line": 4, "col": 3 },
+              "range": {
+                "begin": { "line": 4, "col": 3 },
+                "end": { "line": 4, "col": 18 }
+              },
+              "inner": [
+                {
+                  "kind": "CXXConstructExpr",
+                  "type": { "qualType": "Widget" },
+                  "range": {
+                    "begin": { "line": 4, "col": 10 },
+                    "end": { "line": 4, "col": 18 }
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": { "line": 5, "col": 3 },
+                "end": { "line": 5, "col": 23 }
+              },
+              "inner": [
+                {
+                  "kind": "CXXMemberCallExpr",
+                  "type": { "qualType": "int" },
+                  "range": {
+                    "begin": { "line": 5, "col": 10 },
+                    "end": { "line": 5, "col": 23 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "save",
+                      "type": { "qualType": "int ()" },
+                      "range": {
+                        "begin": { "line": 5, "col": 10 },
+                        "end": { "line": 5, "col": 21 }
+                      },
+                      "referencedDecl": {
+                        "id": "Widget-save",
+                        "kind": "CXXMethodDecl",
+                        "name": "save",
+                        "type": { "qualType": "int ()" }
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "name": "widget",
+                          "type": { "qualType": "Widget" },
+                          "referencedDecl": {
+                            "id": "Widget-widget",
+                            "kind": "VarDecl",
+                            "name": "widget"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
