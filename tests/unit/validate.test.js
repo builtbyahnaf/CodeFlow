@@ -78,7 +78,9 @@ test('construct children and data facts must reference declared entities', () =>
   badConstruct.controlConstructs[0].children.push('construct:missing');
   const constructResult = validateAnalysisRun(badConstruct);
   assert.equal(constructResult.ok, false);
-  assert.ok(constructResult.issues.some((issue) => /child "construct:missing"/.test(issue.message)));
+  assert.ok(
+    constructResult.issues.some((issue) => /child "construct:missing"/.test(issue.message)),
+  );
 
   const badFact = createMockAnalysis();
   badFact.dataFacts[0].symbolId = 'symbol:missing';
@@ -120,7 +122,9 @@ test('ranges must be integers inside declared file bounds', () => {
   inverted.symbols[0].declaration.endLine = 5;
   const invertedResult = validateAnalysisRun(inverted);
   assert.equal(invertedResult.ok, false);
-  assert.ok(invertedResult.issues.some((issue) => /endLine must be >= startLine/.test(issue.message)));
+  assert.ok(
+    invertedResult.issues.some((issue) => /endLine must be >= startLine/.test(issue.message)),
+  );
 
   const outside = createMockAnalysis();
   outside.symbols[0].declaration.endLine = 9999;
@@ -196,7 +200,13 @@ test('defensive mode drops only invalid records and marks the run partial', () =
     name: 'bad',
     qualifiedName: 'bad',
     language: 'mock',
-    declaration: { fileId: run.files[0].fileId, startLine: 0, startColumn: 0, endLine: 0, endColumn: 1 },
+    declaration: {
+      fileId: run.files[0].fileId,
+      startLine: 0,
+      startColumn: 0,
+      endLine: 0,
+      endColumn: 1,
+    },
   });
   run.completeness = 'full';
 

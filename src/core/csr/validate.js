@@ -505,16 +505,25 @@ function validateFile(entry, path, issues) {
   requireString(record.language, `${path}.language`, 'language', issues);
   requireString(record.contentHash, `${path}.contentHash`, 'contentHash', issues);
   if (!Number.isInteger(record.sizeBytes) || Number(record.sizeBytes) < 0) {
-    issues.push({ path: `${path}.sizeBytes`, message: 'sizeBytes must be a non-negative integer.' });
+    issues.push({
+      path: `${path}.sizeBytes`,
+      message: 'sizeBytes must be a non-negative integer.',
+    });
   }
   if (!Number.isInteger(record.lineCount) || Number(record.lineCount) < 1) {
     issues.push({ path: `${path}.lineCount`, message: 'lineCount must be a positive integer.' });
   }
   if (record.generated !== undefined && typeof record.generated !== 'boolean') {
-    issues.push({ path: `${path}.generated`, message: 'generated must be a boolean when present.' });
+    issues.push({
+      path: `${path}.generated`,
+      message: 'generated must be a boolean when present.',
+    });
   }
   if (record.extensions !== undefined && !isPlainObject(record.extensions)) {
-    issues.push({ path: `${path}.extensions`, message: 'extensions must be an object when present.' });
+    issues.push({
+      path: `${path}.extensions`,
+      message: 'extensions must be an object when present.',
+    });
   }
 }
 
@@ -578,7 +587,10 @@ function validateSymbol(entry, path, fileById, issues) {
     }
   }
   if (record.extensions !== undefined && !isPlainObject(record.extensions)) {
-    issues.push({ path: `${path}.extensions`, message: 'extensions must be an object when present.' });
+    issues.push({
+      path: `${path}.extensions`,
+      message: 'extensions must be an object when present.',
+    });
   }
 }
 
@@ -765,7 +777,10 @@ function validateRelationship(entry, path, fileById, symbolById, issues) {
     }
   }
   if (record.extensions !== undefined && !isPlainObject(record.extensions)) {
-    issues.push({ path: `${path}.extensions`, message: 'extensions must be an object when present.' });
+    issues.push({
+      path: `${path}.extensions`,
+      message: 'extensions must be an object when present.',
+    });
   }
 }
 
@@ -1010,7 +1025,10 @@ function validateRange(range, path, fileById, issues) {
   const record = /** @type {Record<string, unknown>} */ (range);
   if (fileById) {
     if (!fileById.has(record.fileId)) {
-      issues.push({ path: `${path}.fileId`, message: `Unknown fileId "${String(record.fileId)}".` });
+      issues.push({
+        path: `${path}.fileId`,
+        message: `Unknown fileId "${String(record.fileId)}".`,
+      });
     } else {
       const file = /** @type {Record<string, unknown>} */ (fileById.get(record.fileId));
       if (Number.isInteger(record.endLine) && Number(record.endLine) >= Number(file.lineCount)) {
@@ -1019,7 +1037,10 @@ function validateRange(range, path, fileById, issues) {
           message: `endLine ${String(record.endLine)} exceeds lineCount ${String(file.lineCount)}.`,
         });
       }
-      if (Number.isInteger(record.startLine) && Number(record.startLine) >= Number(file.lineCount)) {
+      if (
+        Number.isInteger(record.startLine) &&
+        Number(record.startLine) >= Number(file.lineCount)
+      ) {
         issues.push({
           path: `${path}.startLine`,
           message: `startLine ${String(
@@ -1032,7 +1053,10 @@ function validateRange(range, path, fileById, issues) {
   for (const field of ['startOffset', 'endOffset']) {
     if (record[field] !== undefined) {
       if (!Number.isInteger(record[field]) || Number(record[field]) < 0) {
-        issues.push({ path: `${path}.${field}`, message: `${field} must be a non-negative integer.` });
+        issues.push({
+          path: `${path}.${field}`,
+          message: `${field} must be a non-negative integer.`,
+        });
       }
     }
   }
@@ -1076,10 +1100,26 @@ function workspacePathIssues(value) {
   if (segments.includes('')) {
     issues.push('path must not contain empty segments.');
   }
-  if (/[\u0000-\u001f]/.test(value)) {
+  if (containsControlCharacters(value)) {
     issues.push('path must not contain control characters.');
   }
   return issues;
+}
+
+/**
+ * Control characters are checked by code unit so the rule stays readable and
+ * the regex linter does not have to reason about an escape range.
+ *
+ * @param {string} value
+ * @returns {boolean}
+ */
+function containsControlCharacters(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) < 32) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
