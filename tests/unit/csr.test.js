@@ -139,3 +139,27 @@ test('rejects an unknown completeness level', () => {
   assert.equal(result.ok, false);
   assert.ok(result.issues.some((issue) => issue.path === 'completeness'));
 });
+
+test('adapter-specific reason codes are closed, described and categorized', async () => {
+  const { REASON_CODES, REASON_CODE_DESCRIPTIONS } = await import('../../src/core/csr/types.js');
+  const { describeReason, isReasonCode, reasonCategory } =
+    await import('../../src/core/csr/reasons.js');
+
+  for (const code of [
+    'missing_system_headers',
+    'toolchain_version_mismatch',
+    'template_dependent',
+    'unknown_receiver',
+    'computed_member',
+    'eval_scope',
+    'external_package',
+    'header_without_tu',
+  ]) {
+    assert.equal(isReasonCode(code), true, code);
+    assert.equal(REASON_CODE_DESCRIPTIONS[code].length > 10, true, code);
+    assert.notEqual(reasonCategory(code), 'unknown', code);
+    assert.equal(describeReason(code), REASON_CODE_DESCRIPTIONS[code]);
+  }
+  assert.equal(REASON_CODES.length, new Set(REASON_CODES).size);
+  assert.equal(isReasonCode('unknown_reason'), false);
+});

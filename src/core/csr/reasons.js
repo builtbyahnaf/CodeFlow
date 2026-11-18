@@ -36,18 +36,36 @@ export function reasonCategory(code) {
   switch (code) {
     case 'dynamic_dispatch':
     case 'function_pointer':
+    case 'unknown_receiver':
+    case 'computed_member':
+    case 'prototype_mutation':
+    case 'callback_parameter':
+    case 'deferred_invocation':
       return 'dynamic';
     case 'missing_compile_db':
+    case 'missing_system_headers':
+    case 'toolchain_version_mismatch':
     case 'unknown_import_target':
+    case 'external_package':
+    case 'path_alias_unresolved':
+    case 'exports_map_unsupported':
     case 'unsupported_language':
       return 'environment';
     case 'out_of_scope':
     case 'too_deep':
     case 'overload_ambiguous':
+    case 'template_dependent':
+    case 'header_without_tu':
+    case 'reexport_depth_exceeded':
       return 'scope';
     case 'macro_expansion':
     case 'generated_source':
     case 'parse_error':
+    case 'unsupported_construct':
+    case 'unsupported_syntax':
+    case 'eval_scope':
+    case 'dynamic_scope':
+    case 'mixed_module_system':
     case 'index_stale':
       return 'source';
     case 'budget_exceeded':
