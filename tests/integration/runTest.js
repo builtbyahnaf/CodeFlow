@@ -116,7 +116,12 @@ async function main() {
     // cannot remove its own working directory.
     process.chdir(root);
     try {
-      await fs.rm(stage.stageRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      await fs.rm(stage.stageRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 200,
+      });
     } catch (error) {
       console.warn(
         `[integration] could not remove the staged directory (${stage.stageRoot}): ${
