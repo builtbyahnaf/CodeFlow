@@ -10,6 +10,8 @@
  * that looks more complete than the analysis is.
  */
 
+import { createQueryLayer } from '../csr/query.js';
+
 /**
  * @typedef {import('../csr/entities.js').AnalysisRun} AnalysisRun
  * @typedef {import('../csr/entities.js').SymbolRecord} SymbolRecord
@@ -58,10 +60,23 @@
  * @returns {Graph}
  */
 export function buildGraph(run) {
+  // Core-to-core reads go through the query layer. The graph never walks CSR
+  // arrays itself, so a validated run remains the single source of truth.
+  const query = createQueryLayer(run);
+  const info = valueOf(query.runInfo(), {
+    runId: '',
+    language: '',
+    adapterId: '',
+    completeness: 'partial',
+  });
+  const diagnostics = valueOf(query.diagnostics(), []);
+  const symbols = valueOf(query.allSymbols(), []);
+  const relationships = valueOf(query.allRelationships(), []);
+
   /** @type {Map<string, GraphNode>} */
   const nodes = new Map();
 
-  for (const symbol of run.symbols) {
+  for (const symbol of symbols) {
     nodes.set(symbol.symbolId, {
       id: symbol.symbolId,
       label: displayName(symbol),
@@ -79,7 +94,7 @@ export function buildGraph(run) {
   /** @type {string[]} */
   const skippedRelationships = [];
 
-  for (const relationship of run.relationships) {
+  for (const relationship of relationships) {
     if (!nodes.has(relationship.to)) {
       nodes.set(relationship.to, {
         id: relationship.to,
@@ -119,35 +134,48 @@ export function buildGraph(run) {
   }
 
   const degradations = [];
-  if (run.completeness !== 'full') {
-    degradations.push(`Analysis completeness: ${run.completeness}`);
+  if (info.completeness !== 'full') {
+    degradations.push(`Analysis completeness: ${info.completeness}`);
   }
   for (const relationshipId of skippedRelationships) {
     degradations.push(
       `Skipped relationship ${relationshipId}: its source symbol was not declared.`,
     );
   }
-  for (const diagnostic of run.diagnostics) {
+  for (const diagnostic of diagnostics) {
     if (diagnostic.severity !== 'info') {
       degradations.push(`${diagnostic.code}: ${diagnostic.message}`);
     }
   }
 
   return {
-    graphId: `graph:${run.runId}`,
-    runId: run.runId,
-    language: run.language,
-    adapterId: run.adapterId,
-    completeness: run.completeness,
+    graphId: `graph:${info.runId}`,
+    runId: info.runId,
+    language: info.language,
+    adapterId: info.adapterId,
+    completeness: info.completeness,
     nodes: [...nodes.values()].sort(byId),
     edges: edges.sort(byId),
-    diagnostics: run.diagnostics.map((diagnostic) => ({
+    diagnostics: diagnostics.map((diagnostic) => ({
       code: diagnostic.code,
       message: diagnostic.message,
       severity: diagnostic.severity,
     })),
     degradations,
   };
+}
+
+/**
+ * Aggregate queries cannot fail for a validated run. This guard keeps the graph
+ * total if that invariant ever changes.
+ *
+ * @template T
+ * @param {{ok: true, value: T} | {ok: false, code: string, message: string}} result
+ * @param {T} fallback
+ * @returns {T}
+ */
+function valueOf(result, fallback) {
+  return result.ok ? result.value : fallback;
 }
 
 /**

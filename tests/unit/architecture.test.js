@@ -124,6 +124,36 @@ test('the graph layer does not know about adapters, languages, or rendering', as
   }
 });
 
+test('the graph layer reads CSR through the query layer, not raw run arrays', async () => {
+  const forbidden = [
+    /\brun\.symbols\b/,
+    /\brun\.relationships\b/,
+    /\brun\.controlConstructs\b/,
+    /\brun\.dataFacts\b/,
+    /\brun\.diagnostics\b/,
+    /\brun\.files\b/,
+    /\brun\.runId\b/,
+    /\brun\.language\b/,
+    /\brun\.adapterId\b/,
+    /\brun\.completeness\b/,
+  ];
+  for (const file of await listSourceFiles('src/core/graph')) {
+    const source = await fs.readFile(path.join(root, file), 'utf8');
+    for (const pattern of forbidden) {
+      assert.ok(
+        !pattern.test(source),
+        `${file} reads ${pattern} directly; core consumers must use createQueryLayer()`,
+      );
+    }
+  }
+
+  const { imports } = await readWithImports('src/core/graph/model.js');
+  assert.ok(
+    imports.some((specifier) => specifier.includes('csr/query.js')),
+    'the graph model must obtain CSR facts from the query layer',
+  );
+});
+
 test('the CSR layer does not import the graph layer or adapters', async () => {
   for (const file of await listSourceFiles('src/core/csr')) {
     const { imports } = await readWithImports(file);
