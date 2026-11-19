@@ -13,7 +13,7 @@ import { buildDiagnosticsReport, openDiagnosticsDocument } from './diagnostics.j
  * @param {{
  *   context: vscode.ExtensionContext,
  *   logger: {info: Function, warn: Function, error: Function, show: Function, level: () => string},
- *   panelManager: {show: () => unknown, isOpen: () => boolean, pendingRequests: () => number},
+ *   panelManager: {show: () => unknown, showFile: (path: string) => unknown, isOpen: () => boolean, pendingRequests: () => number},
  *   registry: ReturnType<typeof import('../core/adapterRegistry.js').createAdapterRegistry>,
  *   extensionVersion: string,
  * }} options
@@ -44,6 +44,20 @@ export function registerCommands({ context, logger, panelManager, registry, exte
   register('codeflow.openExplorer', () => {
     logger.info('command.openExplorer');
     panelManager.show();
+  });
+
+  register('codeflow.analyzeActiveFile', () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.uri.scheme !== 'file') {
+      void vscode.window.showWarningMessage(
+        'CodeFlow: open a file in the workspace before analysing it.',
+      );
+      return;
+    }
+    logger.info('command.analyzeActiveFile', {
+      extension: editor.document.uri.path.split('.').pop(),
+    });
+    panelManager.showFile(editor.document.uri.fsPath);
   });
 
   register('codeflow.showDiagnostics', async () => {

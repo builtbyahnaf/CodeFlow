@@ -38,6 +38,11 @@
         "category": "CodeFlow"
       },
       {
+        "command": "codeflow.analyzeActiveFile",
+        "title": "Analyze Active File",
+        "category": "CodeFlow"
+      },
+      {
         "command": "codeflow.showDiagnostics",
         "title": "Show Diagnostics",
         "category": "CodeFlow"
@@ -72,6 +77,56 @@
           "type": "boolean",
           "default": false,
           "description": "Keep the CodeFlow webview alive when hidden. Disabled by default to reduce memory use; re-rendering is cheap."
+        },
+        "codeflow.cpp.clangPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to clang or clang++. When empty, CodeFlow probes PATH and the platform's common locations. It never runs a build system."
+        },
+        "codeflow.cpp.compileCommandsPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a compile_commands.json. When empty, CodeFlow searches the workspace root, build/, cmake-build-* and out/."
+        },
+        "codeflow.cpp.fallbackIncludePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Include paths used only when no compilation database entry covers a file. Results in this mode are always partial."
+        },
+        "codeflow.cpp.fallbackDefines": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Preprocessor defines used only in heuristic mode, for example DEBUG or NAME=1."
+        },
+        "codeflow.cpp.fallbackStandard": {
+          "type": "string",
+          "default": "",
+          "description": "Language standard used in heuristic mode, for example c++17 or c++20. Empty lets CodeFlow choose from the file extension."
+        },
+        "codeflow.cpp.timeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 1000,
+          "maximum": 600000,
+          "description": "Time budget for one Clang invocation. Exceeding it produces a partial run, never a frozen window."
+        },
+        "codeflow.cpp.maxOutputBytes": {
+          "type": "number",
+          "default": 67108864,
+          "minimum": 1048576,
+          "description": "Maximum Clang stdout/stderr size. A larger AST produces a partial run with a diagnostic."
+        },
+        "codeflow.cpp.maxFileBytes": {
+          "type": "number",
+          "default": 4194304,
+          "minimum": 65536,
+          "description": "Maximum source file size CodeFlow will read for one translation unit."
         }
       }
     }
