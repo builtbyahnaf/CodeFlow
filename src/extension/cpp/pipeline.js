@@ -91,7 +91,7 @@ export function createCppAnalysisService(options) {
   }
 
   /**
-   * @param {{path: string, runId: string, workspaceRoot: string, cancellation?: unknown}} input
+   * @param {{path: string, runId: string, workspaceRoot: string, trusted?: boolean, cancellation?: unknown}} input
    * @returns {Promise<AnalyzeSuccess | AnalyzeFailure>}
    */
   async function analyze(input) {
@@ -138,7 +138,7 @@ export function createCppAnalysisService(options) {
   }
 
   /**
-   * @param {{path: string, runId: string, workspaceRoot: string, cancellation?: unknown}} input
+   * @param {{path: string, runId: string, workspaceRoot: string, trusted?: boolean, cancellation?: unknown}} input
    * @returns {Promise<{ok: true, value: PreparedCpp} | AnalyzeFailure>}
    */
   async function prepare(input) {
@@ -149,6 +149,12 @@ export function createCppAnalysisService(options) {
     const workspaceRoot = input.workspaceRoot;
     if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
       return failure('E_INPUT', 'Open a workspace folder before analysing C++ files.');
+    }
+    if (input.trusted === false) {
+      return failure(
+        'E_UNTRUSTED',
+        'CodeFlow does not read workspace files in Restricted Mode. Trust the workspace first.',
+      );
     }
     if (typeof input.path !== 'string' || input.path.length === 0) {
       return failure('E_INPUT', 'A file path is required.');
