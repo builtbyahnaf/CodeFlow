@@ -1,0 +1,153 @@
+{
+  "id": "0x3000",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "compute-int",
+      "kind": "FunctionDecl",
+      "name": "compute",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "D:/w/src/overloads.cpp", "line": 1, "col": 1 },
+      "range": {
+        "begin": { "line": 1, "col": 1 },
+        "end": { "line": 1, "col": 42 }
+      },
+      "inner": [
+        {
+          "id": "compute-int-p1",
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": { "qualType": "int" },
+          "loc": { "line": 1, "col": 13 },
+          "range": {
+            "begin": { "line": 1, "col": 13 },
+            "end": { "line": 1, "col": 23 }
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 1, "col": 25 },
+            "end": { "line": 1, "col": 42 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "compute-double",
+      "kind": "FunctionDecl",
+      "name": "compute",
+      "type": { "qualType": "double (double)" },
+      "loc": { "line": 2, "col": 1 },
+      "range": {
+        "begin": { "line": 2, "col": 1 },
+        "end": { "line": 2, "col": 45 }
+      },
+      "inner": [
+        {
+          "id": "compute-double-p1",
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": { "qualType": "double" },
+          "loc": { "line": 2, "col": 16 },
+          "range": {
+            "begin": { "line": 2, "col": 16 },
+            "end": { "line": 2, "col": 29 }
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 2, "col": 31 },
+            "end": { "line": 2, "col": 45 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "main",
+      "kind": "FunctionDecl",
+      "name": "main",
+      "type": { "qualType": "int ()" },
+      "loc": { "line": 4, "col": 1 },
+      "range": {
+        "begin": { "line": 4, "col": 1 },
+        "end": { "line": 8, "col": 2 }
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 4, "col": 11 },
+            "end": { "line": 8, "col": 2 }
+          },
+          "inner": [
+            {
+              "kind": "CallExpr",
+              "type": { "qualType": "int" },
+              "range": {
+                "begin": { "line": 5, "col": 3 },
+                "end": { "line": 5, "col": 14 }
+              },
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "type": { "qualType": "int (*)(int)" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "name": "compute",
+                      "type": { "qualType": "int (int)" },
+                      "referencedDecl": {
+                        "id": "compute-int",
+                        "kind": "FunctionDecl",
+                        "name": "compute",
+                        "type": { "qualType": "int (int)" }
+                      }
+                    }
+                  ]
+                },
+                { "kind": "IntegerLiteral", "value": "1", "type": { "qualType": "int" } }
+              ]
+            },
+            {
+              "kind": "CallExpr",
+              "type": { "qualType": "double" },
+              "range": {
+                "begin": { "line": 6, "col": 3 },
+                "end": { "line": 6, "col": 16 }
+              },
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "type": { "qualType": "double (*)(double)" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "name": "compute",
+                      "type": { "qualType": "double (double)" },
+                      "referencedDecl": {
+                        "id": "compute-double",
+                        "kind": "FunctionDecl",
+                        "name": "compute",
+                        "type": { "qualType": "double (double)" }
+                      }
+                    }
+                  ]
+                },
+                { "kind": "FloatingLiteral", "value": "1.5", "type": { "qualType": "double" } }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": { "line": 7, "col": 3 },
+                "end": { "line": 7, "col": 12 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

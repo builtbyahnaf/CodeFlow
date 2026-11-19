@@ -178,7 +178,7 @@ export function mapClangAst(options) {
     const qualifiedName = input.parent
       ? `${input.parent.qualifiedName}::${input.name}`
       : input.name;
-    const scopeKey = `${input.file}|${input.kind}|${qualifiedName}`;
+    const scopeKey = `${input.file}|${input.kind}|${qualifiedName}|${input.disambiguator ?? ''}`;
     const existing = byScopeKey.get(scopeKey);
     if (existing) {
       if (input.node.id) {

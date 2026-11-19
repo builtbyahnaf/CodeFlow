@@ -11,6 +11,22 @@ const astText = await fs.readFile(
   'utf8',
 );
 const sourceText = await fs.readFile(new URL('../fixtures/cpp/basic.cpp', import.meta.url), 'utf8');
+const overloadAst = await fs.readFile(
+  new URL('../fixtures/cpp/ast-overloads.json', import.meta.url),
+  'utf8',
+);
+const overloadSource = await fs.readFile(
+  new URL('../fixtures/cpp/overloads.cpp', import.meta.url),
+  'utf8',
+);
+const unicodeAst = await fs.readFile(
+  new URL('../fixtures/cpp/ast-unicode.json', import.meta.url),
+  'utf8',
+);
+const unicodeSource = await fs.readFile(
+  new URL('../fixtures/cpp/unicode.cpp', import.meta.url),
+  'utf8',
+);
 
 function makeRun(overrides = {}) {
   return mapClangAst({
@@ -209,4 +225,57 @@ test('byte columns are converted to UTF-16 columns', () => {
   assert.equal(utf16Column(line, 5), 3);
   assert.equal(utf16Column(line, 6), 4);
   assert.deepEqual(splitLines('a\r\nb\rc\nd'), ['a', 'b', 'c', 'd']);
+});
+
+test('overloads receive distinct identities and resolve to the right declaration', () => {
+  const run = mapClangAst({
+    runId: 'run:cpp-overloads',
+    path: 'src/overloads.cpp',
+    text: overloadSource,
+    ast: overloadAst,
+    workspaceRoot: 'D:/w',
+  });
+  assert.equal(validateAnalysisRun(run).ok, true);
+  const overloads = run.symbols.filter((symbol) => symbol.name === 'compute');
+  assert.equal(overloads.length, 2);
+  assert.notEqual(overloads[0].symbolId, overloads[1].symbolId);
+  assert.notEqual(overloads[0].disambiguator, overloads[1].disambiguator);
+  const targets = run.relationships
+    .filter((relationship) => relationship.type === 'calls' && relationship.status === 'resolved')
+    .map((relationship) => relationship.to)
+    .sort();
+  assert.deepEqual(targets, overloads.map((symbol) => symbol.symbolId).sort());
+});
+
+test('unicode identifiers keep their names and UTF-16 columns', () => {
+  const run = mapClangAst({
+    runId: 'run:cpp-unicode',
+    path: 'src/unicode.cpp',
+    text: unicodeSource,
+    ast: unicodeAst,
+    workspaceRoot: 'D:/w',
+  });
+  assert.equal(validateAnalysisRun(run).ok, true);
+  const fn = run.symbols.find((symbol) => symbol.name === 'naïve');
+  assert.ok(fn);
+  assert.equal(fn.declaration.startColumn, 32);
+  const parameter = run.symbols.find((symbol) => symbol.name === '値');
+  assert.ok(parameter);
+  assert.equal(parameter.kind, 'parameter');
+});
+
+test('CRLF and LF sources produce the same logical positions', () => {
+  const lf = makeRun();
+  const crlf = makeRun({ text: sourceText.replace(/\n/g, '\r\n') });
+  assert.equal(lf.files[0].lineCount, crlf.files[0].lineCount);
+  assert.deepEqual(
+    lf.symbols.map(
+      (symbol) =>
+        `${symbol.qualifiedName}:${symbol.declaration.startLine}:${symbol.declaration.startColumn}`,
+    ),
+    crlf.symbols.map(
+      (symbol) =>
+        `${symbol.qualifiedName}:${symbol.declaration.startLine}:${symbol.declaration.startColumn}`,
+    ),
+  );
 });
