@@ -8,6 +8,51 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.002] - 2026-11-19
+
+### Phase 2 — C++ Analysis Foundation
+
+Real C++ analysis through Clang AST JSON, with a strict host/pure-adapter split
+and honest degradation. See `docs/PHASE-02-REPORT.md` and
+`docs/adr/0007-cpp-integration-route.md`.
+
+- **Bounded process tooling** (`src/extension/tooling/runTool.js`):
+  - Argument arrays only (no shell), fixed working directory, timeout, cancellation, kill-tree, and stdout/stderr caps.
+  - The only module in the codebase allowed to spawn a process.
+
+- **Toolchain and configuration** (`src/extension/cpp/`):
+  - Clang discovery: setting → compile-database compiler → `PATH` → `clang-cl`/`xcrun`, with a version policy that warns and degrades instead of hard-failing.
+  - Compilation-database discovery and parsing with an explicit override, multi-database scoring, and malformed-JSON handling. Build systems are never executed.
+  - Heuristic fallback (include paths, defines, standard) for projects without a database; every such run is `partial` with `missing_compile_db`.
+  - Header→representative-TU mapping; header analyses are filtered with `focusRunOnPath` and marked `partial` with an `out_of_scope` diagnostic.
+  - Unicode/CRLF-safe source locator (UTF-8 byte → UTF-16 column) and a 4 MB source cap.
+
+- **Pure C++ adapter** (`src/adapters/cpp/`):
+  - Clang AST JSON → validated CSR: files, namespaces, classes/structs, enums, aliases, functions, methods, constructors/destructors, lambdas, variables, fields, parameters.
+  - Calls with honest statuses: `resolved` only from `referencedDecl`; virtual dispatch `possible`/`dynamic_dispatch`; function pointers `unresolved`/`function_pointer`; dependent templates degrade.
+  - Overload identity includes a disambiguator, so same-name overloads stay distinct and calls resolve to the right declaration.
+  - `includes` edges for workspace-owned files; system headers excluded; `instantiates` for constructor expressions.
+  - Diagnostics for parse errors, unsupported constructs, missing configuration, timeouts, caps, and focused headers; sanitised, bounded stderr.
+
+- **Host integration**:
+  - `createCppAnalysisService` orchestrates discovery, analysis, and header focusing; discovery results are cached with a TTL.
+  - Restricted Mode returns `E_UNTRUSTED` before any read or spawn.
+  - Panel analyses route through the service; new `codeflow.analyzeActiveFile` command.
+  - Settings: `codeflow.cpp.clangPath`, `compileCommandsPath`, `fallbackIncludePaths`, `fallbackDefines`, `fallbackStandard`, `timeoutMs`, `maxOutputBytes`, `maxFileBytes`.
+
+- **Tests and fixtures**:
+  - `npm run test:cpp` and C-01…C-12 conformance on a real AST fixture.
+  - `tests/fixtures/cpp/` covers basic declarations, overloads, unicode, CRLF/LF, multi-TU headers, templates, virtual dispatch, function pointers, macros, and parse errors.
+  - 79 new tests over Phase 1 (252 total), all passing.
+
+- **Documentation**: ADR 0007, normative C++ section in `docs/LANGUAGE_ADAPTERS.md`, and the Phase 2 report.
+
+- **Known gaps (recorded, not hidden)**:
+  - No Clang/clangd/libclang is installed in the development environment, so live-Clang timings, the P2-20 anti-false-positive cross-check, and the `perf-medium` smoke test are unverified.
+  - Templates are modelled but not instantiated; macros keep expansion-site provenance only; constructors emit `instantiates` but not constructor `calls`.
+  - Cancellation kill-tree is unit-tested with fake children; no OS-level orphan assertion was run.
+  - No Linux/macOS CI run in this environment.
+
 ## [0.1.001] - 2026-11-16
 
 ### Project Initialization & Core Architecture
