@@ -1,12 +1,12 @@
-# Language adapters (Phase 1 contract)
+# Language adapters (contract)
 
 > **Status: normative.** This is the adapter contract every language backend must
 > satisfy. It describes `src/core/adapterRegistry.js`, the CSR it validates
 > (`docs/CSR_SPECIFICATION.md`), and the conformance suite in
 > `tests/conformance/harness.js`.
 >
-> Phase 2 (C++) and Phase 3 (JavaScript) add adapters; they do not change this
-> boundary.
+> Phase 2 adds the C++ adapter described below. Phase 3 adds JavaScript. Neither
+> changes the core/adapter boundary, the CSR, or the conformance suite.
 
 ## The contract
 
@@ -203,6 +203,103 @@ rule citations, not a generic "failed".
    in fields that participate in identity or the run hash.
 10. Pass C-01 … C-12 before declaring the adapter usable.
 
+## C++ adapter (`cpp-clang`)
+
+The C++ implementation is split so that the adapter stays pure:
+
+| Layer            | Location                                                        | Responsibility                                                                                                          |
+| ---------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Host pipeline    | `src/extension/cpp/pipeline.js`                                 | Trust/path/size checks, toolchain discovery, compile-DB selection, header→TU mapping, Clang invocation, header focusing |
+| Toolchain/config | `src/extension/cpp/{clang,compileDb,analysisConfig,headers}.js` | Discovery order, version policy, compile-DB parsing, heuristic flags, include scanning                                  |
+| Process facility | `src/extension/tooling/runTool.js`                              | Argument arrays, no shell, timeout, cancellation, kill-tree, output caps                                                |
+| Pure adapter     | `src/adapters/cpp/index.js`                                     | Declares capabilities and forwards injected `text` + `cppAst` to the mapper                                             |
+| Mapper           | `src/adapters/cpp/mapper.js`                                    | Clang AST JSON → validated CSR records                                                                                  |
+| Locator          | `src/adapters/cpp/locator.js`                                   | UTF-8 byte → UTF-16 columns, CRLF/CR line counting, file records                                                        |
+
+The adapter never spawns a compiler and never reads a workspace file. Conformance
+rule C-11 fails it if it imports `child_process`, `eval`, or `new Function`.
+
+### Configuration and degradation
+
+Discovery order for the compiler is `codeflow.cpp.clangPath`, then the compiler
+named in a compile-database entry when it is Clang-compatible, then `clang` /
+`clang++` on `PATH`, then `clang-cl` on Windows or `xcrun --find clang` on macOS.
+If nothing is found the host returns typed `E_UNSUPPORTED` with an actionable
+message; nothing is downloaded or shipped.
+
+A major version below the documented floor still attempts analysis and marks the
+run `partial` with `toolchain_version_mismatch`; a toolchain nuance never
+hard-fails the extension.
+
+The compile database is discovered from `codeflow.cpp.compileCommandsPath`, then
+the workspace root, `build/`, `cmake-build-*/`, `out/`, and finally a shallow
+single-match search. When several databases exist, the one covering the largest
+file set wins and the choice is recorded. **No build system is ever executed.**
+Without a database, heuristic mode uses:
+
+- `codeflow.cpp.fallbackIncludePaths`
+- `codeflow.cpp.fallbackDefines`
+- `codeflow.cpp.fallbackStandard`
+
+Every run produced in heuristic mode is `partial` with `missing_compile_db`, and
+the UI must show that completeness. System headers will usually be unresolved.
+
+Headers are not analysed standalone. The host finds a representative translation
+unit that includes the header, analyses that TU, then filters the run with
+`focusRunOnPath`. The result is marked `partial` with an `out_of_scope` info
+diagnostic naming the TU. Symbols keep their header file attribution. A header
+with no including TU is analysed syntactically only with `header_without_tu`.
+
+### Support boundaries
+
+These boundaries are normative for V1. Where a construct is not modelled, the
+CSR must say so with a reason code or a diagnostic; silence is a defect.
+
+| Construct                                           | V1 boundary                                                                                                                                                                                                                              |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Templates                                           | Declarations modelled (`extensions.template = true`); instantiations not expanded. Calls on dependent types are `unresolved` or `possible` with `template_dependent`                                                                     |
+| Overloads                                           | Distinct identities via kind + qualified name + disambiguator (arity and parameter kinds). A call to one overload is `resolved`; an unresolved set is `possible` or `unresolved` with candidates in evidence, never a guessed `resolved` |
+| Macros                                              | Expansion-site provenance only; macro bodies are not inlined into the graph. Object-like macros producing declarations may make identity ambiguous and are reported as `unsupported_construct`                                           |
+| Function pointers, member pointers, `std::function` | `unresolved` with `function_pointer`; never `resolved`                                                                                                                                                                                   |
+| Virtual dispatch                                    | Calls through a known static type are `possible` with `dynamic_dispatch`; a single known override may be `inferred`. No `resolved` edge is invented                                                                                      |
+| Constructors / destructors                          | `CXXConstructExpr` emits `instantiates` to the class. V1 does not emit a separate constructor `calls` edge                                                                                                                               |
+| `goto` / computed `goto`                            | Recorded as a construct; full control flow is Phase 4. Computed jumps remain `unresolved`                                                                                                                                                |
+| Exceptions                                          | `throw`/`catch` sites recorded as constructs with an `unsupported_construct` info diagnostic; exception-path modelling is Phase 4                                                                                                        |
+| Preprocessor conditionals                           | Only the compile database's active configuration is visible; alternate branches are invisible and documented in the UI                                                                                                                   |
+| `extern "C"` / mangling                             | Linkage recorded in `extensions`; identity is unaffected                                                                                                                                                                                 |
+| Multiple inheritance                                | All bases recorded; override disambiguation may be `possible`                                                                                                                                                                            |
+| C++20 modules                                       | Not supported in V1; `unsupported_construct`                                                                                                                                                                                             |
+| Includes                                            | `includes` file→file edges for workspace-owned files; system headers are excluded from the run and reported honestly                                                                                                                     |
+
+### Partial-analysis rules
+
+A run is `partial` when any of the following occurs, and each adds a diagnostic:
+missing compile database (`missing_compile_db`), missing system headers, Clang
+parse errors (`parse_error`), timeout or cancellation (`budget_exceeded` /
+`cancelled`), output cap reached (`budget_exceeded`), unsupported construct in a
+user file (`unsupported_construct`), toolchain version mismatch
+(`toolchain_version_mismatch`), or a focused header run (`out_of_scope`).
+
+Timeouts, output-cap breaches, and cancellation are **partial runs**, not
+rejections: the host keeps whatever validated records were produced and labels
+the result. Missing toolchain, missing workspace, outside-workspace paths, and
+Restricted Mode are typed failures before analysis (`E_UNSUPPORTED`, `E_INPUT`,
+`E_UNTRUSTED`).
+
+### Fixtures and verification
+
+Committed under `tests/fixtures/cpp/`: `basic.cpp`, `overloads.cpp`,
+`unicode.cpp`, `multi-tu` AST/source pairs, and AST fixtures for templates,
+virtual dispatch, function pointers, macros, and parse errors. Unit coverage
+lives in `tests/unit/cpp*.test.js`; conformance lives in
+`tests/conformance/cpp.conformance.test.js`; run both with `npm run test:cpp`.
+
+No Clang installation is assumed by the test suite: AST fixtures exercise the
+mapper, and a fake `runTool` exercises discovery, execution, timeout, cap,
+cancellation, and trust behaviour. The anti-false-positive cross-check against a
+live Clang (P2-20) is recorded as unverified in the Phase 2 report rather than
+silently skipped.
+
 ## Reference implementation: the mock adapter
 
 `src/adapters/mock/index.js` is the fixture that exercises the whole contract:
@@ -221,16 +318,18 @@ It registers `.mock` only and declares no `generateCFG`/`generateDFG`, so
 That is the honest behaviour the capability system exists to produce. Phase 4
 adds the constructs capability to real adapters.
 
-## Planned adapters
+## Adapter status
 
-| Phase | Adapter    | Notes                                                                                       |
-| ----- | ---------- | ------------------------------------------------------------------------------------------- |
-| 2     | C++        | Requires a compile database for good resolution; macros and templates must degrade honestly |
-| 3     | JavaScript | Module resolution and dynamic dispatch are the main uncertainty sources                     |
+| Phase | Adapter                 | Status  | Notes                                                                   |
+| ----- | ----------------------- | ------- | ----------------------------------------------------------------------- |
+| 1     | Mock                    | Shipped | Contract fixture on `.mock` only                                        |
+| 2     | C++ (`cpp-clang`)       | Shipped | Route A; host-driven Clang AST JSON; compile-DB and heuristic modes     |
+| 3     | JavaScript              | Next    | Module resolution and dynamic dispatch are the main uncertainty sources |
+| 7     | C++ cross-file evidence | Planned | May add `clangd` evidence without redefining resolution statuses        |
 
-Both phases must satisfy the same CSR and the same conformance suite. No adapter
-may add a field to the graph DTO directly; additions go through the CSR and the
-DTO in `src/core`.
+Every adapter must satisfy the same CSR and the same conformance suite. No
+adapter may add a field to the graph DTO directly; additions go through the CSR
+and the DTO in `src/core`.
 
 ## Non-goals
 
@@ -238,4 +337,4 @@ DTO in `src/core`.
 - Network access of any kind.
 - Silently guessing a call target to make a graph look complete.
 - Language-specific types leaking into `src/core/graph` or the webview.
-- Claiming `.js` or `.cpp` before a real parser ships.
+- Declaring support for an extension before a real parser ships.
