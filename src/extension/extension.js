@@ -11,11 +11,34 @@ import * as vscode from 'vscode';
 import { createLogger } from './log.js';
 import { createAdapterRegistry } from '../core/adapterRegistry.js';
 import { mockAdapter } from '../adapters/mock/index.js';
+import { cppAdapter } from '../adapters/cpp/index.js';
+import { createCppAnalysisService } from './cpp/pipeline.js';
+import { runTool } from './tooling/runTool.js';
 import { createPanelManager } from './panel.js';
 import { registerCommands } from './commands.js';
 import { PROTOCOL_VERSION } from '../core/protocol/envelope.js';
 
 const EXTENSION_VERSION = '0.0.1';
+
+/**
+ * Read the C++ settings. Called per analysis so a settings change takes effect
+ * without reloading the window.
+ *
+ * @returns {import('./cpp/pipeline.js').CppSettings}
+ */
+function cppSettings() {
+  const config = vscode.workspace.getConfiguration('codeflow');
+  return {
+    clangPath: config.get('cpp.clangPath', ''),
+    compileCommandsPath: config.get('cpp.compileCommandsPath', ''),
+    fallbackIncludePaths: config.get('cpp.fallbackIncludePaths', []),
+    fallbackDefines: config.get('cpp.fallbackDefines', []),
+    fallbackStandard: config.get('cpp.fallbackStandard', ''),
+    timeoutMs: config.get('cpp.timeoutMs', 60_000),
+    maxOutputBytes: config.get('cpp.maxOutputBytes', 64 * 1024 * 1024),
+    maxTuBytes: config.get('cpp.maxFileBytes', 4 * 1024 * 1024),
+  };
+}
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -26,11 +49,20 @@ export async function activate(context) {
 
   const registry = createAdapterRegistry();
   registry.register(mockAdapter);
+  registry.register(cppAdapter);
+
+  const analysis = createCppAnalysisService({
+    registry,
+    runTool,
+    settings: cppSettings,
+    logger,
+  });
 
   const panelManager = createPanelManager({
     context,
     logger,
     registry,
+    analysis,
     extensionVersion: EXTENSION_VERSION,
   });
 
@@ -60,6 +92,7 @@ export async function activate(context) {
     version: EXTENSION_VERSION,
     protocolVersion: PROTOCOL_VERSION,
     registry,
+    analysis,
     panelManager,
     logger,
   };

@@ -19,21 +19,26 @@ import { createPanelWire } from './panelWire.js';
  *   context: vscode.ExtensionContext,
  *   logger: {debug: Function, warn: Function, error: Function},
  *   registry: ReturnType<typeof import('../core/adapterRegistry.js').createAdapterRegistry>,
+ *   analysis?: {analyze: (input: object) => Promise<any>},
  *   extensionVersion: string,
  * }} options
  */
-export function createPanelManager({ context, logger, registry, extensionVersion }) {
+export function createPanelManager({ context, logger, registry, analysis, extensionVersion }) {
   /** @type {vscode.WebviewPanel | null} */
   let panel = null;
   /** @type {{dispose: Function, respond: Function, pendingCount: Function} | null} */
   let bridge = null;
   let runCounter = 0;
+  /** @type {string | null} */
+  let preferredPath = null;
+  const analyzer = analysis ?? registry;
 
   const wire = createPanelWire({
     logger,
     registry,
     extensionVersion,
     loadRun: (path) => analyzeRun(path),
+    defaultPath: () => preferredPath ?? 'sample.mock',
   });
 
   function webviewRoot() {
@@ -50,16 +55,22 @@ export function createPanelManager({ context, logger, registry, extensionVersion
   async function analyzeRun(path) {
     runCounter += 1;
     const runId = `run:${Date.now().toString(36)}-${runCounter}`;
-    const analysis = await registry.analyze({ path, runId });
-    if (!analysis.ok) {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const result = await analyzer.analyze({
+      path,
+      runId,
+      ...(workspaceRoot ? { workspaceRoot } : {}),
+      trusted: vscode.workspace.isTrusted,
+    });
+    if (!result.ok) {
       return {
         ok: false,
-        code: analysis.code,
-        message: analysis.message,
-        issues: analysis.issues,
+        code: result.code,
+        message: result.message,
+        issues: result.issues,
       };
     }
-    return { ok: true, run: analysis.run };
+    return { ok: true, run: result.run };
   }
 
   function applyHtml(target) {
@@ -111,6 +122,21 @@ export function createPanelManager({ context, logger, registry, extensionVersion
 
   return {
     show,
+    /**
+     * Show the panel and analyze a specific file. Re-applying the HTML makes
+     * the webview request its graph again, now with the preferred path.
+     *
+     * @param {string} filePath
+     */
+    showFile(filePath) {
+      preferredPath = filePath;
+      if (panel) {
+        applyHtml(panel);
+        panel.reveal(undefined, false);
+        return panel;
+      }
+      return show();
+    },
     dispose() {
       if (bridge) {
         bridge.dispose('extension_disposed');

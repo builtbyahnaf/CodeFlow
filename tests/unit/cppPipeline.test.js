@@ -319,6 +319,33 @@ test('toolchain and database discovery are cached between analyses', async () =>
   assert.equal(dbCalls, 2);
 });
 
+test('Restricted Mode is rejected before any file is read', async () => {
+  const registry = createAdapterRegistry();
+  registry.register(cppAdapter);
+  let read = false;
+  const service = createCppAnalysisService({
+    registry,
+    readFile: async () => {
+      read = true;
+      return '';
+    },
+    runTool: async () => {
+      throw new Error('must not run');
+    },
+    discoverClangFn: async () => ({ ok: false, code: 'E_UNSUPPORTED', message: '' }),
+    discoverCompileDbFn: async () => ({ ok: false, code: 'E_COMPILE_DB', message: '' }),
+  });
+  const result = await service.analyze({
+    runId: 'run:cpp-untrusted',
+    path: 'src/main.cpp',
+    workspaceRoot,
+    trusted: false,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'E_UNTRUSTED');
+  assert.equal(read, false);
+});
+
 test('stderr is sanitized before it reaches the CSR', async () => {
   const { service } = createService({
     toolResult: {

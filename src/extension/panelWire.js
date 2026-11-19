@@ -28,12 +28,19 @@ import { hashRun } from '../core/csr/serialize.js';
  *   {ok: true, run: import('../core/csr/entities.js').AnalysisRun} |
  *   {ok: false, code: string, message: string, issues?: unknown}
  * >} loadRun
+ * @property {() => string} [defaultPath]
  */
 
 /**
  * @param {WireOptions} options
  */
-export function createPanelWire({ logger, registry, extensionVersion, loadRun }) {
+export function createPanelWire({
+  logger,
+  registry,
+  extensionVersion,
+  loadRun,
+  defaultPath = () => 'sample.mock',
+}) {
   return function wire(target) {
     if (!target?.webview || typeof target.webview.onDidReceiveMessage !== 'function') {
       throw new TypeError('Panel target must expose webview.onDidReceiveMessage.');
@@ -78,7 +85,7 @@ export function createPanelWire({ logger, registry, extensionVersion, loadRun })
      *   {ok: false, code: string, message: string, issues?: unknown}
      * >}
      */
-    async function ensureRun(path = 'sample.mock') {
+    async function ensureRun(path = defaultPath()) {
       if (current && current.path === path) {
         return { ok: true, run: current.run, query: current.query };
       }
