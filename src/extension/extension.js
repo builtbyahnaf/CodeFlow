@@ -11,8 +11,10 @@ import * as vscode from 'vscode';
 import { createLogger } from './log.js';
 import { createAdapterRegistry } from '../core/adapterRegistry.js';
 import { mockAdapter } from '../adapters/mock/index.js';
-import { cppAdapter } from '../adapters/cpp/index.js';
+import { CPP_ADAPTER_ID, cppAdapter } from '../adapters/cpp/index.js';
+import { JS_ADAPTER_ID, javascriptAdapter } from '../adapters/javascript/index.js';
 import { createCppAnalysisService } from './cpp/pipeline.js';
+import { createJavaScriptAnalysisService } from './javascript/pipeline.js';
 import { runTool } from './tooling/runTool.js';
 import { createPanelManager } from './panel.js';
 import { registerCommands } from './commands.js';
@@ -41,6 +43,23 @@ function cppSettings() {
 }
 
 /**
+ * Read the JavaScript settings. Called per analysis so a settings change takes
+ * effect without reloading the window.
+ *
+ * @returns {import('./javascript/pipeline.js').JavaScriptSettings}
+ */
+function javascriptSettings() {
+  const config = vscode.workspace.getConfiguration('codeflow');
+  return {
+    resolveNodeModules: config.get('javascript.resolveNodeModules', false),
+    maxFileBytes: config.get('javascript.maxFileBytes', 2 * 1024 * 1024),
+    maxLines: config.get('javascript.maxLines', 20_000),
+    maxModules: config.get('javascript.maxModules', 64),
+    maxDepth: config.get('javascript.maxDepth', 8),
+  };
+}
+
+/**
  * @param {vscode.ExtensionContext} context
  */
 export async function activate(context) {
@@ -50,13 +69,37 @@ export async function activate(context) {
   const registry = createAdapterRegistry();
   registry.register(mockAdapter);
   registry.register(cppAdapter);
+  registry.register(javascriptAdapter);
 
-  const analysis = createCppAnalysisService({
+  const cppAnalysis = createCppAnalysisService({
     registry,
     runTool,
     settings: cppSettings,
     logger,
   });
+  const javascriptAnalysis = createJavaScriptAnalysisService({
+    registry,
+    settings: javascriptSettings,
+    logger,
+  });
+
+  // The panel speaks to one analyzer. Route by the resolved adapter so the
+  // panel and the command share exactly the same host pipeline.
+  const analysis = {
+    /**
+     * @param {{path?: string}} input
+     */
+    analyze(input) {
+      const adapter = registry.resolve(input?.path ?? '');
+      if (adapter?.id === JS_ADAPTER_ID) {
+        return javascriptAnalysis.analyze(input);
+      }
+      if (adapter?.id === CPP_ADAPTER_ID) {
+        return cppAnalysis.analyze(input);
+      }
+      return registry.analyze(input);
+    },
+  };
 
   const panelManager = createPanelManager({
     context,
