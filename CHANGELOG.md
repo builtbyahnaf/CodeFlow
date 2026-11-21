@@ -8,6 +8,53 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.003] - 2026-11-21
+
+### Phase 3 — JavaScript Analysis Foundation
+
+Real JavaScript analysis through acorn and eslint-scope, with the same
+host/pure-adapter split as C++ and typed uncertainty. See
+`docs/PHASE-03-REPORT.md` and `docs/adr/0008-javascript-parser-choice.md`.
+
+- **Parser boundary** (`src/adapters/javascript/`):
+  - acorn 8.19.0 for ESTree with locations/ranges, eslint-scope 8.4.0 for lexical scopes; both pure JavaScript and bundled by esbuild.
+  - BOM, hashbang, CRLF/CR/LF, unicode identifiers and UTF-16 columns.
+  - Generic AST walking without `acorn-walk`; module-specifier collection for static, re-exported, dynamic and CommonJS requests.
+
+- **Declarations and scopes**:
+  - Functions, arrows, classes, fields, private `#names`, static members, getters/setters, variables, destructuring patterns, parameters and import bindings.
+  - Shadowing, hoisting, TDZ references and catch scopes; named function expressions use their inner name.
+  - `var`/`let`/`const`, default parameters, object-literal methods and anonymous identities that survive whitespace/comment/line shifts.
+
+- **Module graph**:
+  - ESM named/default/namespace, re-export chains to depth 8, CommonJS `require`/`module.exports`/`exports.x`, JSON modules.
+  - Conservative resolver: relative files and `index.*`, optional workspace `node_modules`, typed gaps for aliases, absolute paths, escaping paths and complex `exports` maps.
+  - Circular imports terminate; caps produce `budget_exceeded` diagnostics instead of silent truncation; mixed ESM/CJS files are partial with `mixed_module_system`.
+
+- **Calls and uncertainty**:
+  - `resolved` only for lexically known functions and imports with a known export.
+  - Same-file receiver shapes → `inferred`/`dynamic_dispatch`; unknown receivers, computed members and unknown variables → `unresolved` with typed reasons.
+  - `this.field` and accessor property access → `inferred` `reads`/`writes`.
+  - Callbacks → `possible`/`callback_parameter`; timers → `possible`/`deferred_invocation`; `eval`/`with`, prototype mutation and recursion are flagged.
+
+- **Host pipeline** (`src/extension/javascript/pipeline.js`):
+  - Restricted Mode returns `E_UNTRUSTED` before any read; workspace/path/NUL/exclusion/minified checks; 2 MB and 20 000-line caps.
+  - Package-type cache, bounded module BFS, JSON modules, diagnostics.
+  - Panel analyses route by adapter id; settings: `codeflow.javascript.resolveNodeModules`, `maxFileBytes`, `maxLines`, `maxModules`, `maxDepth`.
+
+- **Tests and fixtures**:
+  - 28 concern folders with machine-checked `expected.json`, a generic runner, focused unit tests, and C-01…C-12 conformance.
+  - `npm run test:js`; 80 JavaScript tests; 332 total tests passing.
+  - `perf-large` (5 100 lines) measured at ≈350 ms end to end on one Windows machine; no RSS/Linux/macOS numbers.
+
+- **Documentation**: ADR 0008, JavaScript section in `docs/LANGUAGE_ADAPTERS.md`, production-dependency table, and the Phase 3 report.
+
+- **Known gaps (recorded, not hidden)**:
+  - TypeScript and JSX are rejected by design, not partially parsed; bundler aliases and complex `exports` maps are deferred to Phase 8.
+  - The anti-false-positive audit (P3-23) and diagnostics wording review (P3-27) were author-only; the report lists all 15 resolved call edges.
+  - No real-world OSS files were added to the corpus; performance is synthetic and single-machine.
+  - VSIX install and Linux/macOS CI remain unrun in this environment.
+
 ## [0.1.002] - 2026-11-19
 
 ### Phase 2 — C++ Analysis Foundation
