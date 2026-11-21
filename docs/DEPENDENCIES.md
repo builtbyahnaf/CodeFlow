@@ -6,19 +6,36 @@ dependency, its license, and why it is acceptable. It is enforced by
 
 ## Policy
 
-1. **No runtime dependencies.** The extension ships bundles, not `node_modules`.
-   Anything imported at runtime is either project source or inlined by esbuild.
+1. **No shipped `node_modules`.** The extension ships bundles, not a dependency
+   tree. Runtime imports are either project source or inlined by esbuild.
+   Runtime packages are still declared under `dependencies` so the lockfile and
+   license audit can see them.
 2. **Development dependencies must be GPL-compatible.** Copyleft and permissive
    licenses are fine; proprietary or non-commercial-only licenses are not.
 3. **Native modules are a last resort.** They complicate packaging, CI, and the
-   extension host. Phase 0 has none in the shipped artifact.
+   extension host. Phase 0 has none in the shipped artifact; Phase 3 adds pure
+   JavaScript parsers only.
 4. **Every direct dependency needs a reason.** "Convenient" is not one.
 5. **Licenses are checked mechanically**, not by memory. The allowlist lives in
    `scripts/checkLicenses.js`; the audit reads `package-lock.json` only.
 
-## Direct dependencies (all development-only)
+## Production dependencies (bundled, never shipped as files)
 
-Measured on 2026-11-16. Sizes are the unpacked directory size in `node_modules`.
+| Package        | Version | License      | Purpose                                    | Verdict |
+| -------------- | ------- | ------------ | ------------------------------------------ | ------- |
+| `acorn`        | 8.19.0  | MIT          | ESTree parser for JavaScript               | Accept  |
+| `eslint-scope` | 8.4.0   | BSD-2-Clause | Lexical scope and reference analysis       | Accept  |
+| `esrecurse`    | 4.3.0   | BSD-2-Clause | Transitive: AST traversal for eslint-scope | Accept  |
+| `estraverse`   | 5.3.0   | BSD-2-Clause | Transitive: AST traversal for eslint-scope | Accept  |
+
+Both direct packages are pure JavaScript with no install scripts, native code, or
+network access. esbuild inlines them into `dist/extension.cjs`, so
+`vsce package --no-dependencies` ships no `node_modules`. The licenses are
+permissive and GPL-3.0-only compatible.
+
+## Development dependencies
+
+Measured on 2026-11-19. Sizes are the unpacked directory size in `node_modules`.
 
 | Package                 | Version | License | Purpose                          | Size                           | Verdict           |
 | ----------------------- | ------- | ------- | -------------------------------- | ------------------------------ | ----------------- |
@@ -47,13 +64,13 @@ Notes:
 | Metric                                  | Value    |
 | --------------------------------------- | -------- |
 | Lockfile package entries                | 437      |
-| Production (shipped) entries            | 0        |
-| Development entries                     | 437      |
+| Production (bundled, not shipped)       | 4        |
+| Development entries                     | 433      |
 | `node_modules` size                     | 111.2 MB |
 | Top-level directories in `node_modules` | 313      |
 | Shipped `node_modules` in the VSIX      | none     |
 
-License histogram across the lockfile (all development-only):
+License histogram across the lockfile:
 
 | License                               | Count |
 | ------------------------------------- | ----- |
