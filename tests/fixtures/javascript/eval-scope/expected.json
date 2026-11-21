@@ -1,0 +1,17 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "diagnostics": [
+    "eval_scope"
+  ],
+  "relationships": [
+    {
+      "type": "calls",
+      "fromName": "caller",
+      "toName": "target",
+      "status": "possible",
+      "reasonCode": "eval_scope"
+    }
+  ]
+}

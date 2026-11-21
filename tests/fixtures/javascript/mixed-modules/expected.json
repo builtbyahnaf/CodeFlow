@@ -1,0 +1,26 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "partial",
+  "diagnostics": [
+    "mixed_module_system"
+  ],
+  "relationships": [
+    {
+      "type": "imports",
+      "fromName": "main",
+      "status": "resolved",
+      "extensions": {
+        "specifier": "./util.js"
+      }
+    },
+    {
+      "type": "imports",
+      "fromName": "main",
+      "status": "resolved",
+      "extensions": {
+        "specifier": "./legacy.cjs"
+      }
+    }
+  ]
+}

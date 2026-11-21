@@ -1,0 +1,19 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "calls",
+      "fromName": "invoke",
+      "status": "possible",
+      "reasonCode": "callback_parameter"
+    },
+    {
+      "type": "calls",
+      "fromName": "deferred",
+      "status": "possible",
+      "reasonCode": "deferred_invocation"
+    }
+  ]
+}

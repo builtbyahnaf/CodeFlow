@@ -1,0 +1,32 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "imports",
+      "fromName": "main",
+      "status": "resolved"
+    },
+    {
+      "type": "calls",
+      "fromName": "main",
+      "toName": "helper",
+      "status": "resolved"
+    },
+    {
+      "type": "calls",
+      "fromName": "main",
+      "toName": "extra",
+      "status": "resolved"
+    },
+    {
+      "type": "exports",
+      "fromName": "index",
+      "status": "resolved",
+      "extensions": {
+        "exportKind": "reexport"
+      }
+    }
+  ]
+}

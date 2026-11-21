@@ -1,0 +1,23 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "first",
+      "kind": "parameter"
+    },
+    {
+      "name": "second",
+      "kind": "parameter"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "reads",
+      "toName": "first",
+      "toKind": "parameter",
+      "status": "resolved"
+    }
+  ]
+}

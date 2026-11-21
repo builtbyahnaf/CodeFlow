@@ -1,0 +1,19 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "sequence",
+      "kind": "function"
+    }
+  ],
+  "symbolExtensions": [
+    {
+      "name": "sequence",
+      "extensions": {
+        "generator": true
+      }
+    }
+  ]
+}

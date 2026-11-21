@@ -1,0 +1,30 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "loop",
+      "kind": "function"
+    },
+    {
+      "name": "arrow",
+      "kind": "closure"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "reads",
+      "toName": "i",
+      "toKind": "variable",
+      "status": "resolved"
+    },
+    {
+      "type": "reads",
+      "fromName": "arrow",
+      "toName": "j",
+      "toKind": "variable",
+      "status": "resolved"
+    }
+  ]
+}

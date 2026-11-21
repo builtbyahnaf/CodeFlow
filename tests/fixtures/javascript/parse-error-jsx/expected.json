@@ -1,0 +1,9 @@
+{
+  "main": "view.jsx",
+  "packageType": "module",
+  "completeness": "partial",
+  "diagnostics": [
+    "unsupported_syntax"
+  ],
+  "symbols": []
+}

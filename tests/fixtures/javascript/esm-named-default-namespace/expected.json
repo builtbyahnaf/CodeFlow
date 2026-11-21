@@ -1,0 +1,38 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "imports",
+      "fromName": "main",
+      "status": "resolved",
+      "extensions": {
+        "specifier": "./util.js"
+      }
+    },
+    {
+      "type": "calls",
+      "fromName": "main",
+      "toName": "primary",
+      "toKind": "function",
+      "status": "resolved"
+    },
+    {
+      "type": "calls",
+      "fromName": "main",
+      "toName": "helper",
+      "toKind": "function",
+      "status": "resolved"
+    },
+    {
+      "type": "exports",
+      "fromName": "util",
+      "toName": "primary",
+      "status": "resolved",
+      "extensions": {
+        "exportName": "default"
+      }
+    }
+  ]
+}

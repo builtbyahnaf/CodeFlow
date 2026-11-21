@@ -1,0 +1,37 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "hoisted",
+      "kind": "function"
+    },
+    {
+      "name": "later",
+      "kind": "function"
+    },
+    {
+      "name": "tdz",
+      "kind": "function"
+    },
+    {
+      "name": "before",
+      "kind": "variable"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "calls",
+      "fromName": "hoisted",
+      "toName": "later",
+      "status": "resolved"
+    },
+    {
+      "type": "reads",
+      "fromName": "tdz",
+      "toName": "before",
+      "status": "resolved"
+    }
+  ]
+}

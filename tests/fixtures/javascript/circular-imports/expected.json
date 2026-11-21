@@ -1,0 +1,28 @@
+{
+  "main": "a.mjs",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "imports",
+      "fromName": "a",
+      "status": "resolved"
+    },
+    {
+      "type": "imports",
+      "fromName": "b",
+      "status": "resolved"
+    },
+    {
+      "type": "calls",
+      "fromName": "a",
+      "toName": "b",
+      "status": "resolved"
+    },
+    {
+      "type": "calls",
+      "fromName": "viaA",
+      "toName": "a",
+      "status": "resolved"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "renamed",
+      "kind": "variable"
+    },
+    {
+      "name": "b",
+      "kind": "variable"
+    },
+    {
+      "name": "first",
+      "kind": "variable"
+    },
+    {
+      "name": "rest",
+      "kind": "variable"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "reads",
+      "toName": "renamed",
+      "status": "resolved"
+    },
+    {
+      "type": "reads",
+      "toName": "rest",
+      "status": "resolved"
+    }
+  ]
+}

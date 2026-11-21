@@ -45,6 +45,9 @@ export default [
       'node_modules/**',
       'context/**',
       'docs/**',
+      // Fixtures deliberately contain anti-patterns (eval, with, unused
+      // bindings, private members, parse errors) that the adapter must analyse.
+      'tests/fixtures/**',
       '.vscode-test/**',
       'codeflow.vsix',
       '**/*.vsix',

@@ -1,0 +1,14 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "writes",
+      "fromName": "patch",
+      "to": "external:Array.prototype.sum",
+      "status": "possible",
+      "reasonCode": "prototype_mutation"
+    }
+  ]
+}

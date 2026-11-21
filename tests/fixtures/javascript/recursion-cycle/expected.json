@@ -1,0 +1,16 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "calls",
+      "fromName": "fact",
+      "toName": "fact",
+      "status": "resolved",
+      "extensions": {
+        "recursive": true
+      }
+    }
+  ]
+}

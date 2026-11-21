@@ -1,0 +1,34 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "Counter",
+      "kind": "class"
+    },
+    {
+      "name": "#count",
+      "kind": "field"
+    },
+    {
+      "name": "bump",
+      "kind": "closure"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "writes",
+      "fromName": "bump",
+      "toName": "#count",
+      "status": "inferred",
+      "reasonCode": "dynamic_dispatch"
+    },
+    {
+      "type": "reads",
+      "fromName": "bump",
+      "toName": "#count",
+      "status": "inferred"
+    }
+  ]
+}

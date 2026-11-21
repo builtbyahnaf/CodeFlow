@@ -1,0 +1,55 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "celsius",
+      "kind": "method",
+      "disambiguator": "get"
+    },
+    {
+      "name": "celsius",
+      "kind": "method",
+      "disambiguator": "set"
+    },
+    {
+      "name": "#celsius",
+      "kind": "field"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "writes",
+      "toName": "celsius",
+      "toKind": "method",
+      "status": "inferred",
+      "extensions": {
+        "accessor": "setter"
+      }
+    },
+    {
+      "type": "reads",
+      "toName": "celsius",
+      "toKind": "method",
+      "status": "inferred",
+      "extensions": {
+        "accessor": "getter"
+      }
+    },
+    {
+      "type": "writes",
+      "fromName": "celsius",
+      "fromKind": "method",
+      "toName": "#celsius",
+      "status": "inferred"
+    },
+    {
+      "type": "reads",
+      "fromName": "celsius",
+      "fromKind": "method",
+      "toName": "#celsius",
+      "status": "inferred"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "#secret",
+      "kind": "field"
+    },
+    {
+      "name": "#shared",
+      "kind": "field"
+    }
+  ],
+  "symbolExtensions": [
+    {
+      "name": "#shared",
+      "extensions": {
+        "static": true,
+        "private": true
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "type": "reads",
+      "fromName": "read",
+      "toName": "#secret",
+      "status": "inferred"
+    },
+    {
+      "type": "writes",
+      "fromName": "write",
+      "toName": "#secret",
+      "status": "inferred"
+    }
+  ]
+}

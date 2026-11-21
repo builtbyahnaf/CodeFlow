@@ -1,0 +1,19 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "load",
+      "kind": "function"
+    }
+  ],
+  "symbolExtensions": [
+    {
+      "name": "load",
+      "extensions": {
+        "async": true
+      }
+    }
+  ]
+}

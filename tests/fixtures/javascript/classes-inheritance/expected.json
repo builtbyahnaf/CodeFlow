@@ -1,0 +1,40 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "Base",
+      "kind": "class"
+    },
+    {
+      "name": "Child",
+      "kind": "class"
+    },
+    {
+      "name": "run",
+      "kind": "function"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "inherits",
+      "fromName": "Child",
+      "toName": "Base",
+      "status": "resolved"
+    },
+    {
+      "type": "instantiates",
+      "fromName": "run",
+      "toName": "Child",
+      "status": "resolved"
+    },
+    {
+      "type": "calls",
+      "fromName": "run",
+      "toName": "save",
+      "status": "inferred",
+      "reasonCode": "dynamic_dispatch"
+    }
+  ]
+}

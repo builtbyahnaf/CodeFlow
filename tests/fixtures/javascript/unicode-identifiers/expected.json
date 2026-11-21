@@ -1,0 +1,31 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "naïve",
+      "kind": "function"
+    },
+    {
+      "name": "函数",
+      "kind": "parameter"
+    },
+    {
+      "name": "café",
+      "kind": "variable"
+    },
+    {
+      "name": "Café",
+      "kind": "class"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "calls",
+      "fromName": "order",
+      "toName": "naïve",
+      "status": "resolved"
+    }
+  ]
+}

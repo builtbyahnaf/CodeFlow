@@ -1,0 +1,11 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "synthetic": {
+    "count": 1700,
+    "template": "export function fn{index}(value) {\n  return value + {index};\n}"
+  },
+  "symbolCountAtLeast": 1700,
+  "maxDurationMs": 3000
+}

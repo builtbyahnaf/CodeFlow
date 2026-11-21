@@ -1,0 +1,13 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "calls",
+      "fromName": "callIt",
+      "status": "unresolved",
+      "reasonCode": "unknown_receiver"
+    }
+  ]
+}

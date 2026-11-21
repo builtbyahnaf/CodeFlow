@@ -1,0 +1,12 @@
+{
+  "main": "main.ts",
+  "packageType": "module",
+  "completeness": "partial",
+  "diagnostics": [
+    "unsupported_language"
+  ],
+  "symbols": [],
+  "inline": {
+    "main.ts": "export function typed(value: number): number {\n  return value;\n}\n"
+  }
+}

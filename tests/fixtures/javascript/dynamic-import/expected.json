@@ -1,0 +1,17 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "imports",
+      "fromName": "load",
+      "status": "possible",
+      "reasonCode": "dynamic_dispatch",
+      "extensions": {
+        "specifier": "./util.js",
+        "dynamic": true
+      }
+    }
+  ]
+}

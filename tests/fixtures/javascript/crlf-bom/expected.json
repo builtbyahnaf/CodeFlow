@@ -1,0 +1,22 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "first",
+      "kind": "function"
+    },
+    {
+      "name": "second",
+      "kind": "function"
+    }
+  ],
+  "symbolPositions": [
+    {
+      "name": "second",
+      "startLine": 1,
+      "startColumn": 7
+    }
+  ]
+}

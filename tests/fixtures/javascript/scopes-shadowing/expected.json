@@ -1,0 +1,37 @@
+{
+  "main": "main.js",
+  "packageType": "module",
+  "completeness": "full",
+  "symbols": [
+    {
+      "name": "value",
+      "kind": "parameter"
+    },
+    {
+      "name": "value",
+      "kind": "variable"
+    },
+    {
+      "name": "shadow",
+      "kind": "function"
+    }
+  ],
+  "relationships": [
+    {
+      "type": "reads",
+      "fromName": "shadow",
+      "fromKind": "function",
+      "toName": "value",
+      "toKind": "parameter",
+      "status": "resolved"
+    },
+    {
+      "type": "reads",
+      "fromName": "shadow",
+      "fromKind": "function",
+      "toName": "value",
+      "toKind": "variable",
+      "status": "resolved"
+    }
+  ]
+}

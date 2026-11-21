@@ -1,0 +1,29 @@
+{
+  "main": "main.cjs",
+  "packageType": "commonjs",
+  "completeness": "full",
+  "relationships": [
+    {
+      "type": "imports",
+      "fromName": "main",
+      "status": "resolved",
+      "extensions": {
+        "moduleSystem": "cjs"
+      }
+    },
+    {
+      "type": "calls",
+      "fromName": "add",
+      "toName": "helper",
+      "status": "resolved"
+    },
+    {
+      "type": "exports",
+      "fromName": "main",
+      "status": "resolved",
+      "extensions": {
+        "exportName": "add"
+      }
+    }
+  ]
+}
