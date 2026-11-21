@@ -300,6 +300,95 @@ cancellation, and trust behaviour. The anti-false-positive cross-check against a
 live Clang (P2-20) is recorded as unverified in the Phase 2 report rather than
 silently skipped.
 
+## JavaScript adapter (`js-acorn`)
+
+The JavaScript implementation keeps the same host/pure-adapter split as C++:
+
+| Layer           | Location                                | Responsibility                                                                                                |
+| --------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Host pipeline   | `src/extension/javascript/pipeline.js`  | Trust/path/size checks, file reads, package-type detection, relative and package resolution, module-graph BFS |
+| Parser boundary | `src/adapters/javascript/parser.js`     | acorn parse, eslint-scope analysis, BOM handling, module-specifier collection                                 |
+| Pure adapter    | `src/adapters/javascript/index.js`      | Declares capabilities, rejects TypeScript/JSX, forwards text plus host resolutions                            |
+| Mapper          | `src/adapters/javascript/mapper.js`     | ESTree + scopes → validated CSR                                                                               |
+| Locator         | `src/adapters/javascript/locator.js`    | acorn locations → CSR ranges and file records                                                                 |
+| Classification  | `src/adapters/javascript/moduleKind.js` | Module/script detection, exclusions, generated-source detection                                               |
+
+The adapter never reads a file or executes analysed code. It parses only the text
+the host supplies; the host owns resolution so Restricted Mode and path guards
+apply before anything is read.
+
+### Module resolution
+
+`detectModuleKind` follows Node's rules: `.mjs` is a module, `.cjs` is a script,
+and `.js` follows the nearest `package.json` `type` (default: script). The host
+resolves each request conservatively:
+
+- Relative requests stay inside the workspace and are tried as the literal file,
+  then `.js`/`.mjs`/`.cjs`/`.json`, then `index.*`.
+- Bare specifiers are `external_package` unless
+  `codeflow.javascript.resolveNodeModules` is enabled. With it enabled, packages
+  are found by walking workspace `node_modules`; a single-string `exports` entry
+  or an `import` condition resolves, while complex maps produce
+  `exports_map_unsupported`.
+- `@/` and `~/` aliases produce `path_alias_unresolved`; bundler configuration is
+  not read.
+- Absolute requests and relative requests that leave the workspace are
+  `unknown_import_target`.
+- `node_modules`, build output, `dist`, `out`, `coverage`, `vendor`, `.git`, and
+  `.codeflow` are excluded. Minified bundles and `@generated` files are refused.
+
+Module graphs are bounded by `codeflow.javascript.maxModules` and `maxDepth`.
+Exceeding a cap turns the affected edge into `unresolved` with `budget_exceeded`
+and adds a diagnostic; it is never a silent truncation. A file that combines ESM
+syntax with a CommonJS module request is marked partial and gets a
+`mixed_module_system` diagnostic; resolution still follows the extension and
+nearest `package.json` type.
+
+### Support boundaries
+
+| Construct                                   | V1 boundary                                                                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ES modules, CommonJS, JSON modules          | Declarations, imports, exports, `require`, `module.exports`, and `exports.*` are modelled                                                                |
+| Shadowing and block scopes                  | Resolved through eslint-scope; shadowed declarations keep distinct ids                                                                                   |
+| Direct calls                                | `resolved` only when the lexical binding and, for imports, the exported declaration are known                                                            |
+| Method calls on a known class instance      | `inferred` with `dynamic_dispatch`; never `resolved`                                                                                                     |
+| Unknown receiver / computed member          | `unresolved` with `unknown_receiver` or `computed_member`                                                                                                |
+| `fn.call`, `fn.apply`, `fn.bind`            | `inferred` with `dynamic_dispatch` against the function itself                                                                                           |
+| Callbacks and timers                        | `possible` with `callback_parameter` or `deferred_invocation`; a bare parameter is only accepted as a callback when handed to a scheduler                |
+| `eval`, `new Function`, `with`              | Enclosing scope marked dynamic; static calls become `possible` with `eval_scope` or `dynamic_scope`, plus a diagnostic                                   |
+| Prototype mutation                          | `possible` `writes` edge with `prototype_mutation`                                                                                                       |
+| Getters/setters                             | Separate `method` symbols with `get`/`set` disambiguators; `this.x` reads/writes target the getter/setter or field as `inferred` with `dynamic_dispatch` |
+| Class fields and private names              | `field` symbols; `#name` kept verbatim                                                                                                                   |
+| Inheritance                                 | `inherits` only when the base class is known in the run                                                                                                  |
+| Re-exports                                  | Followed up to depth 8; deeper chains produce `reexport_depth_exceeded`                                                                                  |
+| TypeScript / TSX                            | Rejected with `unsupported_language`; not partially parsed                                                                                               |
+| JSX                                         | Rejected with `unsupported_syntax`; not partially parsed                                                                                                 |
+| Decorators and non-standard proposal syntax | `parse_error`; the run stays valid and partial                                                                                                           |
+| Minified / generated files                  | Refused before parsing with an input error                                                                                                               |
+
+### Partial-analysis rules
+
+A run is `partial` when any module failed to parse, any import stayed unresolved,
+the line budget forced syntax-only analysis, an eval/with scope was detected, or
+the host supplied no text. Missing text is a `source_unavailable` diagnostic, not
+an empty success. TypeScript and JSX rejections are partial runs with error
+diagnostics.
+
+### Fixtures and verification
+
+Committed under `tests/fixtures/javascript/`: 28 concern folders with an
+`expected.json` (scopes, hoisting, closures, arrow `this`, classes, private
+fields, accessors, destructuring, defaults, ESM, re-exports, CJS, mixed modules,
+dynamic import, unknown receivers, computed members, callbacks, async,
+generators, eval, prototype mutation, recursion, parse errors, TypeScript
+rejection, unicode, CRLF/BOM, circular imports and `perf-large`), plus focused
+loose fixtures. `tests/unit/javascriptFixtures.test.js` executes every folder
+through the real host service and adapter and asserts symbols, statuses, reason
+codes, diagnostics and positions. Unit coverage lives in
+`tests/unit/javascript*.test.js`; conformance lives in
+`tests/conformance/javascript.conformance.test.js`; run both with
+`npm run test:js`.
+
 ## Reference implementation: the mock adapter
 
 `src/adapters/mock/index.js` is the fixture that exercises the whole contract:
@@ -320,12 +409,12 @@ adds the constructs capability to real adapters.
 
 ## Adapter status
 
-| Phase | Adapter                 | Status  | Notes                                                                   |
-| ----- | ----------------------- | ------- | ----------------------------------------------------------------------- |
-| 1     | Mock                    | Shipped | Contract fixture on `.mock` only                                        |
-| 2     | C++ (`cpp-clang`)       | Shipped | Route A; host-driven Clang AST JSON; compile-DB and heuristic modes     |
-| 3     | JavaScript              | Next    | Module resolution and dynamic dispatch are the main uncertainty sources |
-| 7     | C++ cross-file evidence | Planned | May add `clangd` evidence without redefining resolution statuses        |
+| Phase | Adapter                 | Status  | Notes                                                               |
+| ----- | ----------------------- | ------- | ------------------------------------------------------------------- |
+| 1     | Mock                    | Shipped | Contract fixture on `.mock` only                                    |
+| 2     | C++ (`cpp-clang`)       | Shipped | Route A; host-driven Clang AST JSON; compile-DB and heuristic modes |
+| 3     | JavaScript (`js-acorn`) | Shipped | acorn + eslint-scope; conservative module and receiver resolution   |
+| 7     | C++ cross-file evidence | Planned | May add `clangd` evidence without redefining resolution statuses    |
 
 Every adapter must satisfy the same CSR and the same conformance suite. No
 adapter may add a field to the graph DTO directly; additions go through the CSR
