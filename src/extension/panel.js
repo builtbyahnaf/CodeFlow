@@ -13,6 +13,9 @@ import * as vscode from 'vscode';
 import crypto from 'node:crypto';
 import { renderPanelHtml } from './panelTemplate.js';
 import { createPanelWire } from './panelWire.js';
+import { createSourceAccess } from './sourceAccess.js';
+import { resolveWorkspacePath } from './sourcePaths.js';
+import { resolvePreviewSettings, settingsChanged } from '../core/source/settings.js';
 
 /**
  * @param {{
@@ -35,13 +38,133 @@ export function createPanelManager({ context, logger, registry, analysis, extens
   let preferredSymbolId = null;
   const analyzer = analysis ?? registry;
 
+  function workspaceRoot() {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  function previewSettings() {
+    const config = vscode.workspace.getConfiguration('codeflow');
+    return resolvePreviewSettings({
+      enabled: config.get('preview.enabled', true),
+      delayMs: config.get('preview.delayMs', 300),
+      maxLines: config.get('preview.maxLines', 12),
+      syntaxHighlighting: config.get('preview.syntaxHighlighting', true),
+      clickToNavigate: config.get('preview.clickToNavigate', true),
+      pinByDefault: config.get('preview.pinByDefault', false),
+      openInPreviewTab: config.get('navigation.openInPreviewTab', false),
+    });
+  }
+
+  const sourceAccess = createSourceAccess({
+    workspaceRoot,
+    logger,
+    settings: () => {
+      const current = previewSettings();
+      return { maxLines: current.maxLines };
+    },
+  });
+
+  /**
+   * Navigate only when the document still matches the analysis. A guessed
+   * reveal is worse than a warning.
+   *
+   * @param {{fileId: string, range: Record<string, any>}} request
+   * @returns {Promise<{ok: true} | {ok: false, code: string, message: string}>}
+   */
+  async function navigateToRange({ fileId, range }) {
+    const checked = await sourceAccess.validate([range]);
+    if (!checked.ok) {
+      return { ok: false, code: checked.code, message: checked.message };
+    }
+    const integrity = checked.results?.[0]?.integrity;
+    if (integrity === 'stale') {
+      return {
+        ok: false,
+        code: 'E_SOURCE_STALE',
+        message: 'The document changed since this analysis. Re-analyze before navigating.',
+      };
+    }
+    if (integrity !== 'exact') {
+      return {
+        ok: false,
+        code: 'E_SOURCE_MISSING',
+        message: String(checked.results?.[0]?.reason ?? 'The source document is not available.'),
+      };
+    }
+    const relativePath = sourceAccess.relativePathFor(fileId);
+    const root = workspaceRoot();
+    const resolved = resolveWorkspacePath(root ?? '', relativePath ?? '');
+    if (!resolved.ok) {
+      return resolved;
+    }
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(resolved.absolutePath));
+    const selection = new vscode.Range(
+      range.startLine,
+      range.startColumn,
+      range.endLine,
+      range.endColumn,
+    );
+    const settings = previewSettings();
+    const editor = await vscode.window.showTextDocument(document, {
+      preview: settings.openInPreviewTab,
+      preserveFocus: false,
+    });
+    editor.selection = new vscode.Selection(
+      range.startLine,
+      range.startColumn,
+      range.endLine,
+      range.endColumn,
+    );
+    editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+    return { ok: true };
+  }
+
   const wire = createPanelWire({
     logger,
     registry,
     extensionVersion,
     loadRun: (path) => analyzeRun(path),
     defaultPath: () => preferredPath ?? 'sample.mock',
+    sourceAccess,
+    navigate: navigateToRange,
+    getSettings: previewSettings,
   });
+
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let selectionTimer = null;
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection((event) => {
+      if (!bridge || event.textEditor.document.uri.scheme !== 'file') {
+        return;
+      }
+      if (selectionTimer) {
+        clearTimeout(selectionTimer);
+      }
+      selectionTimer = setTimeout(() => {
+        selectionTimer = null;
+        if (!bridge) {
+          return;
+        }
+        const selection = event.selections[0];
+        bridge.notifyEditorSelection?.({
+          path: event.textEditor.document.uri.fsPath,
+          range: {
+            startLine: selection.start.line,
+            startColumn: selection.start.character,
+            endLine: selection.end.line,
+            endColumn: selection.end.character,
+          },
+        });
+      }, 100);
+    }),
+  );
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (settingsChanged(event)) {
+        bridge?.pushSettings?.(previewSettings());
+      }
+    }),
+  );
 
   function webviewRoot() {
     return vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview');
@@ -181,11 +304,27 @@ export function createPanelManager({ context, logger, registry, analysis, extens
       }
       return { ok: true, functions: result.value };
     },
+    /**
+     * Reveal the panel and restore focus to the last selected graph node.
+     */
+    focusGraph() {
+      if (!panel) {
+        return undefined;
+      }
+      panel.reveal(undefined, false);
+      bridge?.focusGraph?.();
+      return panel;
+    },
     dispose() {
+      if (selectionTimer) {
+        clearTimeout(selectionTimer);
+        selectionTimer = null;
+      }
       if (bridge) {
         bridge.dispose('extension_disposed');
         bridge = null;
       }
+      sourceAccess.dispose();
       if (panel) {
         panel.dispose();
         panel = null;
