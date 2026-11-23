@@ -66,10 +66,10 @@ test('the JavaScript adapter passes the same conformance rules as the mock and C
   assert.match(encoding.detail, /naïve/);
 });
 
-test('the JavaScript adapter does not claim C++, CFG or DFG support', () => {
+test('the JavaScript adapter claims CFG but not C++ or DFG support', () => {
   assert.equal(javascriptAdapter.extensions.includes('.cpp'), false);
   assert.equal(javascriptAdapter.extensions.includes('.js'), true);
-  assert.equal(javascriptAdapter.capabilities.generateCFG, false);
+  assert.equal(javascriptAdapter.capabilities.generateCFG, true);
   assert.equal(javascriptAdapter.capabilities.generateDFG, false);
   assert.equal(javascriptAdapter.capabilities.parse, 'partial');
 });
