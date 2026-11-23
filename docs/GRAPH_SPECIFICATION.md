@@ -352,3 +352,92 @@ function, an expression-bodied arrow and the shared parity program.
 `npm run test:cfg` runs the corpus with no VS Code host, webview, adapter
 process or network. `tests/fixtures/cfg/harness.js` builds a real CSR run and
 query layer in memory, so the assertions exercise the same path as production.
+
+---
+
+## 11. Source synchronization, hover preview, and staleness
+
+Phase 5 grounds every source-backed graph node in the real workspace document.
+**Previews are always slices of the real document, never reconstructions from
+CSR or an AST.**
+
+### 11.1 Single host read path and slice contract
+
+- All document reads go through `src/extension/sourceAccess.js` via
+  `vscode.workspace.openTextDocument` → `document.getText(range)`. The webview
+  never receives filesystem access and never reads files directly.
+- Every declared file path passes lexical workspace containment
+  (`resolveWorkspacePath` in `src/extension/sourcePaths.js`) and must belong to
+  the current analysis run's `files[]`. Traversal, NUL bytes, and unknown
+  `fileId` values fail with `E_PATH`, `E_WORKSPACE`, or `E_SOURCE_MISSING`.
+- Ranges are validated against the current document (`normalizeRangeRef` and
+  `rangeWithinDocument` in `src/core/source/ranges.js`). Nothing is clamped:
+  reversed, negative, or out-of-bounds ranges return `E_RANGE`.
+- Slices larger than 64 KB (`SOURCE_LIMITS.maxBytes = 65_536`) are refused with
+  `E_LIMIT`.
+- Slices are capped from the end to `maxLines` (clamped `4–40`, default `12`)
+  with `truncateSource`. When clipped, a trailing line ending is stripped so a
+  `N`-line limit renders `N` lines, and `truncated: true` is returned explicitly.
+- Slices are cached in a bounded LRU (`createLru`, default 30 entries / 5 MB)
+  keyed by `(fileId, documentVersion, maxLines, range)`.
+- `source.slice`, `source.validation`, and `navigate.to` never trigger analysis
+  (`ensureRun`); if no graph has been analyzed/loaded yet, they return
+  `E_NO_ANALYSIS`.
+
+### 11.2 Preview presentation and highlighting
+
+`buildPreviewModel` (`src/core/source/presentation.js`) decides preview card state
+purely from the DTO node and optional slice:
+
+| Node / slice state                     | Presentation behavior                                                                                      |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Synthetic (`isSynthetic` / no range)   | Empty code body, explicit note (`Synthetic <kind> — ...`, anchored line if available), navigation disabled |
+| Missing slice (`integrity: 'missing'`) | Explicit unavailability note, navigation disabled                                                          |
+| Empty or whitespace-only slice         | Explicit `"This range has no source content."` note, navigation disabled                                   |
+| Stale slice (`integrity: 'stale'`)     | Current document text shown dimmed with stale border/banner; navigation blocked                            |
+| Exact slice (`integrity: 'exact'`)     | Original indentation/line endings rendered line-numbered; navigation enabled                               |
+
+Syntax highlighting (`src/webview/highlight.js`) uses `highlight.js@11.11.1`
+(webview-only, `cpp` + `javascript` registered; see ADR 0010) and renders via
+`textContent` spans. Unrecognized languages, disabled highlighting, or errors
+degrade cleanly to plain text.
+
+Hover intent (`src/webview/previewController.js`) requires dwell time (default
+300 ms, `0–2000` ms) and pointer stability (moving > 12 px resets dwell). Leaving
+a node arms a 150 ms grace timer so the pointer can enter the card. Pinning
+(`pinByDefault` or Pin button) keeps the card open until dismissed; `Esc`
+always dismisses.
+
+### 11.3 Conservative staleness model
+
+- Immediately after an analysis run loads, the host captures a per-file
+  full-document SHA-256 baseline (`captureBaseline`), rather than relying on
+  adapter `contentHash` values (which may be synthetic).
+- `integrityFor(analysisHash, currentHash)` is conservative: any full-file hash
+  mismatch marks nodes in that file `stale` (`'missing'` if no baseline/hash).
+- On graph load, the webview issues one `source.validation` batch request for all
+  source-backed nodes (`SOURCE_LIMITS.maxRanges = 2_000`) and marks stale nodes
+  with non-colour cues (`.is-stale` dashed border, dimmed opacity, banner).
+- Document changes (`onDidChangeTextDocument`, `onDidDeleteFiles`,
+  `onDidRenameFiles`) invalidate the slice cache and push `source.stale` to the
+  webview. Closing a document (`onDidCloseTextDocument`) clears cached slices
+  without marking the graph stale.
+- No automatic re-analysis runs in Phase 5; re-analysis remains explicit.
+
+### 11.4 Navigation, bidirectional sync, and keyboard loop
+
+- **Graph → editor (`navigate.to`):** re-validates the range and baseline hash
+  first. Refuses stale or missing files with `E_SOURCE_STALE` /
+  `E_SOURCE_MISSING` in `navigate.done` rather than revealing a guessed range.
+  Valid targets open via `showTextDocument` (non-preview tab by default via
+  `codeflow.navigation.openInPreviewTab: false`), select the exact range, and
+  reveal with `InCenterIfOutsideViewport`. `codeflow.backToGraph` reveals the
+  panel and pushes `graph.focus` to restore focus to the selected node.
+- **Editor → graph (`selection.changed`):** `onDidChangeTextEditorSelection`
+  debounces 100 ms and maps the active selection over `lastDto.nodes` using
+  `containsPosition` / `rangesOverlap` (sorted smallest range first). Clears
+  highlights when the cursor is outside all nodes (no nearest-node guessing)
+  and never steals focus or rewrites the detail panel.
+- **Keyboard access:** `Tab`/arrows focus graph nodes, `H` or `Shift+Space`
+  opens a pinned preview, `Enter` navigates to source, and `Esc` dismisses the
+  preview and returns focus to the selected node.
