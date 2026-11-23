@@ -241,9 +241,11 @@ deterministic serialization and the run hash.
 **Visibilities:** `public`, `protected`, `private`, `internal`, `package`,
 `local`, `unknown`.
 
-**Control construct kinds:** `entry`, `exit`, `sequence`, `block`, `if`, `else`,
-`switch`, `case`, `loop`, `for`, `while`, `do_while`, `try`, `catch`, `finally`,
-`return`, `throw`, `break`, `continue`, `await`, `yield`, `jump`, `unknown`.
+**Control construct kinds:** `entry`, `exit`, `sequence`, `block`, `statement`,
+`call`, `if`, `else`, `ternary`, `short_circuit`, `switch`, `case`, `loop`,
+`for`, `while`, `do_while`, `try`, `catch`, `finally`, `return`, `throw`,
+`break`, `continue`, `await`, `yield`, `jump`, `goto`, `label`, `unreachable`,
+`unsupported`, `unknown`.
 
 **Data fact kinds:** `definition`, `use`, `assignment`, `read`, `write`,
 `parameter`, `return`, `capture`.

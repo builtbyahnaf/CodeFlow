@@ -54,11 +54,19 @@ src/
     adapterRegistry.js       registration, resolution, analyze boundary, dry-run
     graph/
       model.js               CSR -> nodes/edges with provenance
-      layout.js              deterministic layered layout (Phase 0 placeholder)
+      layout.js              deterministic layered layout (call-graph view)
       dto.js                 JSON view model, validation, serialization
+      cfg/
+        kinds.js             frozen CFG node/edge/status/degradation vocabulary
+        builder.js           ControlConstruct -> CFG, invariants, degradations
+        layout.js            deterministic host-side CFG layout
+        dto.js               CFG view model and node-cap truncation
+        index.js             public CFG surface
 
   adapters/
     mock/index.js            deterministic synthetic analysis of `.mock`
+    cpp/                     pure Clang-AST -> CSR adapter
+    javascript/              pure acorn/eslint-scope -> CSR adapter
 
   extension/                 the only layer allowed to import `vscode`
     extension.js             activation and composition root
@@ -187,10 +195,11 @@ command and bridge boundaries.
 
 ## Deliberate Phase 0/1 simplifications
 
-- **Layout lives in `core/graph/layout.js`, not the renderer.** It is a
-  deterministic layered layout with cycle handling, sized for testability. Phase
-  4 benchmarks Cytoscape/ELK/dagre and will replace it behind the renderer
-  interface.
+- **Layout lives in core, not the renderer.** The call-graph view uses
+  `core/graph/layout.js`; the CFG view uses `core/graph/cfg/layout.js`. Both are
+  deterministic layered layouts computed in the extension host. Phase 4
+  benchmarked Cytoscape/ELK/dagre and kept the custom renderer + layout; see
+  ADR 0009.
 - **The mock adapter registers `.mock` only.** It never claims to analyze `.js`
   or `.cpp`; doing so would misrepresent capability.
 - **One panel per window.** A second `codeflow.openExplorer` reveals the existing
@@ -201,15 +210,16 @@ command and bridge boundaries.
 
 ## Deferred to later phases
 
-| Capability                     | Phase |
-| ------------------------------ | ----- |
-| C++ analysis adapters          | 2     |
-| JavaScript analysis adapters   | 3     |
-| CFG/DFG generation in adapters | 4/11  |
-| Real graph engine/layout       | 4     |
-| Source preview and navigation  | 5     |
-| Explanations (non-AI core)     | 6-7   |
-| Project index and caching      | 8     |
+| Capability                       | Phase    |
+| -------------------------------- | -------- |
+| C++ analysis adapters            | 2        |
+| JavaScript analysis adapters     | 3        |
+| CFG generation                   | 4 (done) |
+| DFG overlay                      | 11       |
+| Graph engine revisit/aggregation | 10       |
+| Source preview and navigation    | 5        |
+| Explanations (non-AI core)       | 6-7      |
+| Project index and caching        | 8        |
 
 ## Version floor consequences
 
