@@ -19,6 +19,7 @@ import { createIdentityAllocator, createRelationshipAllocator } from '../../core
 import { createJavaScriptLocator } from './locator.js';
 import { childNodes, parseJavaScript } from './parser.js';
 import { detectModuleKind } from './moduleKind.js';
+import { collectFunctionConstructs } from './constructs.js';
 
 const LANGUAGE = 'javascript';
 
@@ -2503,6 +2504,59 @@ export function mapJavaScript(options) {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Control constructs. The core CFG builder lowers these; the mapper only
+  // describes source structure, so a missing construct degrades the graph
+  // rather than silently dropping a branch.
+  // ---------------------------------------------------------------------------
+
+  /** @type {import('../../core/csr/entities.js').ControlConstruct[]} */
+  const controlConstructs = [];
+  for (const moduleInfo of orderedModules) {
+    if (!moduleInfo.ast) {
+      continue;
+    }
+    /**
+     * @param {Record<string, any>} node
+     */
+    const collect = (node) => {
+      if (!node || typeof node.type !== 'string') {
+        return;
+      }
+      if (isFunctionNode(node)) {
+        const symbol = symbolByAstNode.get(node);
+        if (
+          symbol &&
+          (symbol.kind === 'function' ||
+            symbol.kind === 'closure' ||
+            symbol.kind === 'method' ||
+            symbol.kind === 'constructor')
+        ) {
+          const result = collectFunctionConstructs({
+            moduleInfo,
+            functionNode: node,
+            symbol,
+          });
+          controlConstructs.push(...result.constructs);
+          for (const diagnostic of result.diagnostics) {
+            diagnostics.push(
+              createDiagnostic({
+                severity: 'info',
+                code: diagnostic.code,
+                message: diagnostic.message,
+                ...(diagnostic.range ? { affects: [] } : {}),
+              }),
+            );
+          }
+        }
+      }
+      for (const child of childNodes(node)) {
+        collect(child);
+      }
+    };
+    collect(moduleInfo.ast);
+  }
+
   const parseFailed = orderedModules.some((entry) => entry.parseError);
   const mixedModuleSystem = orderedModules.some((entry) => entry.esm && entry.cjs);
   const completeness =
@@ -2521,7 +2575,7 @@ export function mapJavaScript(options) {
     files,
     symbols,
     relationships,
-    controlConstructs: [],
+    controlConstructs,
     dataFacts: [],
     diagnostics,
     extensions: {

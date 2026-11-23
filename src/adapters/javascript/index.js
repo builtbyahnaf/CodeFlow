@@ -75,7 +75,7 @@ export const javascriptAdapter = {
     resolveSymbols: 'partial',
     resolveTypes: false,
     resolveCalls: 'partial',
-    generateCFG: false,
+    generateCFG: true,
     generateDFG: false,
     resolveImports: 'partial',
     mapSourceLocations: true,
