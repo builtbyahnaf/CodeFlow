@@ -34,6 +34,9 @@ export const WEBVIEW_TO_HOST = Object.freeze([
   'query.capabilities',
   'cfg.functions',
   'cfg.load',
+  'source.slice',
+  'source.validation',
+  'navigate.to',
 ]);
 
 /** Kinds the host may send to the webview. */
@@ -48,6 +51,13 @@ export const HOST_TO_WEBVIEW = Object.freeze([
   'panel.pong',
   'cfg.functions',
   'cfg.data',
+  'source.data',
+  'source.integrity',
+  'source.stale',
+  'navigate.done',
+  'selection.changed',
+  'graph.focus',
+  'settings.data',
 ]);
 
 export const DIRECTIONS = Object.freeze({
