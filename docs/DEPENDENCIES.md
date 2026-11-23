@@ -27,11 +27,14 @@ dependency, its license, and why it is acceptable. It is enforced by
 | `eslint-scope` | 8.4.0   | BSD-2-Clause | Lexical scope and reference analysis       | Accept  |
 | `esrecurse`    | 4.3.0   | BSD-2-Clause | Transitive: AST traversal for eslint-scope | Accept  |
 | `estraverse`   | 5.3.0   | BSD-2-Clause | Transitive: AST traversal for eslint-scope | Accept  |
+| `highlight.js` | 11.11.1 | BSD-3-Clause | Preview syntax highlighting, webview-only  | Accept  |
 
-Both direct packages are pure JavaScript with no install scripts, native code, or
-network access. esbuild inlines them into `dist/extension.cjs`, so
-`vsce package --no-dependencies` ships no `node_modules`. The licenses are
-permissive and GPL-3.0-only compatible.
+The direct runtime packages are pure JavaScript with no install scripts, native
+code, or network access. esbuild inlines them into `dist/extension.cjs` and
+`dist/webview/main.js`, so `vsce package --no-dependencies` ships no
+`node_modules`. The licenses are permissive and GPL-3.0-only compatible.
+`highlight.js` is registered for C++ and JavaScript only (core + two language
+modules); the full language pack is not bundled.
 
 ## Development dependencies
 
@@ -63,11 +66,11 @@ Notes:
 
 | Metric                                  | Value    |
 | --------------------------------------- | -------- |
-| Lockfile package entries                | 437      |
-| Production (bundled, not shipped)       | 4        |
+| Lockfile package entries                | 438      |
+| Production (bundled, not shipped)       | 5        |
 | Development entries                     | 433      |
-| `node_modules` size                     | 111.2 MB |
-| Top-level directories in `node_modules` | 313      |
+| `node_modules` size                     | 116.4 MB |
+| Top-level directories in `node_modules` | 314      |
 | Shipped `node_modules` in the VSIX      | none     |
 
 License histogram across the lockfile:
@@ -79,7 +82,7 @@ License histogram across the lockfile:
 | BSD-2-Clause                          | 19    |
 | Apache-2.0                            | 17    |
 | `SEE LICENSE IN LICENSE.txt`          | 10    |
-| BSD-3-Clause                          | 7     |
+| BSD-3-Clause                          | 8     |
 | BlueOak-1.0.0                         | 7     |
 | Artistic-2.0                          | 5     |
 | `(MIT OR WTFPL)`                      | 1     |
@@ -107,20 +110,22 @@ The audit script reports these explicitly instead of silently ignoring them.
 
 ## Shipped artifact
 
-`npm run package` produces `codeflow.vsix` (10 files, 38.8 KB) containing:
+`npm run package` produces `codeflow.vsix` from the production build. The
+bundle sizes are (minified, no source maps):
 
 ```
 LICENSE.txt              34.33 KB
-changelog.md              2.08 KB
-package.json              3.32 KB
+changelog.md             ~2.1 KB
+package.json             ~3.5 KB
 readme.md                11.67 KB
-dist/extension.cjs       30.56 KB  (minified, production)
-dist/webview/main.js     14.51 KB  (minified, production)
-dist/webview/styles.css   6.00 KB
-dist/build-report.json     0.1 KB
+dist/extension.cjs      380.94 KB
+dist/webview/main.js     67.93 KB
+dist/webview/styles.css  13.42 KB
+dist/build-report.json    0.1 KB
 ```
 
-No `node_modules`, no source maps, no tests.
+No `node_modules`, no source maps, no tests. The compressed VSIX size was not
+re-measured after Phase 5 in this environment.
 
 ## Auditing
 
