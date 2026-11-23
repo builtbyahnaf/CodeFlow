@@ -171,14 +171,18 @@ CodeFlow is currently a project under development. The product direction and int
 
 At this stage:
 
-- The engineering foundation (Phase 0) is implemented: the extension activates,
-  commands work, and a mock adapter feeds a validated host-to-webview protocol
-  and an SVG graph view.
-- The demo graph is synthetic and labelled as mock data. No real C++ or
-  JavaScript analysis exists yet.
-- V1 scope is focused on C++ and JavaScript.
-- The extension implementation is JavaScript.
-- No stable public release is claimed here.
+- **Phases 0–5 are implemented in source** (extension foundation, CSR 1.1
+  model, C++ Clang-AST adapter, JavaScript acorn/eslint-scope adapter, CFG
+  generation and custom SVG visualization, and live source synchronization with
+  hover previews, click-to-navigate, bidirectional highlighting, and
+  stale-source detection).
+- **Preview and navigation settings** (`codeflow.preview.*` and
+  `codeflow.navigation.openInPreviewTab`) and the `CodeFlow: Back to Graph`
+  command are wired end to end without triggering re-analysis on hover.
+- **V1 scope** is focused on C++ and JavaScript, implemented in pure JavaScript.
+- **Unverified in this environment:** no local Clang/clangd compiler or
+  packaged VS Code integration run has executed here; C++ tests run against
+  committed AST fixtures and no stable public release is claimed yet.
 
 Installation instructions, screenshots, release downloads, and usage examples
 will be added when they reflect a working, reproducible build. Development setup
