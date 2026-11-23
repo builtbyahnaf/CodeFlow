@@ -40,9 +40,18 @@ function truncate(value, max) {
 }
 
 /**
- * @param {{svg: SVGSVGElement, onSelect: (nodeId: string, node: DtoNode) => void}} options
+ * @param {{
+ *   svg: SVGSVGElement,
+ *   onSelect: (nodeId: string, node: DtoNode) => void,
+ *   onNavigate?: (nodeId: string, node: DtoNode, trigger?: 'pointer'|'keyboard') => void,
+ *   onPreviewEnter?: (nodeId: string, node: DtoNode, point: {x: number, y: number}) => void,
+ *   onPreviewMove?: (point: {x: number, y: number}) => void,
+ *   onPreviewLeave?: (nodeId: string) => void,
+ *   onPreviewKey?: (nodeId: string, node: DtoNode) => void,
+ * }} options
  */
-export function createSvgRenderer({ svg, onSelect }) {
+export function createSvgRenderer(options) {
+  const { svg, onSelect } = options;
   /** @type {GraphDto | null} */
   let dto = null;
   /** @type {SVGGElement | null} */
@@ -270,10 +279,39 @@ export function createSvgRenderer({ svg, onSelect }) {
         event.stopPropagation();
         select(node.id);
       });
+      group.addEventListener('dblclick', (event) => {
+        event.stopPropagation();
+        select(node.id);
+        options.onNavigate?.(node.id, node, 'pointer');
+      });
+      group.addEventListener('pointerenter', (event) => {
+        options.onPreviewEnter?.(node.id, node, { x: event.clientX, y: event.clientY });
+      });
+      group.addEventListener('pointermove', (event) => {
+        options.onPreviewMove?.({ x: event.clientX, y: event.clientY });
+      });
+      group.addEventListener('pointerleave', () => {
+        options.onPreviewLeave?.(node.id);
+      });
       group.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (event.key === 'Enter') {
           event.preventDefault();
           select(node.id);
+          options.onNavigate?.(node.id, node, 'keyboard');
+          return;
+        }
+        if (event.key === ' ' || event.key === 'Spacebar') {
+          event.preventDefault();
+          if (event.shiftKey) {
+            options.onPreviewKey?.(node.id, node);
+          } else {
+            select(node.id);
+          }
+          return;
+        }
+        if (event.key === 'h' || event.key === 'H') {
+          event.preventDefault();
+          options.onPreviewKey?.(node.id, node);
         }
       });
 
@@ -412,9 +450,49 @@ export function createSvgRenderer({ svg, onSelect }) {
     }
   });
 
+  /**
+   * Editor-driven highlight. Distinct from selection so typing in the editor
+   * never steals graph focus or rewrites the detail panel.
+   *
+   * @param {string[]} nodeIds
+   */
+  function highlight(nodeIds) {
+    const wanted = new Set(Array.isArray(nodeIds) ? nodeIds : []);
+    for (const [id, element] of nodeElements) {
+      element.classList.toggle('is-synced', wanted.has(id));
+    }
+    for (const [, element] of edgeElements) {
+      const active =
+        wanted.size > 0 &&
+        (wanted.has(element.dataset.from ?? '') || wanted.has(element.dataset.to ?? ''));
+      element.classList.toggle('is-synced', active);
+    }
+  }
+
+  /**
+   * @param {string[]} nodeIds
+   */
+  function markStale(nodeIds) {
+    const wanted = new Set(Array.isArray(nodeIds) ? nodeIds : []);
+    for (const [id, element] of nodeElements) {
+      element.classList.toggle('is-stale', wanted.has(id));
+    }
+  }
+
+  function focusSelection() {
+    if (selectedId) {
+      nodeElements.get(selectedId)?.focus();
+      return true;
+    }
+    return false;
+  }
+
   return {
     render,
     select,
+    highlight,
+    markStale,
+    focusSelection,
     zoomToFit,
     destroy() {
       clear();
