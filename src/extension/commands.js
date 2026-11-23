@@ -13,7 +13,14 @@ import { buildDiagnosticsReport, openDiagnosticsDocument } from './diagnostics.j
  * @param {{
  *   context: vscode.ExtensionContext,
  *   logger: {info: Function, warn: Function, error: Function, show: Function, level: () => string},
- *   panelManager: {show: () => unknown, showFile: (path: string) => unknown, isOpen: () => boolean, pendingRequests: () => number},
+ *   panelManager: {
+ *     show: () => unknown,
+ *     showFile: (path: string) => unknown,
+ *     showCfg: (path: string, symbolId: string) => unknown,
+ *     listCfgFunctions: (path: string) => Promise<{ok: boolean, [key: string]: unknown}>,
+ *     isOpen: () => boolean,
+ *     pendingRequests: () => number,
+ *   },
  *   registry: ReturnType<typeof import('../core/adapterRegistry.js').createAdapterRegistry>,
  *   extensionVersion: string,
  * }} options
@@ -58,6 +65,44 @@ export function registerCommands({ context, logger, panelManager, registry, exte
       extension: editor.document.uri.path.split('.').pop(),
     });
     panelManager.showFile(editor.document.uri.fsPath);
+  });
+
+  register('codeflow.showCfg', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.uri.scheme !== 'file') {
+      void vscode.window.showWarningMessage(
+        'CodeFlow: open a supported file before showing its control flow.',
+      );
+      return;
+    }
+    const filePath = editor.document.uri.fsPath;
+    const listed = /** @type {{ok: true, functions: Array<{symbolId: string, name: string, qualifiedName: string, kind: string}>} | {ok: false, code: string, message: string}} */ (
+      await panelManager.listCfgFunctions(filePath)
+    );
+    if (!listed.ok) {
+      void vscode.window.showWarningMessage(`CodeFlow: ${listed.message}`);
+      return;
+    }
+    if (listed.functions.length === 0) {
+      void vscode.window.showInformationMessage(
+        'CodeFlow: this file has no function with a control-flow graph to show.',
+      );
+      panelManager.showFile(filePath);
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      listed.functions.map((entry) => ({
+        label: entry.qualifiedName,
+        description: entry.kind,
+        symbolId: entry.symbolId,
+      })),
+      { title: 'CodeFlow: show control-flow graph', placeHolder: 'Select a function' },
+    );
+    if (!picked) {
+      return;
+    }
+    logger.info('command.showCfg', { file: filePath });
+    panelManager.showCfg(filePath, picked.symbolId);
   });
 
   register('codeflow.showDiagnostics', async () => {
