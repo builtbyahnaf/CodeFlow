@@ -161,8 +161,9 @@ test('Phase 1 CSR and query kinds are sendable in their own direction only', () 
     'query.callees',
     'query.constructs',
     'query.capabilities',
+    'cfg.load',
   ];
-  const hostKinds = ['csr.data', 'query.data', 'analysis.progress'];
+  const hostKinds = ['csr.data', 'query.data', 'analysis.progress', 'cfg.data'];
 
   for (const kind of webviewKinds) {
     assert.equal(validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).ok, true, kind);
@@ -178,6 +179,14 @@ test('Phase 1 CSR and query kinds are sendable in their own direction only', () 
       validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).reason,
       'unknown_kind',
       kind,
+    );
+  }
+
+  // The function list is request and response, so it travels both ways.
+  for (const direction of [WEBVIEW_TO_HOST, HOST_TO_WEBVIEW]) {
+    assert.equal(
+      validateEnvelope(createEnvelope('cfg.functions', {}), direction).ok,
+      true,
     );
   }
 });
