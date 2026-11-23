@@ -8,6 +8,79 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.004] - 2026-11-23
+
+### Phase 4 — CFG and first visualization
+
+The first useful product moment: a C++ or JavaScript function opens as an
+accurate, inspectable control-flow graph. See `docs/PHASE-04-REPORT.md`,
+`docs/GRAPH_SPECIFICATION.md` and `docs/adr/0009-graph-rendering-stack.md`.
+
+- **CFG vocabulary and builder** (`src/core/graph/cfg/`):
+  - Frozen node kinds (`entry`, `exit`, `statement`, `condition`, `multiway`,
+    `merge`, `loop_header`, `loop_latch`, `loop_body_entry`, `break`,
+    `continue`, `return`, `throw`, `call`, `await`, `catch_entry`,
+    `finally_entry`, `unreachable`, `unmodeled`) and edge kinds (`seq`, `true`,
+    `false`, `case`, `default`, `loop_back`, `break`, `continue`, `return`,
+    `throw`, `exception`, `finally`, `unreachable`).
+  - Lowering from language-neutral `ControlConstruct` trees only; the builder
+    reads the CSR through the query layer and never imports an adapter.
+  - Sequence, `if`/`else`, ternary, `&&`/`||`/`??`, all loop forms, `switch`
+    with fallthrough, labelled jumps, `return`/`throw`/`try`/`catch`/`finally`,
+    `await`, and explicit dead-code regions.
+  - One entry and one exit; every other node is reachable or explicitly
+    `unreachable`. Unexpected failures become `E_CFG_INTERNAL`, never throws.
+
+- **Adapter integration**:
+  - Both adapters emit the same construct vocabulary and set
+    `generateCFG: true`; C++ and JavaScript produce structurally equivalent
+    CFGs for the shared parity program.
+  - Call constructs carry `callSite`; the graph shows resolved, inferred,
+    possible and unresolved targets without inventing a resolved edge.
+  - `goto` and computed `goto` become `unmodeled` plus an `unresolved` edge and
+    a typed reason; unsupported shapes are reported, never flattened.
+
+- **DTO and protocol**:
+  - CFG DTO keeps `dtoVersion: 1`; adds `dtoKind`/`graphKind: 'cfg'`,
+    `entryId`/`exitId`, function metadata, `labelLines`, `badges`,
+    `isSynthetic`, `unreachable`, `rangeRef`, per-node call summaries, edge
+    `kind`/`dash`/`glyphHint`, `degradations`, `truncated`/`truncationReason`,
+    `analysisCompleteness`, `extent` and `legend`.
+  - `validateCfgDto` enforces invariants at the boundary; no source text
+    crosses the boundary.
+  - Protocol kinds `cfg.load` (webview → host), `cfg.data` (host → webview) and
+    bidirectional `cfg.functions`.
+
+- **Visualization**:
+  - Host-side deterministic layered layout; the webview only draws. Back edges
+    do not push ranks; unreachable nodes sit in a separate band.
+  - Pan, zoom, fit, selection, legend, degradation banner and a node detail
+    panel with kind, range, status, call targets and degradation reason.
+  - Status is encoded with a glyph and dash pattern as well as colour.
+  - `codeflow.showCfg` quick pick and an in-panel function picker.
+  - 2 000-node render cap with an explicit truncation notice; 1 500-node
+    build gate with an opt-in.
+
+- **Renderer decision**: custom SVG plus custom CFG layout. Measured at
+  1 500 nodes: layout 1.35 ms and 2.4 KB gzip for the renderer, against
+  1 555–3 698 ms and 155–440 KB gzip for ELK/Cytoscape. ADR 0009 records the
+  losing options and the unmeasured browser traces.
+
+- **Tests and fixtures**:
+  - 36 shared neutral fixtures across both languages, a CSR-backed harness and
+    `npm run test:cfg` (76 tests).
+  - C++ AST fixtures for `cfg.cpp` and `parity.cpp`; no compiler or process is
+    required by the CFG tests.
+  - Fault injection, immutability, truncation, performance and protocol tests.
+
+- **Known gaps (recorded, not hidden)**:
+  - No Clang/clangd in this environment; C++ CFG verification uses committed
+    AST fixtures, not live compiler runs.
+  - Browser frame traces for sustained pan/zoom were not measured; layout is
+    off the webview path by construction.
+  - The CFG spec review was author-only.
+  - VSIX install and Linux/macOS CI remain unrun here.
+
 ## [0.1.003] - 2026-11-21
 
 ### Phase 3 — JavaScript Analysis Foundation
