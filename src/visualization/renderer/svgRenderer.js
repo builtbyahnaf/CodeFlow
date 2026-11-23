@@ -156,31 +156,49 @@ export function createSvgRenderer({ svg, onSelect }) {
       }
       const path = /** @type {SVGPathElement} */ (
         svgEl('path', {
-          class: `cf-edge cf-edge--${edge.status}`,
+          class: `cf-edge cf-edge--${edge.status} cf-edge--kind-${edge.kind ?? edge.type}`,
           d: edgePath(source, target),
           'data-from': edge.from,
           'data-to': edge.to,
+          ...(edge.dash ? { 'stroke-dasharray': edge.dash } : {}),
         })
       );
       path.dataset.from = edge.from;
       path.dataset.to = edge.to;
       const title = svgEl('title');
-      title.textContent = `${edge.type} (${edge.status})${edge.reasonCode ? `: ${edge.reasonCode}` : ''}`;
+      title.textContent = `${edge.kind ?? edge.type} (${edge.status})${
+        edge.reasonCode ? `: ${edge.reasonCode}` : ''
+      }${edge.glyphHint ? ` ${edge.glyphHint}` : ''}`;
       path.appendChild(title);
       viewport.appendChild(path);
       edgeElements.set(edge.id, path);
+
+      if (edge.label && edge.label.length > 0) {
+        const from = nodePoint(source, 'out');
+        const to = nodePoint(target, 'in');
+        const label = svgEl('text', {
+          class: 'cf-edge-label',
+          x: (from.x + to.x) / 2,
+          y: (from.y + to.y) / 2 - 4,
+          'text-anchor': 'middle',
+        });
+        label.textContent = truncate(edge.label, 22);
+        viewport.appendChild(label);
+      }
     }
 
     for (const node of dto.nodes) {
       const group = /** @type {SVGGElement} */ (
         svgEl('g', {
-          class: `cf-node cf-node--${node.status}${node.external ? ' cf-node--external' : ''}`,
+          class: `cf-node cf-node--${node.status} cf-node--kind-${node.kind}${
+            node.external ? ' cf-node--external' : ''
+          }${node.unreachable ? ' cf-node--unreachable' : ''}`,
           transform: `translate(${node.position.x} ${node.position.y})`,
           tabindex: '0',
           role: 'button',
           'aria-label': `${node.kind} ${node.label}, ${node.status}${
-            node.external ? ', external target' : ''
-          }`,
+            node.unreachable ? ', unreachable' : ''
+          }${node.external ? ', external target' : ''}`,
         })
       );
 
@@ -194,37 +212,58 @@ export function createSvgRenderer({ svg, onSelect }) {
         }),
       );
 
+      const lines =
+        Array.isArray(node.labelLines) && node.labelLines.length > 0
+          ? node.labelLines.slice(0, 3)
+          : [truncate(node.label, 26)];
+      const lineHeight = 13;
+      const blockHeight = lines.length * lineHeight;
       const label = svgEl('text', {
         class: 'cf-node-label',
         x: 10,
-        y: node.position.height / 2 - 1,
+        y: node.position.height / 2 - blockHeight / 2 + lineHeight - 3,
       });
-      label.textContent = truncate(node.label, 26);
+      for (const [index, text] of lines.entries()) {
+        const span = svgEl('tspan', {
+          x: 10,
+          ...(index === 0 ? {} : { dy: lineHeight }),
+        });
+        span.textContent = text;
+        label.appendChild(span);
+      }
       group.appendChild(label);
 
       const kind = svgEl('text', {
         class: 'cf-node-kind',
         x: 10,
-        y: node.position.height / 2 + 13,
+        y: node.position.height - 8,
       });
       kind.textContent = node.external ? `${node.kind} · external` : node.kind;
       group.appendChild(kind);
 
-      if (node.badge || node.status !== 'resolved') {
+      const badgeText =
+        Array.isArray(node.badges) && node.badges.length > 0
+          ? node.badges.join(' · ')
+          : node.badge || (node.status !== 'resolved' ? node.status : '');
+      if (badgeText) {
         const badge = svgEl('text', {
           class: 'cf-node-badge',
           x: node.position.width - 8,
-          y: 12,
+          y: 13,
           'text-anchor': 'end',
         });
-        badge.textContent = truncate(node.badge || node.status, 18);
+        badge.textContent = truncate(badgeText, 24);
         group.appendChild(badge);
       }
 
       const title = svgEl('title');
+      const callText =
+        Array.isArray(node.calls) && node.calls.length > 0
+          ? `\ncalls: ${node.calls.map((call) => `${call.label} (${call.status})`).join(', ')}`
+          : '';
       title.textContent = `${node.kind} ${node.label}\nstatus: ${node.status}${
         node.range ? `\nlines ${node.range.startLine + 1}-${node.range.endLine + 1}` : ''
-      }`;
+      }${node.reasonCode ? `\nreason: ${node.reasonCode}` : ''}${callText}`;
       group.appendChild(title);
 
       group.addEventListener('click', (event) => {
