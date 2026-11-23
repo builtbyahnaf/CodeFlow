@@ -31,6 +31,8 @@ export function createPanelManager({ context, logger, registry, analysis, extens
   let runCounter = 0;
   /** @type {string | null} */
   let preferredPath = null;
+  /** @type {string | null} */
+  let preferredSymbolId = null;
   const analyzer = analysis ?? registry;
 
   const wire = createPanelWire({
@@ -90,6 +92,7 @@ export function createPanelManager({ context, logger, registry, analysis, extens
       scriptUri: webview.asWebviewUri(vscode.Uri.joinPath(root, 'main.js')).toString(),
       styleUri: webview.asWebviewUri(vscode.Uri.joinPath(root, 'styles.css')).toString(),
       title: 'CodeFlow',
+      preferredSymbolId,
     });
   }
 
@@ -130,12 +133,53 @@ export function createPanelManager({ context, logger, registry, analysis, extens
      */
     showFile(filePath) {
       preferredPath = filePath;
+      preferredSymbolId = null;
       if (panel) {
         applyHtml(panel);
         panel.reveal(undefined, false);
         return panel;
       }
       return show();
+    },
+    /**
+     * Show the panel for a file with a specific function preselected. Symbol
+     * ids are content-derived, so re-analysis in the webview resolves the same
+     * function.
+     *
+     * @param {string} filePath
+     * @param {string} symbolId
+     */
+    showCfg(filePath, symbolId) {
+      preferredPath = filePath;
+      preferredSymbolId = symbolId;
+      if (panel) {
+        applyHtml(panel);
+        panel.reveal(undefined, false);
+        return panel;
+      }
+      return show();
+    },
+    /**
+     * List functions that have control constructs, for the command quick pick.
+     * Runs through the same host analysis pipeline as the panel.
+     *
+     * @param {string} filePath
+     * @returns {Promise<
+     *   {ok: true, functions: Array<{symbolId: string, name: string, qualifiedName: string, kind: string}>} |
+     *   {ok: false, code: string, message: string, issues?: unknown}
+     * >}
+     */
+    async listCfgFunctions(filePath) {
+      const loaded = await analyzeRun(filePath);
+      if (!loaded.ok) {
+        return loaded;
+      }
+      const query = registry.query(loaded.run);
+      const result = query.cfgFunctions();
+      if (!result.ok) {
+        return { ok: false, code: result.code, message: result.message };
+      }
+      return { ok: true, functions: result.value };
     },
     dispose() {
       if (bridge) {
