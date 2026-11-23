@@ -477,3 +477,222 @@ body {
   stroke: var(--cf-status-possible);
   stroke-dasharray: 5 3;
 }
+
+/* Editor-driven sync highlight: distinct from selection so typing in the
+   editor never rewrites the detail panel or steals graph focus. */
+
+.cf-node.is-synced .cf-node-box {
+  stroke: var(--cf-accent);
+  stroke-width: 2.2;
+}
+
+.cf-edge.is-synced {
+  stroke-width: 2.2;
+  stroke: var(--cf-accent);
+}
+
+/* Stale: the analysis predates the current document. Always paired with a
+   banner and a preview note; never colour-only. */
+
+.cf-node.is-stale .cf-node-box {
+  stroke: var(--cf-status-unresolved);
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+
+.cf-node.is-stale::after {
+  content: 'stale';
+}
+
+/* Source preview card */
+
+.cf-preview {
+  position: absolute;
+  z-index: 20;
+  max-width: calc(100% - 16px);
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--vscode-editorHoverWidget-background, #252526);
+  color: var(--vscode-editorHoverWidget-foreground, #cccccc);
+  border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.cf-preview[hidden] {
+  display: none;
+}
+
+.cf-preview:focus-visible,
+.cf-preview:focus {
+  outline: 1px solid var(--cf-accent);
+  outline-offset: 1px;
+}
+
+.cf-preview.is-stale {
+  border-color: var(--cf-status-unresolved);
+}
+
+.cf-preview.is-synthetic {
+  border-color: var(--cf-status-stale);
+}
+
+.cf-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--cf-surface);
+}
+
+.cf-preview-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-preview-head .cf-button {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.cf-preview-pin[aria-pressed='true'] {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+}
+
+.cf-preview-meta {
+  padding: 4px 8px;
+  color: var(--cf-muted);
+  font-size: 11px;
+  border-bottom: 1px solid var(--cf-border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cf-preview-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 0;
+  font-family: var(--cf-mono);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cf-preview-body.is-clickable {
+  cursor: pointer;
+}
+
+.cf-preview-code {
+  display: flex;
+  flex-direction: column;
+}
+
+.cf-preview-line {
+  display: flex;
+  gap: 10px;
+  padding: 0 8px;
+  white-space: pre;
+}
+
+.cf-preview-line-number {
+  flex: 0 0 auto;
+  min-width: 2.6em;
+  text-align: right;
+  color: var(--cf-muted);
+  user-select: none;
+}
+
+.cf-preview-line-text {
+  flex: 1 1 auto;
+}
+
+.cf-preview-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--cf-border);
+  background: var(--cf-surface);
+}
+
+.cf-preview-note {
+  flex: 1;
+  min-width: 0;
+  color: var(--cf-muted);
+  font-size: 11px;
+}
+
+.cf-preview-note:empty {
+  display: none;
+}
+
+.cf-preview-foot .cf-button {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.cf-preview-foot .cf-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* highlight.js token colours, mapped onto VS Code theme tokens. */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--vscode-editorLineNumber-foreground, #6a9955);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-meta .hljs-string {
+  color: var(--vscode-debugTokenExpression-string, #ce9178);
+}
+
+.hljs-number,
+.hljs-attr,
+.hljs-built_in {
+  color: var(--vscode-debugTokenExpression-number, #b5cea8);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--cf-fg);
+}
+
+.hljs-meta,
+.hljs-preprocessor,
+.hljs-meta .hljs-keyword {
+  color: var(--vscode-symbolIcon-namespaceForeground, #c586c0);
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--vscode-symbolIcon-constantForeground, #4fc1ff);
+}
