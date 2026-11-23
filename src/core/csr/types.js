@@ -237,8 +237,12 @@ export const CONTROL_CONSTRUCT_KINDS = Object.freeze([
   'exit',
   'sequence',
   'block',
+  'statement',
+  'call',
   'if',
   'else',
+  'ternary',
+  'short_circuit',
   'switch',
   'case',
   'loop',
@@ -255,6 +259,10 @@ export const CONTROL_CONSTRUCT_KINDS = Object.freeze([
   'await',
   'yield',
   'jump',
+  'goto',
+  'label',
+  'unreachable',
+  'unsupported',
   'unknown',
 ]);
 
