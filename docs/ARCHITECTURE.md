@@ -1,8 +1,8 @@
 # Architecture
 
-Status: Phase 1 (CSR and adapter foundation). This document describes what the
-code does today, not what later phases plan to add. Anything not implemented is
-listed under "Deferred".
+Status: Phase 5 (Source synchronization and hover preview). This document
+describes what the code does today, not what later phases plan to add. Anything
+not implemented is listed under "Deferred".
 
 The normative contracts live in separate documents:
 
@@ -10,6 +10,9 @@ The normative contracts live in separate documents:
   semantic representation every adapter emits and every consumer reads.
 - [`docs/LANGUAGE_ADAPTERS.md`](./LANGUAGE_ADAPTERS.md) — the adapter boundary,
   capabilities, failure semantics, and the C-01…C-12 conformance suite.
+- [`docs/GRAPH_SPECIFICATION.md`](./GRAPH_SPECIFICATION.md) — the CFG
+  vocabulary, lowering rules, DTO contract, and Phase 5 source synchronization
+  and staleness model.
 
 ## Two runtimes, two bundles
 
@@ -62,6 +65,11 @@ src/
         layout.js            deterministic host-side CFG layout
         dto.js               CFG view model and node-cap truncation
         index.js             public CFG surface
+    source/
+      ranges.js              range validation, slicing, truncation, containment
+      cache.js               bounded LRU slice cache
+      settings.js            preview and navigation settings defaults/clamping
+      presentation.js        pure preview card model (exact/stale/synthetic)
 
   adapters/
     mock/index.js            deterministic synthetic analysis of `.mock`
@@ -71,19 +79,23 @@ src/
   extension/                 the only layer allowed to import `vscode`
     extension.js             activation and composition root
     log.js                   output channel
-    commands.js              three commands, all guarded
-    panel.js                 single webview panel, bridge wiring
+    commands.js              guarded commands (explorer, analyze, CFG, backToGraph, diagnostics)
+    panel.js                 single webview panel, bridge wiring, navigation, editor sync
     panelWire.js             vscode-free bridge wiring (host side of protocol)
-    panelTemplate.js         CSP + HTML as a string module
+    panelTemplate.js         CSP + HTML + preview card markup as a string module
+    sourcePaths.js           lexical workspace containment for source access
+    sourceAccess.js          single host read path, SHA-256 baselines, slice LRU
     diagnostics.js           "why isn't this working" report
     security/paths.js        lexical workspace containment helpers
 
   visualization/
-    renderer/svgRenderer.js  render()/select()/destroy() over an SVG element
+    renderer/svgRenderer.js  render()/select()/highlight()/markStale()/destroy()
 
   webview/
-    main.js                  protocol client, DTO validation, DOM updates
-    styles.css               themable styles, status styling
+    main.js                  protocol client, DTO validation, preview & sync DOM
+    previewController.js     pure injected-timer hover-intent/pin state machine
+    highlight.js             highlight.js C++/JS wrapper with plain-text fallback
+    styles.css               themable styles, status/stale/preview/hljs tokens
 ```
 
 `src/extension/security/paths.js` is the only source file outside the host that
@@ -118,27 +130,40 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 
 ### Messages (protocol v1)
 
-| Kind                 | Direction       | Purpose                                 |
-| -------------------- | --------------- | --------------------------------------- |
-| `webview.ready`      | webview -> host | handshake; asks for capabilities        |
-| `graph.load`         | webview -> host | request the demo graph                  |
-| `csr.load`           | webview -> host | request the validated CSR run           |
-| `query.symbol`       | webview -> host | look up one symbol by id                |
-| `query.symbols`      | webview -> host | list symbols in a file                  |
-| `query.callers`      | webview -> host | derived `called_by` for a symbol        |
-| `query.callees`      | webview -> host | outgoing calls for a symbol             |
-| `query.constructs`   | webview -> host | control constructs for a symbol         |
-| `query.capabilities` | webview -> host | current adapter capability set          |
-| `node.select`        | webview -> host | report selection (no response expected) |
-| `panel.ping`         | webview -> host | liveness check                          |
-| `graph.data`         | host -> webview | graph DTO payload                       |
-| `csr.data`           | host -> webview | validated run + `hash`                  |
-| `query.data`         | host -> webview | typed query result                      |
-| `capabilities.data`  | host -> webview | adapter matrix, version, demo flag      |
-| `analysis.progress`  | host -> webview | unprompted progress push (Phase 2+)     |
-| `protocol.error`     | both            | typed error, correlated when possible   |
-| `protocol.ack`       | host -> webview | reserved; not currently sent            |
-| `panel.pong`         | host -> webview | response to `panel.ping`                |
+| Kind                 | Direction       | Purpose                                              |
+| -------------------- | --------------- | ---------------------------------------------------- |
+| `webview.ready`      | webview -> host | handshake; asks for capabilities                     |
+| `graph.load`         | webview -> host | request the demo graph                               |
+| `csr.load`           | webview -> host | request the validated CSR run                        |
+| `query.symbol`       | webview -> host | look up one symbol by id                             |
+| `query.symbols`      | webview -> host | list symbols in a file                               |
+| `query.callers`      | webview -> host | derived `called_by` for a symbol                     |
+| `query.callees`      | webview -> host | outgoing calls for a symbol                          |
+| `query.constructs`   | webview -> host | control constructs for a symbol                      |
+| `query.capabilities` | webview -> host | current adapter capability set                       |
+| `cfg.functions`      | bidirectional   | list/return CFG-capable functions                    |
+| `cfg.load`           | webview -> host | request a function CFG DTO                           |
+| `source.slice`       | webview -> host | request an exact document slice                      |
+| `source.validation`  | webview -> host | batch range validation for a loaded graph            |
+| `navigate.to`        | webview -> host | validate and reveal a source range in editor         |
+| `node.select`        | webview -> host | report selection (no response expected)              |
+| `panel.ping`         | webview -> host | liveness check                                       |
+| `graph.data`         | host -> webview | graph DTO payload                                    |
+| `cfg.data`           | host -> webview | CFG DTO payload                                      |
+| `source.data`        | host -> webview | validated `SourceSlice` response                     |
+| `source.integrity`   | host -> webview | batch validation results (`exact`/`stale`/`missing`) |
+| `source.stale`       | host -> webview | stale file push on change/delete/rename              |
+| `navigate.done`      | host -> webview | navigation outcome (`ok` or typed error code)        |
+| `selection.changed`  | host -> webview | debounced editor selection mapped to node ids        |
+| `graph.focus`        | host -> webview | focus graph and restore node selection               |
+| `settings.data`      | host -> webview | live preview/navigation settings push                |
+| `csr.data`           | host -> webview | validated run + `hash`                               |
+| `query.data`         | host -> webview | typed query result                                   |
+| `capabilities.data`  | host -> webview | adapter matrix, version, demo flag, settings         |
+| `analysis.progress`  | host -> webview | unprompted progress push (Phase 2+)                  |
+| `protocol.error`     | both            | typed error, correlated when possible                |
+| `protocol.ack`       | host -> webview | reserved; not currently sent                         |
+| `panel.pong`         | host -> webview | response to `panel.ping`                             |
 
 Envelope fields: `protocolVersion` (currently `1`), `kind`, optional
 `requestId`, object `payload`. Unknown fields are ignored; unknown kinds are
@@ -212,14 +237,14 @@ command and bridge boundaries.
 
 | Capability                       | Phase    |
 | -------------------------------- | -------- |
-| C++ analysis adapters            | 2        |
-| JavaScript analysis adapters     | 3        |
+| C++ analysis adapters            | 2 (done) |
+| JavaScript analysis adapters     | 3 (done) |
 | CFG generation                   | 4 (done) |
-| DFG overlay                      | 11       |
-| Graph engine revisit/aggregation | 10       |
-| Source preview and navigation    | 5        |
+| Source preview and navigation    | 5 (done) |
 | Explanations (non-AI core)       | 6-7      |
 | Project index and caching        | 8        |
+| Graph engine revisit/aggregation | 10       |
+| DFG overlay                      | 11       |
 
 ## Version floor consequences
 
