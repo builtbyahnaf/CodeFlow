@@ -8,6 +8,75 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.005] - 2026-11-23
+
+### Phase 5 — Source Synchronization and Hover Preview
+
+The trust foundation: hovering any node shows an exact slice of the real
+source document, double-clicking or pressing `Enter` navigates to that range,
+editor cursor movement highlights matching nodes, and edits conservatively mark
+affected nodes stale. See `docs/PHASE-05-REPORT.md`,
+`docs/GRAPH_SPECIFICATION.md` (§11), and `docs/adr/0010-preview-highlighting.md`.
+
+- **Core source modules** (`src/core/source/`):
+  - `ranges.js`: `normalizeRangeRef`, `createDocumentView`, `rangeWithinDocument`
+    (no clamping; rejects out-of-bounds with `E_RANGE`), `sliceText`,
+    `truncateSource` (strips trailing line ending so `N`-line caps render `N`
+    lines), containment/overlap helpers, and conservative `integrityFor`.
+  - `cache.js`: bounded LRU cache (30 entries / 5 MB) with prefix invalidation.
+  - `settings.js`: `PREVIEW_DEFAULTS`, clamping (`delayMs` `0–2000`, `maxLines`
+    `4–40`), and `settingsChanged`.
+  - `presentation.js`: pure `buildPreviewModel` handling exact, truncated,
+    empty/whitespace, missing, stale, and synthetic nodes.
+
+- **Host source access and navigation** (`src/extension/`):
+  - `sourcePaths.js` + `sourceAccess.js`: single host read path via
+    `workspace.openTextDocument` → `document.getText(range)` with lexical
+    workspace containment, 64 KB slice cap (`E_LIMIT`), batch range validation,
+    and post-analysis full-file SHA-256 baseline capture.
+  - Cache invalidation and `source.stale` push on document change, deletion,
+    and rename; `panel.js` blocks navigation to stale or missing files with
+    `E_SOURCE_STALE` / `E_SOURCE_MISSING`.
+  - `panelWire.js`: `source.slice`, `source.validation`, `navigate.to` (all
+    asserted never to call `ensureRun`), debounced editor-to-graph selection
+    sync (`selection.changed`), live settings push (`settings.data`), and
+    `focusGraph`.
+  - `commands.js`: registered `codeflow.backToGraph` to reveal the panel and
+    restore node focus.
+
+- **Webview preview, highlighting, and accessibility** (`src/webview/`,
+  `src/visualization/renderer/`):
+  - `previewController.js`: pure injected-timer hover-intent state machine
+    (300 ms dwell, >12 px pointer reset, 150 ms grace, pinning, `pinByDefault`,
+    `Esc` dismiss).
+  - `highlight.js`: `highlight.js@11.11.1` (BSD-3-Clause, webview-only, core +
+    `cpp` + `javascript` only) with `textContent` span rendering and automatic
+    plain-text fallback (`plainLines`).
+  - `panelTemplate.js`, `svgRenderer.js`, `main.js`, and `styles.css`: preview
+    card DOM, click-to-navigate (with explicit "Open" button retained when
+    disabled), keyboard loop (`Tab`/arrows, `H`/`Shift+Space`, `Enter`, `Esc`),
+    and `.is-synced` / `.is-stale` non-colour cues.
+
+- **Settings (`package.json`)**:
+  - Added `codeflow.preview.enabled`, `delayMs`, `maxLines`,
+    `syntaxHighlighting`, `clickToNavigate`, `pinByDefault`, and
+    `codeflow.navigation.openInPreviewTab`.
+
+- **Tests and documentation**:
+  - Added unit suites for `sourceRanges`, `sourceCache`, `sourceSettings`,
+    `sourcePresentation`, `previewController`, `highlight`, `sourcePaths`, and
+    all-node `sourceFidelity`, plus 10 `panelWire` tests and updated protocol and
+    template tests.
+  - Added ADR 0010, `docs/GRAPH_SPECIFICATION.md` §11, `docs/PHASE-05-REPORT.md`,
+    and updated `docs/ARCHITECTURE.md`, `docs/DEPENDENCIES.md`, and `README.md`.
+
+- **Known gaps (recorded, not hidden)**:
+  - `tests/fixtures/cpp/ast-cfg.json` retains one pre-existing ternary node
+    whose range extends past end-of-line (rejected by `rangeWithinDocument`);
+    C++ fidelity tests use `parity.cpp`/`ast-parity.json`.
+  - No local Clang/clangd, live VS Code host integration run, or webview frame
+    trace executed in this environment; `npm run check:vsix` previously hung.
+
 ## [0.1.004] - 2026-11-23
 
 ### Phase 4 — CFG and first visualization
