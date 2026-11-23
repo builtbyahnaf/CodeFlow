@@ -1,0 +1,753 @@
+{
+  "id": "0x1",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "helper",
+      "kind": "FunctionDecl",
+      "name": "helper",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "D:/w/src/cfg.cpp", "line": 1, "col": 1 },
+      "range": {
+        "begin": { "line": 1, "col": 1 },
+        "end": { "line": 1, "col": 31 }
+      },
+      "inner": [
+        {
+          "id": "helper-p",
+          "kind": "ParmVarDecl",
+          "name": "n",
+          "type": { "qualType": "int" },
+          "loc": { "line": 1, "col": 12 },
+          "range": {
+            "begin": { "line": 1, "col": 12 },
+            "end": { "line": 1, "col": 17 }
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 1, "col": 19 },
+            "end": { "line": 1, "col": 31 }
+          },
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": { "line": 1, "col": 21 },
+                "end": { "line": 1, "col": 30 }
+              },
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "+",
+                  "range": {
+                    "begin": { "line": 1, "col": 28 },
+                    "end": { "line": 1, "col": 29 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "helper-p", "kind": "ParmVarDecl", "name": "n" },
+                      "range": {
+                        "begin": { "line": 1, "col": 28 },
+                        "end": { "line": 1, "col": 29 }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "classify",
+      "kind": "FunctionDecl",
+      "name": "classify",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "D:/w/src/cfg.cpp", "line": 3, "col": 1 },
+      "range": {
+        "begin": { "line": 3, "col": 1 },
+        "end": { "line": 23, "col": 2 }
+      },
+      "inner": [
+        {
+          "id": "classify-p",
+          "kind": "ParmVarDecl",
+          "name": "n",
+          "type": { "qualType": "int" },
+          "loc": { "line": 3, "col": 15 },
+          "range": {
+            "begin": { "line": 3, "col": 15 },
+            "end": { "line": 3, "col": 16 }
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 3, "col": 18 },
+            "end": { "line": 23, "col": 2 }
+          },
+          "inner": [
+            {
+              "kind": "IfStmt",
+              "hasElse": true,
+              "range": {
+                "begin": { "line": 4, "col": 3 },
+                "end": { "line": 8, "col": 4 }
+              },
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "<",
+                  "range": {
+                    "begin": { "line": 4, "col": 7 },
+                    "end": { "line": 4, "col": 12 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "classify-p", "kind": "ParmVarDecl", "name": "n" },
+                      "range": {
+                        "begin": { "line": 4, "col": 7 },
+                        "end": { "line": 4, "col": 8 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "range": {
+                    "begin": { "line": 4, "col": 13 },
+                    "end": { "line": 6, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "ReturnStmt",
+                      "range": {
+                        "begin": { "line": 5, "col": 5 },
+                        "end": { "line": 5, "col": 15 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "UnaryOperator",
+                          "opcode": "-",
+                          "range": {
+                            "begin": { "line": 5, "col": 12 },
+                            "end": { "line": 5, "col": 14 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "value": 1,
+                              "range": {
+                                "begin": { "line": 5, "col": 13 },
+                                "end": { "line": 5, "col": 14 }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "IfStmt",
+                  "hasElse": false,
+                  "range": {
+                    "begin": { "line": 6, "col": 10 },
+                    "end": { "line": 8, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": "==",
+                      "range": {
+                        "begin": { "line": 6, "col": 14 },
+                        "end": { "line": 6, "col": 20 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "referencedDecl": { "id": "classify-p", "kind": "ParmVarDecl", "name": "n" },
+                          "range": {
+                            "begin": { "line": 6, "col": 14 },
+                            "end": { "line": 6, "col": 15 }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "CompoundStmt",
+                      "range": {
+                        "begin": { "line": 6, "col": 21 },
+                        "end": { "line": 8, "col": 4 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "ReturnStmt",
+                          "range": {
+                            "begin": { "line": 7, "col": 5 },
+                            "end": { "line": 7, "col": 14 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "value": 0,
+                              "range": {
+                                "begin": { "line": 7, "col": 12 },
+                                "end": { "line": 7, "col": 13 }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ForStmt",
+              "range": {
+                "begin": { "line": 9, "col": 3 },
+                "end": { "line": 12, "col": 4 }
+              },
+              "inner": [
+                {
+                  "kind": "DeclStmt",
+                  "range": {
+                    "begin": { "line": 9, "col": 8 },
+                    "end": { "line": 9, "col": 18 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "VarDecl",
+                      "id": "classify-i",
+                      "name": "i",
+                      "type": { "qualType": "int" },
+                      "loc": { "line": 9, "col": 12 },
+                      "range": {
+                        "begin": { "line": 9, "col": 12 },
+                        "end": { "line": 9, "col": 18 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "<",
+                  "range": {
+                    "begin": { "line": 9, "col": 20 },
+                    "end": { "line": 9, "col": 25 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "classify-i", "kind": "VarDecl", "name": "i" },
+                      "range": {
+                        "begin": { "line": 9, "col": 20 },
+                        "end": { "line": 9, "col": 21 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "UnaryOperator",
+                  "opcode": "++",
+                  "isPostfix": true,
+                  "range": {
+                    "begin": { "line": 9, "col": 27 },
+                    "end": { "line": 9, "col": 30 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "classify-i", "kind": "VarDecl", "name": "i" },
+                      "range": {
+                        "begin": { "line": 9, "col": 27 },
+                        "end": { "line": 9, "col": 28 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "range": {
+                    "begin": { "line": 9, "col": 32 },
+                    "end": { "line": 12, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "IfStmt",
+                      "hasElse": false,
+                      "range": {
+                        "begin": { "line": 10, "col": 5 },
+                        "end": { "line": 10, "col": 26 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "BinaryOperator",
+                          "opcode": "==",
+                          "range": {
+                            "begin": { "line": 10, "col": 9 },
+                            "end": { "line": 10, "col": 15 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": { "id": "classify-i", "kind": "VarDecl", "name": "i" },
+                              "range": {
+                                "begin": { "line": 10, "col": 9 },
+                                "end": { "line": 10, "col": 10 }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "ContinueStmt",
+                          "range": {
+                            "begin": { "line": 10, "col": 17 },
+                            "end": { "line": 10, "col": 26 }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "IfStmt",
+                      "hasElse": false,
+                      "range": {
+                        "begin": { "line": 11, "col": 5 },
+                        "end": { "line": 11, "col": 22 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "BinaryOperator",
+                          "opcode": ">",
+                          "range": {
+                            "begin": { "line": 11, "col": 9 },
+                            "end": { "line": 11, "col": 14 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": { "id": "classify-i", "kind": "VarDecl", "name": "i" },
+                              "range": {
+                                "begin": { "line": 11, "col": 9 },
+                                "end": { "line": 11, "col": 10 }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "BreakStmt",
+                          "range": {
+                            "begin": { "line": 11, "col": 16 },
+                            "end": { "line": 11, "col": 22 }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "SwitchStmt",
+              "range": {
+                "begin": { "line": 13, "col": 3 },
+                "end": { "line": 20, "col": 4 }
+              },
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "referencedDecl": { "id": "classify-p", "kind": "ParmVarDecl", "name": "n" },
+                  "range": {
+                    "begin": { "line": 13, "col": 11 },
+                    "end": { "line": 13, "col": 12 }
+                  }
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "range": {
+                    "begin": { "line": 13, "col": 14 },
+                    "end": { "line": 20, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "CaseStmt",
+                      "range": {
+                        "begin": { "line": 14, "col": 5 },
+                        "end": { "line": 15, "col": 16 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "value": 1,
+                          "range": {
+                            "begin": { "line": 14, "col": 10 },
+                            "end": { "line": 14, "col": 11 }
+                          }
+                        },
+                        {
+                          "kind": "ReturnStmt",
+                          "range": {
+                            "begin": { "line": 15, "col": 7 },
+                            "end": { "line": 15, "col": 16 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "value": 10,
+                              "range": {
+                                "begin": { "line": 15, "col": 14 },
+                                "end": { "line": 15, "col": 16 }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "CaseStmt",
+                      "range": {
+                        "begin": { "line": 16, "col": 5 },
+                        "end": { "line": 17, "col": 16 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "value": 2,
+                          "range": {
+                            "begin": { "line": 16, "col": 10 },
+                            "end": { "line": 16, "col": 11 }
+                          }
+                        },
+                        {
+                          "kind": "ReturnStmt",
+                          "range": {
+                            "begin": { "line": 17, "col": 7 },
+                            "end": { "line": 17, "col": 16 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "IntegerLiteral",
+                              "value": 20,
+                              "range": {
+                                "begin": { "line": 17, "col": 14 },
+                                "end": { "line": 17, "col": 16 }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "DefaultStmt",
+                      "range": {
+                        "begin": { "line": 18, "col": 5 },
+                        "end": { "line": 19, "col": 12 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "BreakStmt",
+                          "range": {
+                            "begin": { "line": 19, "col": 7 },
+                            "end": { "line": 19, "col": 12 }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "range": {
+                "begin": { "line": 21, "col": 3 },
+                "end": { "line": 21, "col": 40 }
+              },
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "referencedDecl": { "id": "classify-p", "kind": "ParmVarDecl", "name": "n" },
+                  "range": {
+                    "begin": { "line": 21, "col": 3 },
+                    "end": { "line": 21, "col": 4 }
+                  }
+                },
+                {
+                  "kind": "ConditionalOperator",
+                  "range": {
+                    "begin": { "line": 21, "col": 7 },
+                    "end": { "line": 21, "col": 39 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": ">",
+                      "range": {
+                        "begin": { "line": 21, "col": 7 },
+                        "end": { "line": 21, "col": 28 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "CallExpr",
+                          "range": {
+                            "begin": { "line": 21, "col": 7 },
+                            "end": { "line": 21, "col": 15 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "ImplicitCastExpr",
+                              "range": {
+                                "begin": { "line": 21, "col": 7 },
+                                "end": { "line": 21, "col": 13 }
+                              },
+                              "inner": [
+                                {
+                                  "kind": "DeclRefExpr",
+                                  "referencedDecl": { "id": "helper", "kind": "FunctionDecl", "name": "helper" },
+                                  "range": {
+                                    "begin": { "line": 21, "col": 7 },
+                                    "end": { "line": 21, "col": 13 }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "value": 100,
+                          "range": {
+                            "begin": { "line": 21, "col": 26 },
+                            "end": { "line": 21, "col": 29 }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "IntegerLiteral",
+                      "value": 100,
+                      "range": {
+                        "begin": { "line": 21, "col": 32 },
+                        "end": { "line": 21, "col": 35 }
+                      }
+                    },
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "classify-p", "kind": "ParmVarDecl", "name": "n" },
+                      "range": {
+                        "begin": { "line": 21, "col": 38 },
+                        "end": { "line": 21, "col": 39 }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": { "line": 22, "col": 3 },
+                "end": { "line": 22, "col": 12 }
+              },
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "referencedDecl": { "id": "classify-p", "kind": "ParmVarDecl", "name": "n" },
+                  "range": {
+                    "begin": { "line": 22, "col": 10 },
+                    "end": { "line": 22, "col": 11 }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guarded",
+      "kind": "FunctionDecl",
+      "name": "guarded",
+      "type": { "qualType": "int (int *)" },
+      "loc": { "file": "D:/w/src/cfg.cpp", "line": 25, "col": 1 },
+      "range": {
+        "begin": { "line": 25, "col": 1 },
+        "end": { "line": 34, "col": 2 }
+      },
+      "inner": [
+        {
+          "id": "guarded-p",
+          "kind": "ParmVarDecl",
+          "name": "p",
+          "type": { "qualType": "int *" },
+          "loc": { "line": 25, "col": 15 },
+          "range": {
+            "begin": { "line": 25, "col": 15 },
+            "end": { "line": 25, "col": 18 }
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 25, "col": 20 },
+            "end": { "line": 34, "col": 2 }
+          },
+          "inner": [
+            {
+              "kind": "IfStmt",
+              "hasElse": false,
+              "range": {
+                "begin": { "line": 26, "col": 3 },
+                "end": { "line": 28, "col": 4 }
+              },
+              "inner": [
+                {
+                  "kind": "UnaryOperator",
+                  "opcode": "!",
+                  "range": {
+                    "begin": { "line": 26, "col": 7 },
+                    "end": { "line": 26, "col": 9 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "guarded-p", "kind": "ParmVarDecl", "name": "p" },
+                      "range": {
+                        "begin": { "line": 26, "col": 8 },
+                        "end": { "line": 26, "col": 9 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "range": {
+                    "begin": { "line": 26, "col": 10 },
+                    "end": { "line": 28, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "CXXThrowExpr",
+                      "range": {
+                        "begin": { "line": 27, "col": 5 },
+                        "end": { "line": 27, "col": 18 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "StringLiteral",
+                          "value": "null",
+                          "range": {
+                            "begin": { "line": 27, "col": 11 },
+                            "end": { "line": 27, "col": 17 }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "CXXTryStmt",
+              "range": {
+                "begin": { "line": 29, "col": 3 },
+                "end": { "line": 33, "col": 4 }
+              },
+              "inner": [
+                {
+                  "kind": "CompoundStmt",
+                  "range": {
+                    "begin": { "line": 29, "col": 7 },
+                    "end": { "line": 31, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "ReturnStmt",
+                      "range": {
+                        "begin": { "line": 30, "col": 5 },
+                        "end": { "line": 30, "col": 15 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "UnaryOperator",
+                          "opcode": "*",
+                          "range": {
+                            "begin": { "line": 30, "col": 12 },
+                            "end": { "line": 30, "col": 14 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": { "id": "guarded-p", "kind": "ParmVarDecl", "name": "p" },
+                              "range": {
+                                "begin": { "line": 30, "col": 13 },
+                                "end": { "line": 30, "col": 14 }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "CXXCatchStmt",
+                  "range": {
+                    "begin": { "line": 31, "col": 5 },
+                    "end": { "line": 33, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "CompoundStmt",
+                      "range": {
+                        "begin": { "line": 31, "col": 19 },
+                        "end": { "line": 33, "col": 4 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "ReturnStmt",
+                          "range": {
+                            "begin": { "line": 32, "col": 5 },
+                            "end": { "line": 32, "col": 14 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "UnaryOperator",
+                              "opcode": "-",
+                              "range": {
+                                "begin": { "line": 32, "col": 12 },
+                                "end": { "line": 32, "col": 14 }
+                              },
+                              "inner": [
+                                {
+                                  "kind": "IntegerLiteral",
+                                  "value": 1,
+                                  "range": {
+                                    "begin": { "line": 32, "col": 13 },
+                                    "end": { "line": 32, "col": 14 }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
