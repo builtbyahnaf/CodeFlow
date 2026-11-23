@@ -21,7 +21,7 @@ test('the C++ adapter declares its real capabilities and extensions', () => {
   assert.equal(cppAdapter.extensions.includes('.js'), false);
   assert.equal(cppAdapter.capabilities.parse, 'partial');
   assert.equal(cppAdapter.capabilities.resolveCalls, 'partial');
-  assert.equal(cppAdapter.capabilities.generateCFG, false);
+  assert.equal(cppAdapter.capabilities.generateCFG, true);
 });
 
 test('the adapter maps a host-supplied AST into CSR', () => {
