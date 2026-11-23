@@ -15,6 +15,8 @@ import { createBridge } from '../core/protocol/bridge.js';
 import { DIRECTIONS, PROTOCOL_VERSION, createErrorPayload } from '../core/protocol/envelope.js';
 import { buildGraph } from '../core/graph/model.js';
 import { toDto } from '../core/graph/dto.js';
+import { buildCfg } from '../core/graph/cfg/builder.js';
+import { toCfgDto } from '../core/graph/cfg/dto.js';
 import { hashRun } from '../core/csr/serialize.js';
 
 /** @typedef {ReturnType<typeof import('../core/csr/query.js').createQueryLayer>} QueryLayer */
@@ -134,6 +136,66 @@ export function createPanelWire({
         return;
       }
       bridge.respond('graph.data', { dto: toDto(buildGraph(loaded.run)) }, requestId);
+    });
+
+    bridge.on('cfg.functions', async (_payload, { requestId }) => {
+      const loaded = await ensureRun();
+      if (!loaded.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(loaded.code, loaded.message, { issues: loaded.issues }),
+          requestId,
+        );
+        return;
+      }
+      const result = loaded.query.cfgFunctions();
+      if (!result.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(result.code, result.message),
+          requestId,
+        );
+        return;
+      }
+      bridge.respond(
+        'cfg.functions',
+        {
+          ok: true,
+          functions: result.value.map((symbol) => ({
+            symbolId: symbol.symbolId,
+            name: symbol.name,
+            qualifiedName: symbol.qualifiedName,
+            kind: symbol.kind,
+            range: symbol.declaration,
+          })),
+        },
+        requestId,
+      );
+    });
+
+    bridge.on('cfg.load', async (payload, { requestId }) => {
+      const loaded = await ensureRun();
+      if (!loaded.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(loaded.code, loaded.message, { issues: loaded.issues }),
+          requestId,
+        );
+        return;
+      }
+      const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
+      const result = buildCfg(loaded.query, symbolId, {
+        allowLarge: payload.allowLarge === true,
+      });
+      if (!result.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(result.code, result.message, result.detail),
+          requestId,
+        );
+        return;
+      }
+      bridge.respond('cfg.data', { ok: true, dto: toCfgDto(result.cfg) }, requestId);
     });
 
     bridge.on('csr.load', async (payload, { requestId }) => {
