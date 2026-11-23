@@ -18,6 +18,7 @@ import { buildDiagnosticsReport, openDiagnosticsDocument } from './diagnostics.j
  *     showFile: (path: string) => unknown,
  *     showCfg: (path: string, symbolId: string) => unknown,
  *     listCfgFunctions: (path: string) => Promise<{ok: boolean, [key: string]: unknown}>,
+ *     focusGraph: () => unknown,
  *     isOpen: () => boolean,
  *     pendingRequests: () => number,
  *   },
@@ -105,8 +106,12 @@ export function registerCommands({ context, logger, panelManager, registry, exte
     panelManager.showCfg(filePath, picked.symbolId);
   });
 
-  register('codeflow.showDiagnostics', async () => {
-    const report = buildDiagnosticsReport({
+  register('codeflow.backToGraph', () => {
+    logger.info('command.backToGraph');
+    panelManager.focusGraph();
+  });
+
+  register('codeflow.showDiagnostics', async () => {    const report = buildDiagnosticsReport({
       registry,
       panelManager,
       logger,
