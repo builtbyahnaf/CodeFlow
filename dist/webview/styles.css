@@ -75,7 +75,36 @@ body {
 
 .cf-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.cf-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--cf-muted);
+}
+
+.cf-picker-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cf-select {
+  background: var(--vscode-dropdown-background, #3a3d41);
+  color: var(--vscode-dropdown-foreground, #ffffff);
+  border: 1px solid var(--vscode-dropdown-border, transparent);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font: inherit;
+  max-width: 240px;
+}
+
+.cf-select:focus-visible {
+  outline: 1px solid var(--cf-accent);
+  outline-offset: 1px;
 }
 
 .cf-button {
@@ -351,4 +380,100 @@ body {
   font-family: var(--cf-font);
   font-size: 9px;
   pointer-events: none;
+}
+
+.cf-edge-label {
+  fill: var(--cf-muted);
+  font-family: var(--cf-mono);
+  font-size: 9px;
+  pointer-events: none;
+}
+
+/* CFG node kinds: shape and accent stay glyph-backed, never colour-only. */
+
+.cf-node--kind-entry .cf-node-box,
+.cf-node--kind-exit .cf-node-box {
+  stroke-width: 2;
+}
+
+.cf-node--kind-entry .cf-node-box {
+  fill: color-mix(in srgb, var(--cf-status-resolved) 18%, var(--cf-bg));
+}
+
+.cf-node--kind-exit .cf-node-box {
+  fill: color-mix(in srgb, var(--cf-status-stale) 18%, var(--cf-bg));
+}
+
+.cf-node--kind-condition .cf-node-box,
+.cf-node--kind-multiway .cf-node-box {
+  stroke: var(--cf-status-possible);
+}
+
+.cf-node--kind-loop_header .cf-node-box,
+.cf-node--kind-loop_latch .cf-node-box,
+.cf-node--kind-loop_body_entry .cf-node-box {
+  stroke: var(--cf-status-inferred);
+}
+
+.cf-node--kind-return .cf-node-box,
+.cf-node--kind-throw .cf-node-box,
+.cf-node--kind-break .cf-node-box,
+.cf-node--kind-continue .cf-node-box {
+  stroke-dasharray: 6 3;
+}
+
+.cf-node--kind-catch_entry .cf-node-box,
+.cf-node--kind-finally_entry .cf-node-box {
+  stroke: var(--cf-status-possible);
+  stroke-dasharray: 4 3;
+}
+
+.cf-node--kind-unreachable .cf-node-box,
+.cf-node--kind-unmodeled .cf-node-box,
+.cf-node--unreachable .cf-node-box {
+  stroke: var(--cf-status-unresolved);
+  stroke-dasharray: 3 4;
+  opacity: 0.75;
+}
+
+.cf-node--unreachable .cf-node-label,
+.cf-node--kind-unmodeled .cf-node-label {
+  fill: var(--cf-muted);
+  font-style: italic;
+}
+
+/* CFG edge kinds: downstream of status, so both cues remain visible. */
+
+.cf-edge--kind-true,
+.cf-edge--kind-case {
+  stroke: var(--cf-status-resolved);
+}
+
+.cf-edge--kind-false,
+.cf-edge--kind-default {
+  stroke: var(--cf-status-possible);
+  stroke-dasharray: 3 3;
+}
+
+.cf-edge--kind-loop_back {
+  stroke: var(--cf-status-inferred);
+  stroke-dasharray: 8 4;
+}
+
+.cf-edge--kind-break,
+.cf-edge--kind-continue {
+  stroke: var(--cf-status-inferred);
+  stroke-dasharray: 2 3;
+}
+
+.cf-edge--kind-return,
+.cf-edge--kind-throw {
+  stroke: var(--cf-status-unresolved);
+  stroke-dasharray: 6 3;
+}
+
+.cf-edge--kind-exception,
+.cf-edge--kind-finally {
+  stroke: var(--cf-status-possible);
+  stroke-dasharray: 5 3;
 }
