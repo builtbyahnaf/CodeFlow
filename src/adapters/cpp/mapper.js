@@ -25,6 +25,7 @@ import {
   createRelationshipAllocator,
 } from '../../core/csr/identity.js';
 import { createSourceLocator } from './locator.js';
+import { collectFunctionConstructs } from './constructs.js';
 
 /**
  * @typedef {import('../../core/csr/entities.js').AnalysisRun} AnalysisRun
@@ -98,6 +99,8 @@ export function mapClangAst(options) {
     }),
   );
 
+  /** @type {import('../../core/csr/entities.js').ControlConstruct[]} */
+  const controlConstructs = [];
   /** @type {Array<{node: Record<string, unknown>, file: string, functionId: string|null, range: SourceRange|null}>} */
   const callSites = [];
   /** @type {Array<{file: string, name: string, system: boolean, line: number, lineText: string}>} */
@@ -405,6 +408,7 @@ export function mapClangAst(options) {
         symbolId: symbol.symbolId,
         kind: symbolKind,
       };
+      collectConstructs(node, symbol, file);
       for (const child of inner(node)) {
         visit(child, {
           ...context,
@@ -576,6 +580,7 @@ export function mapClangAst(options) {
           symbolId: symbol.symbolId,
           kind: 'closure',
         };
+        collectConstructs(node, symbol, file);
         for (const child of inner(node)) {
           visit(child, {
             ...context,
@@ -953,6 +958,45 @@ export function mapClangAst(options) {
   }
 
   /**
+   * Derive the control constructs for one function. A failure here degrades the
+   * CFG for that function only; it never invalidates the surrounding run.
+   *
+   * @param {Record<string, unknown>} node
+   * @param {SymbolRecord} symbol
+   * @param {string} file
+   */
+  function collectConstructs(node, symbol, file) {
+    try {
+      const result = collectFunctionConstructs({
+        functionNode: /** @type {Record<string, any>} */ (node),
+        symbol,
+        locator,
+        file,
+      });
+      controlConstructs.push(...result.constructs);
+      for (const diagnostic of result.diagnostics) {
+        diagnostics.push(
+          createDiagnostic({
+            severity: 'info',
+            code: diagnostic.code,
+            message: diagnostic.message,
+          }),
+        );
+      }
+    } catch (error) {
+      diagnostics.push(
+        createDiagnostic({
+          severity: 'warning',
+          code: 'construct_failed',
+          message: `Control constructs for ${symbol.qualifiedName} could not be derived: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        }),
+      );
+    }
+  }
+
+  /**
    * @param {SymbolRecord[]} _unused
    * @returns {AnalysisRun}
    */
@@ -994,7 +1038,7 @@ export function mapClangAst(options) {
       files,
       symbols,
       relationships,
-      controlConstructs: [],
+      controlConstructs,
       dataFacts: [],
       diagnostics,
       extensions: {
