@@ -10,6 +10,7 @@
  */
 
 import { computeLayout } from './layout.js';
+import { CFG_EDGE_KINDS, CFG_NODE_KINDS, CFG_STATUSES } from './cfg/kinds.js';
 
 export const GRAPH_DTO_VERSION = 1;
 
@@ -118,6 +119,12 @@ export function validateDto(dto) {
   if (candidate.dtoVersion !== GRAPH_DTO_VERSION) {
     issues.push(`Unsupported dtoVersion: ${String(candidate.dtoVersion)}.`);
   }
+  if (candidate.dtoKind === 'cfg') {
+    validateCfgDto(candidate, issues);
+    return issues.length > 0
+      ? { ok: false, issues }
+      : { ok: true, dto: /** @type {GraphDto} */ (dto) };
+  }
   const nodes = candidate.nodes;
   const edges = candidate.edges;
   if (!Array.isArray(nodes)) {
@@ -153,6 +160,219 @@ export function validateDto(dto) {
     return { ok: false, issues };
   }
   return { ok: true, dto: /** @type {GraphDto} */ (dto) };
+}
+
+/**
+ * @param {Record<string, unknown>} candidate
+ * @param {string[]} issues
+ */
+function validateCfgDto(candidate, issues) {
+  if (candidate.graphKind !== 'cfg') {
+    issues.push('A CFG DTO must declare graphKind "cfg".');
+  }
+  const fn = candidate.function;
+  if (typeof fn !== 'object' || fn === null || Array.isArray(fn)) {
+    issues.push('function must be an object.');
+  } else {
+    const record = /** @type {Record<string, unknown>} */ (fn);
+    for (const key of ['symbolId', 'name', 'qualifiedName', 'kind']) {
+      if (typeof record[key] !== 'string') {
+        issues.push(`function.${key} must be a string.`);
+      }
+    }
+    if (record.range !== null && !isRangeRef(record.range)) {
+      issues.push('function.range must be a range reference or null.');
+    }
+  }
+
+  const nodes = candidate.nodes;
+  const edges = candidate.edges;
+  if (!Array.isArray(nodes)) {
+    issues.push('nodes must be an array.');
+    return;
+  }
+  if (!Array.isArray(edges)) {
+    issues.push('edges must be an array.');
+    return;
+  }
+
+  const ids = new Set();
+  /** @type {string[]} */
+  const entryIds = [];
+  /** @type {string[]} */
+  const exitIds = [];
+  for (const entry of nodes) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      issues.push('Every node must be an object.');
+      continue;
+    }
+    const node = /** @type {Record<string, unknown>} */ (entry);
+    const id = node.id;
+    if (typeof id !== 'string') {
+      issues.push('Every node needs a string id.');
+      continue;
+    }
+    if (ids.has(id)) {
+      issues.push(`Duplicate node id "${id}".`);
+    }
+    ids.add(id);
+    if (!CFG_NODE_KINDS.includes(String(node.kind))) {
+      issues.push(`Node "${id}" has unknown kind "${String(node.kind)}".`);
+    }
+    if (!CFG_STATUSES.includes(String(node.status))) {
+      issues.push(`Node "${id}" has unknown status "${String(node.status)}".`);
+    }
+    if (typeof node.label !== 'string') {
+      issues.push(`Node "${id}" needs a string label.`);
+    }
+    if (!Array.isArray(node.labelLines) || node.labelLines.some((line) => typeof line !== 'string')) {
+      issues.push(`Node "${id}" needs string labelLines.`);
+    }
+    if (node.range !== null && !isRangeRef(node.range)) {
+      issues.push(`Node "${id}" has an invalid range reference.`);
+    }
+    if (!isPosition(node.position)) {
+      issues.push(`Node "${id}" has an invalid position.`);
+    }
+    if (node.kind === 'entry') {
+      entryIds.push(id);
+    }
+    if (node.kind === 'exit') {
+      exitIds.push(id);
+    }
+    if (node.calls !== undefined) {
+      if (!Array.isArray(node.calls)) {
+        issues.push(`Node "${id}" calls must be an array when present.`);
+      } else {
+        for (const call of node.calls) {
+          if (
+            typeof call !== 'object' ||
+            call === null ||
+            typeof call.to !== 'string' ||
+            typeof call.label !== 'string' ||
+            !CFG_STATUSES.includes(String(call.status))
+          ) {
+            issues.push(`Node "${id}" has an invalid call target.`);
+          }
+        }
+      }
+    }
+  }
+  if (entryIds.length !== 1) {
+    issues.push(`A CFG needs exactly one entry node; found ${entryIds.length}.`);
+  }
+  if (exitIds.length !== 1) {
+    issues.push(`A CFG needs exactly one exit node; found ${exitIds.length}.`);
+  }
+  if (candidate.entryId !== entryIds[0]) {
+    issues.push('entryId must reference the entry node.');
+  }
+  if (candidate.exitId !== exitIds[0]) {
+    issues.push('exitId must reference the exit node.');
+  }
+
+  const edgeIds = new Set();
+  for (const entry of edges) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      issues.push('Every edge must be an object.');
+      continue;
+    }
+    const edge = /** @type {Record<string, unknown>} */ (entry);
+    const id = edge.id;
+    if (typeof id !== 'string') {
+      issues.push('Every edge needs a string id.');
+      continue;
+    }
+    if (edgeIds.has(id)) {
+      issues.push(`Duplicate edge id "${id}".`);
+    }
+    edgeIds.add(id);
+    if (typeof edge.from !== 'string' || !ids.has(edge.from)) {
+      issues.push(`Edge "${id}" has an unknown source node.`);
+    }
+    if (typeof edge.to !== 'string' || !ids.has(edge.to)) {
+      issues.push(`Edge "${id}" has an unknown target node.`);
+    }
+    if (!CFG_EDGE_KINDS.includes(String(edge.kind))) {
+      issues.push(`Edge "${id}" has unknown kind "${String(edge.kind)}".`);
+    }
+    if (!CFG_STATUSES.includes(String(edge.status))) {
+      issues.push(`Edge "${id}" has unknown status "${String(edge.status)}".`);
+    }
+    if (typeof edge.label !== 'string') {
+      issues.push(`Edge "${id}" needs a string label.`);
+    }
+    if (typeof edge.dash !== 'string' || typeof edge.glyphHint !== 'string') {
+      issues.push(`Edge "${id}" needs string dash and glyphHint fields.`);
+    }
+  }
+
+  const degradations = candidate.degradations;
+  if (!Array.isArray(degradations)) {
+    issues.push('degradations must be an array.');
+  } else {
+    for (const entry of degradations) {
+      if (
+        typeof entry !== 'object' ||
+        entry === null ||
+        typeof entry.code !== 'string' ||
+        typeof entry.message !== 'string' ||
+        !['info', 'warning', 'error'].includes(String(entry.severity))
+      ) {
+        issues.push('Every degradation needs a code, message and severity.');
+      }
+    }
+  }
+
+  const extent = candidate.extent;
+  if (
+    typeof extent !== 'object' ||
+    extent === null ||
+    !Number.isFinite(extent.width) ||
+    !Number.isFinite(extent.height)
+  ) {
+    issues.push('extent must carry finite width and height.');
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isRangeRef(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const range = /** @type {Record<string, unknown>} */ (value);
+  return (
+    typeof range.fileId === 'string' &&
+    Number.isInteger(range.startLine) &&
+    Number.isInteger(range.startColumn) &&
+    Number.isInteger(range.endLine) &&
+    Number.isInteger(range.endColumn) &&
+    range.startLine >= 0 &&
+    range.startColumn >= 0 &&
+    range.endLine >= 0 &&
+    range.endColumn >= 0
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isPosition(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const position = /** @type {Record<string, unknown>} */ (value);
+  return (
+    Number.isFinite(position.x) &&
+    Number.isFinite(position.y) &&
+    Number.isFinite(position.width) &&
+    Number.isFinite(position.height) &&
+    Number.isInteger(position.layer)
+  );
 }
 
 /**
