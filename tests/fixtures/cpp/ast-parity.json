@@ -1,0 +1,166 @@
+{
+  "id": "0x1",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "parity",
+      "kind": "FunctionDecl",
+      "name": "parity",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "D:/w/src/parity.cpp", "line": 1, "col": 1 },
+      "range": {
+        "begin": { "line": 1, "col": 1 },
+        "end": { "line": 6, "col": 2 }
+      },
+      "inner": [
+        {
+          "id": "parity-p",
+          "kind": "ParmVarDecl",
+          "name": "n",
+          "type": { "qualType": "int" },
+          "loc": { "line": 1, "col": 12 },
+          "range": {
+            "begin": { "line": 1, "col": 12 },
+            "end": { "line": 1, "col": 17 }
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 1, "col": 19 },
+            "end": { "line": 6, "col": 2 }
+          },
+          "inner": [
+            {
+              "kind": "ForStmt",
+              "range": {
+                "begin": { "line": 2, "col": 3 },
+                "end": { "line": 4, "col": 4 }
+              },
+              "inner": [
+                {
+                  "kind": "DeclStmt",
+                  "range": {
+                    "begin": { "line": 2, "col": 8 },
+                    "end": { "line": 2, "col": 18 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "VarDecl",
+                      "id": "parity-i",
+                      "name": "i",
+                      "type": { "qualType": "int" },
+                      "loc": { "line": 2, "col": 12 },
+                      "range": {
+                        "begin": { "line": 2, "col": 12 },
+                        "end": { "line": 2, "col": 18 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "<",
+                  "range": {
+                    "begin": { "line": 2, "col": 20 },
+                    "end": { "line": 2, "col": 25 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "parity-i", "kind": "VarDecl", "name": "i" },
+                      "range": {
+                        "begin": { "line": 2, "col": 20 },
+                        "end": { "line": 2, "col": 21 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "UnaryOperator",
+                  "opcode": "++",
+                  "isPostfix": true,
+                  "range": {
+                    "begin": { "line": 2, "col": 27 },
+                    "end": { "line": 2, "col": 30 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "referencedDecl": { "id": "parity-i", "kind": "VarDecl", "name": "i" },
+                      "range": {
+                        "begin": { "line": 2, "col": 27 },
+                        "end": { "line": 2, "col": 28 }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "range": {
+                    "begin": { "line": 2, "col": 32 },
+                    "end": { "line": 4, "col": 4 }
+                  },
+                  "inner": [
+                    {
+                      "kind": "IfStmt",
+                      "hasElse": false,
+                      "range": {
+                        "begin": { "line": 3, "col": 5 },
+                        "end": { "line": 3, "col": 27 }
+                      },
+                      "inner": [
+                        {
+                          "kind": "BinaryOperator",
+                          "opcode": "==",
+                          "range": {
+                            "begin": { "line": 3, "col": 9 },
+                            "end": { "line": 3, "col": 15 }
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": { "id": "parity-i", "kind": "VarDecl", "name": "i" },
+                              "range": {
+                                "begin": { "line": 3, "col": 9 },
+                                "end": { "line": 3, "col": 10 }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "ContinueStmt",
+                          "range": {
+                            "begin": { "line": 3, "col": 17 },
+                            "end": { "line": 3, "col": 26 }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "range": {
+                "begin": { "line": 5, "col": 3 },
+                "end": { "line": 5, "col": 12 }
+              },
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "referencedDecl": { "id": "parity-p", "kind": "ParmVarDecl", "name": "n" },
+                  "range": {
+                    "begin": { "line": 5, "col": 10 },
+                    "end": { "line": 5, "col": 11 }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
