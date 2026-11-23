@@ -372,6 +372,56 @@ export function createQueryLayer(run, options = {}) {
   }
 
   /**
+   * Every stored control construct in deterministic id order.
+   *
+   * @returns {QueryResult<ControlConstruct[]>}
+   */
+  function allConstructs() {
+    const capability = requireCapability('generateCFG', 'Control-flow queries');
+    if (!capability.ok) {
+      return capability;
+    }
+    return {
+      ok: true,
+      value: [...run.controlConstructs].sort((a, b) =>
+        a.constructId < b.constructId ? -1 : a.constructId > b.constructId ? 1 : 0,
+      ),
+    };
+  }
+
+  /**
+   * Functions that have at least one control construct, ordered by qualified
+   * name and id. The function picker uses this so the webview never sees raw
+   * CSR arrays.
+   *
+   * @returns {QueryResult<SymbolRecord[]>}
+   */
+  function cfgFunctions() {
+    const capability = requireCapability('generateCFG', 'Control-flow queries');
+    if (!capability.ok) {
+      return capability;
+    }
+    /** @type {SymbolRecord[]} */
+    const result = [];
+    for (const [symbolId, constructs] of constructsBySymbol) {
+      if (constructs.length === 0) {
+        continue;
+      }
+      const symbol = symbols.get(symbolId);
+      if (symbol) {
+        result.push(symbol);
+      }
+    }
+    result.sort((a, b) => {
+      if (a.qualifiedName !== b.qualifiedName) {
+        return a.qualifiedName < b.qualifiedName ? -1 : 1;
+      }
+      return a.symbolId < b.symbolId ? -1 : a.symbolId > b.symbolId ? 1 : 0;
+    });
+    return { ok: true, value: result };
+  }
+
+  /**
    * @param {string} symbolId
    * @returns {QueryResult<DataFact[]>}
    */
@@ -405,6 +455,8 @@ export function createQueryLayer(run, options = {}) {
     callers,
     callees,
     constructsOf,
+    allConstructs,
+    cfgFunctions,
     dataFactsOf,
     capabilities: capabilitiesOf,
     invalidate() {
