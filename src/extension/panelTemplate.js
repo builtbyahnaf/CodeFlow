@@ -9,10 +9,17 @@
  */
 
 /**
- * @param {{nonce: string, cspSource: string, scriptUri: string, styleUri: string, title?: string}} input
+ * @param {{nonce: string, cspSource: string, scriptUri: string, styleUri: string, title?: string, preferredSymbolId?: string|null}} input
  * @returns {string}
  */
-export function renderPanelHtml({ nonce, cspSource, scriptUri, styleUri, title = 'CodeFlow' }) {
+export function renderPanelHtml({
+  nonce,
+  cspSource,
+  scriptUri,
+  styleUri,
+  title = 'CodeFlow',
+  preferredSymbolId = null,
+}) {
   const csp = [
     "default-src 'none'",
     `img-src ${cspSource} data:`,
@@ -33,7 +40,7 @@ export function renderPanelHtml({ nonce, cspSource, scriptUri, styleUri, title =
     <link rel="stylesheet" href="${styleUri}" />
     <title>${escapeHtml(title)}</title>
   </head>
-  <body>
+  <body${preferredSymbolId ? ` data-preferred-symbol="${escapeHtml(preferredSymbolId)}"` : ''}>
     <header class="cf-header">
       <div class="cf-title">
         <span class="cf-mark" aria-hidden="true"></span>
@@ -41,6 +48,10 @@ export function renderPanelHtml({ nonce, cspSource, scriptUri, styleUri, title =
       </div>
       <div id="cf-meta" class="cf-meta" role="status" aria-live="polite">Loading…</div>
       <div class="cf-actions">
+        <label class="cf-picker">
+          <span class="cf-picker-label">Function</span>
+          <select id="cf-function" class="cf-select" aria-label="Function to display" hidden></select>
+        </label>
         <button id="cf-refresh" type="button" class="cf-button" title="Reload the graph">
           Reload
         </button>
