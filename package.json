@@ -48,6 +48,11 @@
         "category": "CodeFlow"
       },
       {
+        "command": "codeflow.backToGraph",
+        "title": "Back to Graph",
+        "category": "CodeFlow"
+      },
+      {
         "command": "codeflow.showDiagnostics",
         "title": "Show Diagnostics",
         "category": "CodeFlow"
@@ -163,6 +168,45 @@
           "minimum": 1,
           "maximum": 64,
           "description": "Maximum import depth followed from the analysed file."
+        },
+        "codeflow.preview.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a source preview when hovering a graph node. The preview is always a slice of the real document, never a reconstruction."
+        },
+        "codeflow.preview.delayMs": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Hover dwell time before the source preview appears. Lower values feel faster; higher values flicker less while scanning."
+        },
+        "codeflow.preview.maxLines": {
+          "type": "number",
+          "default": 12,
+          "minimum": 4,
+          "maximum": 40,
+          "description": "Maximum number of source lines shown in a preview card. Longer ranges are truncated with a visible note."
+        },
+        "codeflow.preview.syntaxHighlighting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Highlight preview source in the webview. Disabling it keeps previews readable when a language is unrecognized or performance is a concern."
+        },
+        "codeflow.preview.clickToNavigate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the source range in the editor when a graph node is double-clicked or activated with Enter."
+        },
+        "codeflow.preview.pinByDefault": {
+          "type": "boolean",
+          "default": false,
+          "description": "Keep a hover preview open until it is dismissed instead of hiding when the pointer leaves."
+        },
+        "codeflow.navigation.openInPreviewTab": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open source navigation targets in a preview tab. Disabled by default so trust-building navigation does not replace the current editor."
         }
       }
     }
@@ -201,6 +245,7 @@
   },
   "dependencies": {
     "acorn": "^8.19.0",
-    "eslint-scope": "^8.4.0"
+    "eslint-scope": "^8.4.0",
+    "highlight.js": "11.11.1"
   }
 }
