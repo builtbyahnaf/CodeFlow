@@ -32,6 +32,8 @@ export const WEBVIEW_TO_HOST = Object.freeze([
   'query.callees',
   'query.constructs',
   'query.capabilities',
+  'cfg.functions',
+  'cfg.load',
 ]);
 
 /** Kinds the host may send to the webview. */
@@ -44,6 +46,8 @@ export const HOST_TO_WEBVIEW = Object.freeze([
   'protocol.error',
   'protocol.ack',
   'panel.pong',
+  'cfg.functions',
+  'cfg.data',
 ]);
 
 export const DIRECTIONS = Object.freeze({
