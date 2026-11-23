@@ -72,6 +72,33 @@ export function renderPanelHtml({
         <div id="cf-empty" class="cf-empty" hidden>
           <p>No graph loaded.</p>
         </div>
+        <section
+          id="cf-preview"
+          class="cf-preview"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="cf-preview-title"
+          tabindex="-1"
+          hidden
+        >
+          <header class="cf-preview-head">
+            <span id="cf-preview-title" class="cf-preview-title">Source preview</span>
+            <button id="cf-preview-pin" type="button" class="cf-button cf-preview-pin" aria-pressed="false">
+              Pin
+            </button>
+            <button id="cf-preview-close" type="button" class="cf-button" aria-label="Close preview">
+              Close
+            </button>
+          </header>
+          <div id="cf-preview-meta" class="cf-preview-meta"></div>
+          <div id="cf-preview-body" class="cf-preview-body" tabindex="0"></div>
+          <footer class="cf-preview-foot">
+            <span id="cf-preview-note" class="cf-preview-note" role="status"></span>
+            <button id="cf-preview-open" type="button" class="cf-button cf-preview-open">
+              Open source
+            </button>
+          </footer>
+        </section>
       </section>
       <aside class="cf-detail" aria-label="Selection details">
         <h2 class="cf-detail-title">Selection</h2>
@@ -85,7 +112,7 @@ export function renderPanelHtml({
 
     <footer class="cf-footer">
       <span id="cf-status" class="cf-status">Starting…</span>
-      <span class="cf-hint">Pan: drag · Zoom: wheel · Select: click</span>
+      <span class="cf-hint">Pan: drag · Zoom: wheel · Select: click · Preview: hover or H · Open: Enter</span>
     </footer>
 
     <script nonce="${nonce}" src="${scriptUri}"></script>
