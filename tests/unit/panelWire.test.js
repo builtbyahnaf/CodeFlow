@@ -6,6 +6,7 @@ import { createEnvelope } from '../../src/core/protocol/envelope.js';
 import { createQueryLayer } from '../../src/core/csr/query.js';
 import { createCapabilities } from '../../src/core/adapterRegistry.js';
 import { createMockAnalysis } from '../../src/adapters/mock/index.js';
+import { javascriptAdapter } from '../../src/adapters/javascript/index.js';
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -124,6 +125,62 @@ test('graph.load is answered with a graph payload', async () => {
   assert.equal(response.kind, 'graph.data');
   assert.ok(Array.isArray(response.payload.dto.nodes));
   assert.ok(response.payload.dto.nodes.length > 0);
+});
+
+test('cfg.functions lists functions without exposing raw CSR', async () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:cfg',
+    path: 'src/classify.js',
+    text: 'function classify(n) { if (n) { return 1; } return 0; }\n',
+  });
+  const { wire } = createHarness(async () => ({ ok: true, run }));
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const response = await panel.request('cfg.functions', {});
+  assert.ok(response);
+  assert.equal(response.kind, 'cfg.functions');
+  assert.equal(response.payload.ok, true);
+  assert.equal(response.payload.functions.length, 1);
+  const entry = response.payload.functions[0];
+  assert.equal(entry.name, 'classify');
+  assert.equal(typeof entry.symbolId, 'string');
+  assert.ok(entry.range);
+});
+
+test('cfg.load answers with a validated CFG DTO', async () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:cfg',
+    path: 'src/classify.js',
+    text: 'function classify(n) { if (n) { return 1; } return 0; }\n',
+  });
+  const { wire } = createHarness(async () => ({ ok: true, run }));
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const functions = await panel.request('cfg.functions', {});
+  const target = functions.payload.functions[0];
+  const response = await panel.request('cfg.load', { symbolId: target.symbolId });
+  assert.ok(response);
+  assert.equal(response.kind, 'cfg.data');
+  assert.equal(response.payload.ok, true);
+  assert.equal(response.payload.dto.dtoKind, 'cfg');
+  assert.equal(response.payload.dto.graphKind, 'cfg');
+  assert.ok(response.payload.dto.nodes.length > 0);
+});
+
+test('cfg.load on a run without constructs is a typed protocol.error', async () => {
+  const run = { ...createMockAnalysis(), controlConstructs: [] };
+  const { wire } = createHarness(async () => ({ ok: true, run }));
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const target = run.symbols.find((symbol) => symbol.name === 'main');
+  await panel.receive(createEnvelope('cfg.load', { symbolId: target.symbolId }, 'req-cfg'));
+  const error = panel.posted.find((message) => message.requestId === 'req-cfg');
+  assert.ok(error);
+  assert.equal(error.kind, 'protocol.error');
+  assert.equal(error.payload.code, 'E_CFG_UNAVAILABLE');
 });
 
 test('csr.load returns the validated run and its deterministic hash', async () => {
