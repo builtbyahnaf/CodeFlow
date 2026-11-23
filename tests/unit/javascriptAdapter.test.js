@@ -19,7 +19,7 @@ test('the JavaScript adapter declares honest capabilities and extensions', () =>
   assert.equal(javascriptAdapter.capabilities.parse, 'partial');
   assert.equal(javascriptAdapter.capabilities.discoverDeclarations, true);
   assert.equal(javascriptAdapter.capabilities.resolveTypes, false);
-  assert.equal(javascriptAdapter.capabilities.generateCFG, false);
+  assert.equal(javascriptAdapter.capabilities.generateCFG, true);
   assert.equal(javascriptAdapter.capabilities.generateDFG, false);
 });
 
