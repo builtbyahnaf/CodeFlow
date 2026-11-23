@@ -66,10 +66,10 @@ test('the C++ adapter passes the same conformance rules as the mock', async () =
   assert.match(encoding.detail, /naïve/);
 });
 
-test('the C++ adapter does not claim CFG, DFG or JavaScript support', () => {
+test('the C++ adapter claims CFG but not DFG or JavaScript support', () => {
   assert.equal(cppAdapter.extensions.includes('.js'), false);
   assert.equal(cppAdapter.extensions.includes('.cpp'), true);
-  assert.equal(cppAdapter.capabilities.generateCFG, false);
+  assert.equal(cppAdapter.capabilities.generateCFG, true);
   assert.equal(cppAdapter.capabilities.generateDFG, false);
   assert.equal(cppAdapter.capabilities.parse, 'partial');
 });
