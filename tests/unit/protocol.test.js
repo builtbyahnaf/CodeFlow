@@ -190,3 +190,33 @@ test('Phase 1 CSR and query kinds are sendable in their own direction only', () 
     );
   }
 });
+
+test('Phase 5 source and navigation kinds are directional and validated', () => {
+  const webviewKinds = ['source.slice', 'source.validation', 'navigate.to'];
+  const hostKinds = [
+    'source.data',
+    'source.integrity',
+    'source.stale',
+    'navigate.done',
+    'selection.changed',
+    'graph.focus',
+    'settings.data',
+  ];
+
+  for (const kind of webviewKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+  for (const kind of hostKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+});
