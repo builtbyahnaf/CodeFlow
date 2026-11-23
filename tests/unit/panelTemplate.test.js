@@ -66,10 +66,19 @@ test('declares the document structure the webview expects', () => {
     'cf-detail-body',
     'cf-legend',
     'cf-refresh',
+    'cf-preview',
+    'cf-preview-title',
+    'cf-preview-meta',
+    'cf-preview-body',
+    'cf-preview-pin',
+    'cf-preview-close',
+    'cf-preview-open',
   ]) {
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   }
   assert.match(html, /lang="en"/);
   assert.match(html, /role="alert"/);
   assert.match(html, /aria-live="polite"/);
+  assert.match(html, /role="dialog"/);
+  assert.match(html, /aria-pressed="false"/);
 });
