@@ -121,3 +121,46 @@ describe('extractParamSites', () => {
 // extractConservativeKill
 // ---------------------------------------------------------------------------
 
+describe('extractConservativeKill', () => {
+  it('emits unresolved kill for unresolved call', () => {
+    const site = extractConservativeKill('n1', BASE_PARAM, 'unresolved', ordinalMap());
+    assert.equal(site.kind, 'kill');
+    assert.equal(site.status, 'unresolved');
+    assert.equal(site.reasonCode, 'unresolved_call');
+  });
+
+  it('emits possible kill for possible call', () => {
+    const site = extractConservativeKill('n1', BASE_PARAM, 'possible', ordinalMap());
+    assert.equal(site.status, 'possible');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractUnmodeledKills
+// ---------------------------------------------------------------------------
+
+describe('extractUnmodeledKills', () => {
+  it('kills all mutable bindings', () => {
+    const bindings = [
+      { ...BASE_PARAM, id: 'a', isMutable: true },
+      { ...BASE_PARAM, id: 'b', isMutable: false },
+    ];
+    const sites = extractUnmodeledKills('n1', bindings, ordinalMap());
+    assert.equal(sites.length, 1);
+    assert.equal(sites[0].bindingId, 'a');
+    assert.equal(sites[0].reasonCode, 'unmodeled_region');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractCaptureSite
+// ---------------------------------------------------------------------------
+
+describe('extractCaptureSite', () => {
+  it('emits a kill site for captured binding', () => {
+    const site = extractCaptureSite('n1', BASE_PARAM, 'inner_fn', ordinalMap());
+    assert.equal(site.kind, 'kill');
+    assert.equal(site.status, 'inferred');
+    assert.equal(site.reasonCode, 'capture_mutation');
+  });
+});
