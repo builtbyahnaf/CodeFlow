@@ -166,6 +166,30 @@ export function formatIndexStatusBar(status = {}) {
   }
 
   const state = status.state ?? 'unindexed';
+  if (state === 'paused_while_typing') {
+    return {
+      text: '$(debug-pause) CodeFlow: Paused while typing',
+      tooltip: 'Background indexing is paused while you type and will resume after 2s of idle.',
+      command: 'codeflow.showIndexStatus',
+    };
+  }
+
+  if (state === 'lag_throttled') {
+    return {
+      text: '$(pulse) CodeFlow: Throttled (lag guard)',
+      tooltip: 'Background indexing is throttled to keep editor responsiveness below 100ms lag.',
+      command: 'codeflow.showIndexStatus',
+    };
+  }
+
+  if (state === 'catching_up') {
+    return {
+      text: '$(sync~spin) CodeFlow: Catching up',
+      tooltip: 'Incremental indexing is processing queued file changes.',
+      command: 'codeflow.showIndexStatus',
+    };
+  }
+
   if (state === 'indexing') {
     const done = Math.max(0, Number(status.indexedFiles ?? status.fileCount ?? 0));
     const total = Math.max(done, Number(status.totalFiles ?? done));
