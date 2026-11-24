@@ -305,6 +305,7 @@
     "test:unit": "node --test \"tests/unit/*.test.js\" \"tests/conformance/*.test.js\"",
     "test:cpp": "node --test \"tests/unit/cpp*.test.js\" \"tests/conformance/cpp.conformance.test.js\"",
     "test:c": "node --test \"tests/unit/c*.test.js\" \"tests/conformance/c.conformance.test.js\"",
+    "test:java": "node --test \"tests/unit/java[A-Z]*.test.js\" \"tests/conformance/java.conformance.test.js\"",
     "test:js": "node --test \"tests/unit/javascript*.test.js\" \"tests/conformance/javascript.conformance.test.js\"",
     "test:cfg": "node --test \"tests/unit/cfg*.test.js\"",
     "test:explanation": "node --test \"tests/unit/explanation*.test.js\"",
