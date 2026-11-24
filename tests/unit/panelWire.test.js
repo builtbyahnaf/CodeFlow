@@ -818,3 +818,37 @@ test('index.status returns index stats and health, and indexed indexProvider upg
   assert.equal(zoomSearched.kind, 'zoom.results');
   assert.equal(zoomSearched.payload.ok, true);
 });
+
+test('dfg.load, dfg.trace, and dfg.slice respond via the protocol', async () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:dfg_wire',
+    path: 'src/calc.js',
+    text: 'function calc(x) { let y = x + 1; return y; }\n',
+  });
+  const sym = run.symbols.find((s) => s.kind === 'function');
+  assert.ok(sym);
+
+  const { wire } = createHarness(async () => ({ ok: true, run }));
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  // dfg.load
+  const loaded = await panel.requestRaw('dfg.load', { symbolId: sym.symbolId });
+  if (loaded.kind === 'protocol.error') {
+    assert.fail(`dfg.load returned protocol.error: ${JSON.stringify(loaded.payload)}`);
+  }
+  assert.equal(loaded.kind, 'dfg.data');
+  assert.equal(loaded.payload.ok, true);
+  assert.equal(loaded.payload.dto.functionId, sym.symbolId);
+
+  // dfg.trace without binding
+  const traceEmpty = await panel.request('dfg.trace', { bindingId: null });
+  assert.equal(traceEmpty.kind, 'dfg.overlay');
+  assert.equal(traceEmpty.payload.ok, true);
+  assert.equal(traceEmpty.payload.overlay.slot, 'dfg');
+
+  // dfg.slice
+  const sliceRes = await panel.request('dfg.slice', { nodeId: 'unknown', direction: 'backward' });
+  assert.equal(sliceRes.kind, 'dfg.data');
+  assert.equal(sliceRes.payload.ok, true);
+});
