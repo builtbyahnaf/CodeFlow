@@ -301,6 +301,7 @@
     "test:index": "node --test \"tests/unit/index*.test.js\"",
     "test:incremental": "node --test \"tests/unit/incremental*.test.js\"",
     "test:zoom": "node --test \"tests/unit/zoom*.test.js\"",
+    "test:dfg": "node --test \"tests/unit/dfg*.test.js\"",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
