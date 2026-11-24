@@ -40,6 +40,8 @@ export function createPanelManager({ context, logger, registry, analysis, extens
   let preferredPath = null;
   /** @type {string | null} */
   let preferredSymbolId = null;
+  /** @type {'cfg'|'call_graph'} */
+  let preferredPerspective = 'cfg';
   const analyzer = analysis ?? registry;
 
   function workspaceRoot() {
@@ -108,7 +110,9 @@ export function createPanelManager({ context, logger, registry, analysis, extens
     if (!resolved.ok) {
       return resolved;
     }
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(resolved.absolutePath));
+    const document = await vscode.workspace.openTextDocument(
+      vscode.Uri.file(resolved.absolutePath),
+    );
     const selection = new vscode.Range(
       range.startLine,
       range.startColumn,
@@ -227,6 +231,7 @@ export function createPanelManager({ context, logger, registry, analysis, extens
       styleUri: webview.asWebviewUri(vscode.Uri.joinPath(root, 'styles.css')).toString(),
       title: 'CodeFlow',
       preferredSymbolId,
+      preferredPerspective,
     });
   }
 
@@ -286,6 +291,24 @@ export function createPanelManager({ context, logger, registry, analysis, extens
     showCfg(filePath, symbolId) {
       preferredPath = filePath;
       preferredSymbolId = symbolId;
+      preferredPerspective = 'cfg';
+      if (panel) {
+        applyHtml(panel);
+        panel.reveal(undefined, false);
+        return panel;
+      }
+      return show();
+    },
+    /**
+     * Show the panel for a file in the call-graph perspective for a specific function.
+     *
+     * @param {string} filePath
+     * @param {string} symbolId
+     */
+    showCallGraph(filePath, symbolId) {
+      preferredPath = filePath;
+      preferredSymbolId = symbolId;
+      preferredPerspective = 'call_graph';
       if (panel) {
         applyHtml(panel);
         panel.reveal(undefined, false);
