@@ -1,0 +1,124 @@
+{
+  "kind": "CompilationUnit",
+  "package": "com.example.basic",
+  "imports": [
+    "java.util.List"
+  ],
+  "types": [
+    {
+      "kind": "ClassDeclaration",
+      "name": "BasicDemo",
+      "visibility": "public",
+      "range": {
+        "begin": { "line": 5, "col": 1 },
+        "end": { "line": 34, "col": 2 }
+      },
+      "members": [
+        {
+          "kind": "EnumDeclaration",
+          "name": "Color",
+          "visibility": "public",
+          "range": {
+            "begin": { "line": 6, "col": 5 },
+            "end": { "line": 8, "col": 6 }
+          },
+          "members": [
+            { "kind": "EnumConstantDeclaration", "name": "RED", "range": { "begin": { "line": 7, "col": 9 }, "end": { "line": 7, "col": 12 } } },
+            { "kind": "EnumConstantDeclaration", "name": "GREEN", "range": { "begin": { "line": 7, "col": 14 }, "end": { "line": 7, "col": 19 } } },
+            { "kind": "EnumConstantDeclaration", "name": "BLUE", "range": { "begin": { "line": 7, "col": 21 }, "end": { "line": 7, "col": 25 } } }
+          ]
+        },
+        {
+          "kind": "ClassDeclaration",
+          "name": "Point",
+          "visibility": "public",
+          "isStatic": true,
+          "range": {
+            "begin": { "line": 10, "col": 5 },
+            "end": { "line": 13, "col": 6 }
+          },
+          "members": [
+            { "kind": "FieldDeclaration", "name": "x", "type": "int", "visibility": "public", "range": { "begin": { "line": 11, "col": 9 }, "end": { "line": 11, "col": 21 } } },
+            { "kind": "FieldDeclaration", "name": "y", "type": "int", "visibility": "public", "range": { "begin": { "line": 12, "col": 9 }, "end": { "line": 12, "col": 21 } } }
+          ]
+        },
+        {
+          "kind": "MethodDeclaration",
+          "name": "helper",
+          "visibility": "public",
+          "isStatic": true,
+          "returnType": "int",
+          "range": {
+            "begin": { "line": 15, "col": 5 },
+            "end": { "line": 17, "col": 6 }
+          },
+          "parameters": [{ "name": "delta", "type": "int" }],
+          "body": {
+            "kind": "BlockStmt",
+            "statements": [
+              { "kind": "ReturnStmt", "range": { "begin": { "line": 16, "col": 9 }, "end": { "line": 16, "col": 26 } } }
+            ]
+          }
+        },
+        {
+          "kind": "MethodDeclaration",
+          "name": "calculate",
+          "visibility": "public",
+          "returnType": "int",
+          "range": {
+            "begin": { "line": 19, "col": 5 },
+            "end": { "line": 25, "col": 6 }
+          },
+          "parameters": [{ "name": "pt", "type": "Point" }],
+          "body": {
+            "kind": "BlockStmt",
+            "statements": [
+              {
+                "kind": "CallExpr",
+                "name": "helper",
+                "isStatic": true,
+                "range": { "begin": { "line": 20, "col": 19 }, "end": { "line": 20, "col": 38 } }
+              },
+              {
+                "kind": "IfStmt",
+                "range": { "begin": { "line": 21, "col": 9 }, "end": { "line": 23, "col": 10 } },
+                "condition": { "kind": "BinaryExpr", "range": { "begin": { "line": 21, "col": 13 }, "end": { "line": 21, "col": 21 } } },
+                "thenBranch": {
+                  "kind": "BlockStmt",
+                  "statements": [
+                    { "kind": "ReturnStmt", "range": { "begin": { "line": 22, "col": 13 }, "end": { "line": 22, "col": 24 } } }
+                  ]
+                }
+              },
+              { "kind": "ReturnStmt", "range": { "begin": { "line": 24, "col": 9 }, "end": { "line": 24, "col": 20 } } }
+            ]
+          }
+        },
+        {
+          "kind": "MethodDeclaration",
+          "name": "add",
+          "visibility": "public",
+          "returnType": "int",
+          "range": { "begin": { "line": 27, "col": 5 }, "end": { "line": 29, "col": 6 } },
+          "parameters": [{ "name": "a", "type": "int" }, { "name": "b", "type": "int" }],
+          "body": {
+            "kind": "BlockStmt",
+            "statements": [{ "kind": "ReturnStmt", "range": { "begin": { "line": 28, "col": 9 }, "end": { "line": 28, "col": 22 } } }]
+          }
+        },
+        {
+          "kind": "MethodDeclaration",
+          "name": "add",
+          "visibility": "public",
+          "returnType": "double",
+          "range": { "begin": { "line": 31, "col": 5 }, "end": { "line": 33, "col": 6 } },
+          "parameters": [{ "name": "a", "type": "double" }, { "name": "b", "type": "double" }],
+          "body": {
+            "kind": "BlockStmt",
+            "statements": [{ "kind": "ReturnStmt", "range": { "begin": { "line": 32, "col": 9 }, "end": { "line": 32, "col": 22 } } }]
+          }
+        }
+      ]
+    }
+  ]
+}
