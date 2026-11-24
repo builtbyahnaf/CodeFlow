@@ -407,6 +407,35 @@ else if (kw === 'while') {
         }
       }
     }
-    // more statements
+else if (kw === 'switch') {
+      const parenOpen = body.indexOf('(', m.index);
+      if (parenOpen !== -1) {
+        const parenClose = findMatchingParen(body, parenOpen);
+        if (parenClose !== -1) {
+          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
+          constructs.push(
+            createControlConstruct({
+              constructId: nextId('switch'),
+              kind: 'switch',
+              symbolId: fnSymbolId,
+              condition: condRange,
+              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
+            }),
+          );
+        }
+      }
+    } else if (kw === 'case' || kw === 'default') {
+      const colon = body.indexOf(':', m.index);
+      const endOff = colon !== -1 ? baseOffset + colon + 1 : offset + kw.length;
+      constructs.push(
+        createControlConstruct({
+          constructId: nextId(kw),
+          kind: kw,
+          symbolId: fnSymbolId,
+          sourceRange: rangeOf(offset, endOff),
+        }),
+      );
+    }
+    // calls check
   }
 }
