@@ -353,6 +353,24 @@ function parseBodyConstructs(
         }),
       );
     }
+else if (kw === 'if') {
+      const parenOpen = body.indexOf('(', m.index);
+      if (parenOpen !== -1) {
+        const parenClose = findMatchingParen(body, parenOpen);
+        if (parenClose !== -1) {
+          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
+          constructs.push(
+            createControlConstruct({
+              constructId: nextId('if'),
+              kind: 'if',
+              symbolId: fnSymbolId,
+              condition: condRange,
+              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
+            }),
+          );
+        }
+      }
+    }
     // more statements
   }
 }
