@@ -49,3 +49,20 @@ void countdown(int n) {
   assert.ok(whileCc);
   assert.ok(whileCc.condition);
 });
+
+test('parseCppSource extracts for loop constructs with iteration metadata', () => {
+  const code = `
+int sum(int n) {
+  int total = 0;
+  for (int i = 0; i < n; ++i) {
+    total += i;
+  }
+  return total;
+}
+`;
+  const run = parseCppSource({ runId: 'run:5', path: 'src/for.cpp', text: code });
+  const forCc = run.controlConstructs.find((cc) => cc.kind === 'for');
+  assert.ok(forCc);
+  assert.equal(forCc.extensions?.hasInit, true);
+  assert.equal(forCc.extensions?.hasCondition, true);
+});
