@@ -717,7 +717,13 @@ export function createPanelWire({
               scope: stats.scope,
               issues: [],
             };
-      bridge.respond('index.data', { ok: true, stats, health }, requestId);
+      const telemetry =
+        typeof indexProvider?.telemetry === 'function' ? indexProvider.telemetry() : null;
+      bridge.respond(
+        'index.data',
+        { ok: true, stats, health, ...(telemetry ? { telemetry } : {}) },
+        requestId,
+      );
     });
 
     /**
