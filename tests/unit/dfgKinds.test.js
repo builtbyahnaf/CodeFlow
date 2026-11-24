@@ -37,4 +37,25 @@ describe('dfg/kinds', () => {
     assert.ok(FLOW_REASON_CODES.length >= 10);
   });
 
-  
+  it('flowEdgeLabel returns labels for all known kinds', () => {
+    for (const k of FLOW_EDGE_KINDS) {
+      const label = flowEdgeLabel(k);
+      assert.ok(typeof label === 'string' && label.length > 0, `empty label for ${k}`);
+    }
+  });
+
+  it('flowEdgeLabel returns kind for unknown input', () => {
+    assert.equal(flowEdgeLabel('unknown_kind'), 'unknown_kind');
+  });
+
+  it('glyphForFlowStatus returns a glyph for all known statuses', () => {
+    for (const s of FLOW_STATUSES) {
+      const g = glyphForFlowStatus(s);
+      assert.ok(typeof g === 'string' && g.length > 0, `empty glyph for ${s}`);
+    }
+  });
+
+  it('glyphForFlowStatus falls back to ? for unknown status', () => {
+    assert.equal(glyphForFlowStatus('bogus'), '?');
+  });
+});
