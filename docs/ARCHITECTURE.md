@@ -72,6 +72,9 @@ src/
         kinds.js             frozen call scopes, limits, banners, edge cues
         cursor.js            cursor encoding/decoding and limit clamping
         buckets.js           unresolved target and candidate bucket aggregation
+        filter.js            status, kind, type, and file filter predicates
+        focus.js             1-hop neighborhood and dimming calculator
+        disagreement.js      cross-source relationship disagreement detector
         merge.js             order-independent multi-source merge policy
         cycles.js            Tarjan SCC + self-loop cycle detection
         sources.js           adapter-local and Phase 8 index evidence sources
