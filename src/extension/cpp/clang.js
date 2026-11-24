@@ -55,7 +55,21 @@ export function defaultClangCandidates(platform = process.platform) {
       'C:\\msys64\\clang64\\bin\\clang++.exe',
     ];
   }
-  return ['clang++', 'clang'];
+  if (platform === 'darwin') {
+    return [
+      'clang++',
+      'clang',
+      '/opt/homebrew/bin/clang++',
+      '/usr/local/bin/clang++',
+      '/usr/bin/clang++',
+    ];
+  }
+  return [
+    'clang++',
+    'clang',
+    '/usr/bin/clang++',
+    '/usr/local/bin/clang++',
+  ];
 }
 
 /**
