@@ -254,7 +254,7 @@ export function registerCommands({
   });
 
   register('codeflow.showToolchainGuide', async () => {
-    logger.info('command.showToolchainGuide');
+    logger.info('command.showToolchainGuide', { doc: 'docs/TOOLCHAIN_SETUP.md' });
     const guideUri = vscode.Uri.joinPath(context.extensionUri, 'docs', 'TOOLCHAIN_SETUP.md');
     try {
       await vscode.commands.executeCommand('markdown.showPreview', guideUri);
