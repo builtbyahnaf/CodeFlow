@@ -11,10 +11,7 @@ import { validateDto } from '../core/graph/dto.js';
 import { createSvgRenderer } from '../visualization/renderer/svgRenderer.js';
 import { buildPreviewModel } from '../core/source/presentation.js';
 import { resolvePreviewSettings } from '../core/source/settings.js';
-import {
-  clampExplanationDepth,
-  resolveExplanationSettings,
-} from '../core/explanation/settings.js';
+import { clampExplanationDepth, resolveExplanationSettings } from '../core/explanation/settings.js';
 import { createPreviewController } from './previewController.js';
 import { highlightLines } from './highlight.js';
 
@@ -60,13 +57,67 @@ const explainLimits = /** @type {HTMLDetailsElement|null} */ (
 const explainLimitsText = /** @type {HTMLElement|null} */ (
   document.getElementById('cf-explain-limits-text')
 );
+const perspectiveSelect = /** @type {HTMLSelectElement|null} */ (
+  document.getElementById('cf-perspective')
+);
+const switchPerspectiveBtn = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-switch-perspective')
+);
+const scopeBanner = /** @type {HTMLElement|null} */ (document.getElementById('cf-scope-banner'));
+const callsPanel = /** @type {HTMLElement|null} */ (document.getElementById('cf-calls-panel'));
+const callsFilterStatus = /** @type {HTMLSelectElement|null} */ (
+  document.getElementById('cf-calls-filter-status')
+);
+const callsExpandBtn = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-calls-expand')
+);
+const callsCollapseBtn = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-calls-collapse')
+);
+const callsFocusBtn = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-calls-focus')
+);
+const callersHeading = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-callers-heading')
+);
+const callersList = /** @type {HTMLElement|null} */ (document.getElementById('cf-callers-list'));
+const callersMoreBtn = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-callers-more')
+);
+const calleesHeading = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-callees-heading')
+);
+const calleesList = /** @type {HTMLElement|null} */ (document.getElementById('cf-callees-list'));
+const calleesMoreBtn = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-callees-more')
+);
+const unresolvedBucketDetails = /** @type {HTMLDetailsElement|null} */ (
+  document.getElementById('cf-unresolved-bucket')
+);
+const unresolvedSummary = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-unresolved-summary')
+);
+const unresolvedList = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-unresolved-list')
+);
 
 /** @type {import('../core/graph/dto.js').GraphDto | null} */
 let currentDto = null;
 const preferredSymbolId = document.body.dataset.preferredSymbol || null;
+const preferredPerspective =
+  document.body.dataset.preferredPerspective === 'call_graph' ? 'call_graph' : 'cfg';
 
 /** @type {string | null} */
 let selectedSymbolId = preferredSymbolId;
+/** @type {'cfg'|'call_graph'} */
+let activePerspective = preferredPerspective;
+/** @type {string|undefined} */
+let callersNextCursor;
+/** @type {string|undefined} */
+let calleesNextCursor;
+if (perspectiveSelect) {
+  perspectiveSelect.value = activePerspective;
+}
 
 /** @type {Record<string, any>} */
 let settings = resolvePreviewSettings({});
@@ -439,6 +490,134 @@ function showNodeDetails(nodeId, node) {
   }
 
   void loadNodeExplanation(nodeId);
+  syncCallNodeButtons(node);
+}
+
+/**
+ * @param {Record<string, any>|undefined} node
+ */
+function syncCallNodeButtons(node) {
+  if (!callsExpandBtn || !callsCollapseBtn || !callsFocusBtn) {
+    return;
+  }
+  const isCallGraph = currentDto?.dtoKind === 'call_graph';
+  if (!isCallGraph || !node || node.kind === 'unresolved_bucket') {
+    callsExpandBtn.disabled = true;
+    callsCollapseBtn.disabled = true;
+    return;
+  }
+  callsExpandBtn.disabled = Boolean(node.expanded);
+  callsCollapseBtn.disabled = !node.expanded || Boolean(node.isCenter);
+}
+
+/**
+ * @param {Record<string, any>} dto
+ */
+async function updateCallGraphSidePanel(dto) {
+  if (!callsPanel) {
+    return;
+  }
+  if (dto.dtoKind !== 'call_graph') {
+    callsPanel.hidden = true;
+    if (scopeBanner) {
+      scopeBanner.hidden = true;
+    }
+    return;
+  }
+  callsPanel.hidden = false;
+  if (scopeBanner) {
+    scopeBanner.textContent = dto.scopeBanner || '';
+    scopeBanner.hidden = !dto.scopeBanner;
+  }
+  if (callsFocusBtn) {
+    const focused = Boolean(dto.focusedNodeId);
+    callsFocusBtn.setAttribute('aria-pressed', focused ? 'true' : 'false');
+    callsFocusBtn.textContent = focused ? 'Unfocus' : 'Focus';
+  }
+
+  if (unresolvedBucketDetails && unresolvedSummary && unresolvedList) {
+    const bucket = dto.unresolvedBucket;
+    if (bucket && bucket.count > 0) {
+      unresolvedBucketDetails.hidden = false;
+      unresolvedSummary.textContent = `${bucket.count} unresolved target${bucket.count === 1 ? '' : 's'}`;
+      unresolvedList.replaceChildren();
+      for (const reason of bucket.reasons ?? []) {
+        const li = document.createElement('li');
+        li.textContent = `${reason.reasonCode}: ${reason.count} site${reason.count === 1 ? '' : 's'}`;
+        unresolvedList.appendChild(li);
+      }
+    } else {
+      unresolvedBucketDetails.hidden = true;
+    }
+  }
+
+  if (dto.centerSymbolId) {
+    callersNextCursor = undefined;
+    calleesNextCursor = undefined;
+    callersList?.replaceChildren();
+    calleesList?.replaceChildren();
+    await Promise.all([
+      loadNeighborPage('incoming', dto.centerSymbolId, false),
+      loadNeighborPage('outgoing', dto.centerSymbolId, false),
+    ]);
+  }
+}
+
+/**
+ * @param {'incoming'|'outgoing'} direction
+ * @param {string} symbolId
+ * @param {boolean} append
+ */
+async function loadNeighborPage(direction, symbolId, append) {
+  const kind = direction === 'incoming' ? 'calls.incoming' : 'calls.outgoing';
+  const cursor = direction === 'incoming' ? callersNextCursor : calleesNextCursor;
+  const listEl = direction === 'incoming' ? callersList : calleesList;
+  const headingEl = direction === 'incoming' ? callersHeading : calleesHeading;
+  const moreBtn = direction === 'incoming' ? callersMoreBtn : calleesMoreBtn;
+  if (!listEl) {
+    return;
+  }
+  try {
+    const response = await bridge.request(kind, {
+      symbolId,
+      limit: 50,
+      ...(append && cursor ? { cursor } : {}),
+    });
+    const payload = response.payload ?? {};
+    if (!append) {
+      listEl.replaceChildren();
+    }
+    if (headingEl) {
+      headingEl.textContent =
+        direction === 'incoming'
+          ? `Callers (${payload.total ?? 0})`
+          : `Callees (${payload.total ?? 0})`;
+    }
+    for (const item of payload.items ?? []) {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cf-evidence-link';
+      btn.textContent = `${item.displayName} (${item.status}${item.callSiteCount > 1 ? ` ×${item.callSiteCount}` : ''})`;
+      btn.addEventListener('click', () => {
+        renderer.select(item.symbolId);
+      });
+      li.appendChild(btn);
+      listEl.appendChild(li);
+    }
+    if (direction === 'incoming') {
+      callersNextCursor = payload.nextCursor;
+    } else {
+      calleesNextCursor = payload.nextCursor;
+    }
+    if (moreBtn) {
+      moreBtn.hidden = !payload.nextCursor;
+    }
+  } catch {
+    if (moreBtn) {
+      moreBtn.hidden = true;
+    }
+  }
 }
 
 /**
@@ -628,7 +807,11 @@ async function openPreview(nodeId, anchor = null, pin = false) {
     void bridge
       .request('explain.node', { nodeId, depth: 1 })
       .then((res) => {
-        if (previewNodeId === nodeId && previewRequest <= requestForExplain && res.payload?.summary) {
+        if (
+          previewNodeId === nodeId &&
+          previewRequest <= requestForExplain &&
+          res.payload?.summary
+        ) {
           previewExplain.textContent = res.payload.summary;
           previewExplain.hidden = false;
         }
@@ -844,8 +1027,18 @@ function handleGraph(payload) {
   clearDetail();
   void validateGraph(dto);
   void loadFunctionSummary(dto);
+  void updateCallGraphSidePanel(dto);
+  if (switchPerspectiveBtn) {
+    switchPerspectiveBtn.hidden = !selectedSymbolId;
+    switchPerspectiveBtn.textContent =
+      dto.dtoKind === 'call_graph' ? 'Show in CFG' : 'Show in Call Graph';
+  }
   const subject =
-    dto.dtoKind === 'cfg' && dto.function ? `${dto.function.qualifiedName} · CFG` : 'call graph';
+    dto.dtoKind === 'cfg' && dto.function
+      ? `${dto.function.qualifiedName} · CFG`
+      : dto.dtoKind === 'call_graph'
+        ? `${dto.centerSymbolId} · Call Graph`
+        : 'call graph';
   setStatus(
     `${subject} · ${dto.language} · ${dto.nodes.length} nodes · ${dto.edges.length} edges · ${dto.completeness}`,
   );
@@ -958,6 +1151,28 @@ async function loadCfg(symbolId) {
   }
 }
 
+/**
+ * @param {string} symbolId
+ */
+async function loadCallGraph(symbolId) {
+  setStatus('Building call graph…');
+  setBanner('');
+  try {
+    const response = await bridge.request('calls.load', { symbolId });
+    selectedSymbolId = symbolId;
+    activePerspective = 'call_graph';
+    if (perspectiveSelect) {
+      perspectiveSelect.value = 'call_graph';
+    }
+    handleGraph(response.payload);
+    return true;
+  } catch (error) {
+    setBanner(`Could not build call graph: ${error?.message ?? String(error)}`, true);
+    setStatus('Call graph unavailable');
+    return false;
+  }
+}
+
 async function loadGraph() {
   setStatus('Loading graph…');
   setBanner('');
@@ -970,7 +1185,10 @@ async function loadGraph() {
         selectedSymbolId && list.some((entry) => entry.symbolId === selectedSymbolId)
           ? selectedSymbolId
           : list[0].symbolId;
-      const loaded = await loadCfg(retained);
+      const loaded =
+        activePerspective === 'call_graph'
+          ? await loadCallGraph(retained)
+          : await loadCfg(retained);
       if (loaded) {
         return;
       }
@@ -996,7 +1214,108 @@ reloadButton.addEventListener('click', () => {
 functionPicker?.addEventListener('change', () => {
   const symbolId = functionPicker.value;
   if (symbolId) {
-    void loadCfg(symbolId);
+    if (activePerspective === 'call_graph') {
+      void loadCallGraph(symbolId);
+    } else {
+      void loadCfg(symbolId);
+    }
+  }
+});
+
+perspectiveSelect?.addEventListener('change', () => {
+  activePerspective = perspectiveSelect.value === 'call_graph' ? 'call_graph' : 'cfg';
+  if (selectedSymbolId) {
+    if (activePerspective === 'call_graph') {
+      void loadCallGraph(selectedSymbolId);
+    } else {
+      void loadCfg(selectedSymbolId);
+    }
+  }
+});
+
+switchPerspectiveBtn?.addEventListener('click', () => {
+  const targetSymbol =
+    activeNodeId && currentDto?.dtoKind === 'call_graph' && !activeNodeId.startsWith('bucket:')
+      ? activeNodeId
+      : selectedSymbolId;
+  if (!targetSymbol) {
+    return;
+  }
+  if (currentDto?.dtoKind === 'call_graph') {
+    activePerspective = 'cfg';
+    if (perspectiveSelect) {
+      perspectiveSelect.value = 'cfg';
+    }
+    void loadCfg(targetSymbol);
+  } else {
+    activePerspective = 'call_graph';
+    if (perspectiveSelect) {
+      perspectiveSelect.value = 'call_graph';
+    }
+    void loadCallGraph(targetSymbol);
+  }
+});
+
+callsExpandBtn?.addEventListener('click', async () => {
+  if (!activeNodeId || currentDto?.dtoKind !== 'call_graph') {
+    return;
+  }
+  try {
+    const res = await bridge.request('calls.expand', { symbolId: activeNodeId });
+    handleGraph(res.payload);
+  } catch (error) {
+    setBanner(`Expand failed: ${error?.message ?? String(error)}`, true);
+  }
+});
+
+callsCollapseBtn?.addEventListener('click', async () => {
+  if (!activeNodeId || currentDto?.dtoKind !== 'call_graph') {
+    return;
+  }
+  try {
+    const res = await bridge.request('calls.collapse', { symbolId: activeNodeId });
+    handleGraph(res.payload);
+  } catch (error) {
+    setBanner(`Collapse failed: ${error?.message ?? String(error)}`, true);
+  }
+});
+
+callsFocusBtn?.addEventListener('click', async () => {
+  if (currentDto?.dtoKind !== 'call_graph') {
+    return;
+  }
+  const nextFocus = currentDto.focusedNodeId ? null : (activeNodeId ?? currentDto.centerSymbolId);
+  try {
+    const res = await bridge.request('calls.focus', { symbolId: nextFocus });
+    handleGraph(res.payload);
+  } catch (error) {
+    setBanner(`Focus failed: ${error?.message ?? String(error)}`, true);
+  }
+});
+
+callsFilterStatus?.addEventListener('change', async () => {
+  if (currentDto?.dtoKind !== 'call_graph') {
+    return;
+  }
+  const value = callsFilterStatus.value;
+  const statuses = value === 'all' ? null : value.split(',');
+  try {
+    const res = await bridge.request('calls.filter', { statuses });
+    handleGraph(res.payload);
+  } catch (error) {
+    setBanner(`Filter failed: ${error?.message ?? String(error)}`, true);
+  }
+});
+
+callersMoreBtn?.addEventListener('click', () => {
+  if (currentDto?.centerSymbolId) {
+    void loadNeighborPage('incoming', currentDto.centerSymbolId, true);
+  }
+});
+
+calleesMoreBtn?.addEventListener('click', () => {
+  if (currentDto?.centerSymbolId) {
+    void loadNeighborPage('outgoing', currentDto.centerSymbolId, true);
   }
 });
 
