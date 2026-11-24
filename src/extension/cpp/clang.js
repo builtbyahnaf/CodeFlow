@@ -42,7 +42,15 @@ export function parseClangVersion(text) {
  */
 export function defaultClangCandidates(platform = process.platform) {
   if (platform === 'win32') {
-    return ['clang++.exe', 'clang.exe', 'clang-cl.exe'];
+    return [
+      'clang++.exe',
+      'clang.exe',
+      'clang-cl.exe',
+      'C:\\Program Files\\LLVM\\bin\\clang++.exe',
+      'C:\\Program Files\\LLVM\\bin\\clang.exe',
+      'C:\\Program Files (x86)\\LLVM\\bin\\clang++.exe',
+      'C:\\Program Files (x86)\\LLVM\\bin\\clang.exe',
+    ];
   }
   return ['clang++', 'clang'];
 }
