@@ -97,6 +97,17 @@ src/
         persistence.js       workspaceState serialization and safe ancestor fallback
         session.js           interactive semantic zoom session orchestrator
         index.js             public semantic zoom surface
+      dfg/
+        kinds.js             frozen DFG node/edge/status vocabulary and reason codes
+        model.js             FlowNode/FlowEdge model, validation, and serialization
+        defuse.js            def/use/kill site extraction from CFG nodes and DataFacts
+        reaching.js          forward monotone reaching definitions and back-edge detection
+        builder.js           DFG builder, conservative kill rules, limitation disclosures
+        query.js             traceBinding, defsReachingUse, backwardSlice, forwardSlice
+        cache.js             bounded LRU cache for function DFGs
+        overlay.js           variable trace overlay for Phase 10 Semantic Zoom (L4/L5)
+        dto.js               JSON view model and validation
+        index.js             public DFG surface
     source/
       ranges.js              range validation, slicing, truncation, containment
       cache.js               bounded LRU slice cache
@@ -241,6 +252,9 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `zoom.search`        | webview -> host | search across zoom levels or jump to a result        |
 | `zoom.filter`        | webview -> host | filter zoom level by kind/type/status with chips     |
 | `zoom.focus`         | webview -> host | focus a node for incoming/outgoing highlight         |
+| `dfg.load`           | webview -> host | build/retrieve a function DFG DTO                    |
+| `dfg.trace`          | webview -> host | request variable trace overlay for chosen binding     |
+| `dfg.slice`          | webview -> host | backward or forward slice from a flow node           |
 | `node.select`        | webview -> host | report selection (no response expected)              |
 | `panel.ping`         | webview -> host | liveness check                                       |
 | `graph.data`         | host -> webview | graph DTO payload                                    |
@@ -251,6 +265,9 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `zoom.data`          | host -> webview | semantic zoom level DTO payload                      |
 | `zoom.members`       | host -> webview | paginated cluster members or bundled edges           |
 | `zoom.results`       | host -> webview | cross-level search results page                      |
+| `dfg.data`           | host -> webview | function DFG DTO or slice result                     |
+| `dfg.overlay`        | host -> webview | variable trace overlay for Semantic Zoom (L4/L5)     |
+| `dfg.error`          | host -> webview | typed data-flow failure                              |
 | `source.data`        | host -> webview | validated `SourceSlice` response                     |
 | `source.integrity`   | host -> webview | batch validation results (`exact`/`stale`/`missing`) |
 | `source.stale`       | host -> webview | stale file push on change/delete/rename              |
