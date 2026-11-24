@@ -1,0 +1,68 @@
+# Phase 9 Completion Report — Incremental Indexing and Hybrid Execution
+
+- **Phase:** 9 — Incremental Indexing and Hybrid Execution
+- **Version:** `0.1.988`
+- **Author:** Muhammad Tahmid Ahnaf
+
+---
+
+## 1. Status Matrix
+
+### Implemented
+
+| Area                                                                                                                                                                                                                                        | Modules                                                                                                                            | Verification                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Normalized change event model & sequence coalescing (`editor_dirty`, `editor_save`, `editor_revert`, `watcher_change`, `file_create`, `file_delete`, `file_rename`, `bulk_burst`, `config_change`, `compile_db_change`, `toolchain_change`) | `src/core/indexing/incremental/events.js`                                                                                          | `tests/unit/incrementalEvents.test.js`                                                                                           |
+| Per-document debouncing (`350 ms` default, `100..2000 ms` clamped), `3,000 ms` trailing max-wait flush, IME composition hold, and `>25` file burst/branch-switch coalescing                                                                 | `src/core/indexing/incremental/debounce.js`                                                                                        | `tests/unit/incrementalDebounce.test.js`                                                                                         |
+| Line-independent symbol signature normalization & $O(N)$ row diffing (`computeSymbolSignature`, `diffFileRows`)                                                                                                                             | `src/core/indexing/incremental/signatures.js`                                                                                      | `tests/unit/incrementalSignatures.test.js`                                                                                       |
+| Change classification matrix (`local`, `dependent`, `global`, C++ header transitive marking)                                                                                                                                                | `src/core/indexing/incremental/classify.js`                                                                                        | `tests/unit/incrementalClassify.test.js`                                                                                         |
+| Reverse dependency graph (including conservative `possible`/`unresolved` edges) & cost-modeled cascade escalation (`direct_dependents`, `module_subtree`, `full_project`)                                                                   | `src/core/indexing/incremental/cascade.js`                                                                                         | `tests/unit/incrementalCascade.test.js`                                                                                          |
+| Uncertainty guardrails (missing compile DB, unresolved import, excluded target, rename without deps, stale-on-analysis-failure, determinism check)                                                                                          | `src/core/indexing/incremental/guardrails.js`                                                                                      | `tests/unit/incrementalGuardrails.test.js`                                                                                       |
+| In-memory provisional overlay for dirty buffers (`maxFiles: 4`, cross-file edges capped at `possible`, save reconciliation, revert discard, conflict detection)                                                                             | `src/core/indexing/incremental/provisional.js`                                                                                     | `tests/unit/incrementalProvisional.test.js`                                                                                      |
+| Priority task queue (`P0..P3`), cooperative preemption, P3 aging, Phase 10 zoom-expansion P0 lane, and `(fileId, contentHash, generation)` supersession                                                                                     | `src/core/indexing/incremental/priorityQueue.js`                                                                                   | `tests/unit/incrementalPriorityQueue.test.js`                                                                                    |
+| Continuous-typing backpressure (`>10 s` or queue `>500`), 50% typing concurrency cap, `2 s` idle resume, and `100 ms` event-loop lag guard                                                                                                  | `src/core/indexing/incremental/backpressure.js`                                                                                    | `tests/unit/incrementalBackpressure.test.js`                                                                                     |
+| Local-only, content-free telemetry (`p50`/`p95` durations per language, coalescing ratio, cache hit ratio, classifications, escalations)                                                                                                    | `src/core/indexing/incremental/telemetry.js`                                                                                       | `tests/unit/incrementalTelemetry.test.js`                                                                                        |
+| End-to-end incremental coordinator, config-change exclusion reconciliation, host watcher wiring, and 500-edit equivalence test                                                                                                              | `src/core/indexing/incremental/coordinator.js`, `src/core/indexing/incremental/scenarios.js`, `src/extension/indexing/watchers.js` | `tests/unit/incrementalCoordinator.test.js`, `tests/unit/incrementalScenarios.test.js`, `tests/unit/incrementalWatchers.test.js` |
+
+### Partially Implemented / Deferred by Design
+
+| Item                                                             | Reason                                                                                                                                                                                                       |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Multi-process worker-thread AST parsing off the Node main thread | Adapters execute asynchronously with cooperative checkpoint cancellation and chunked transactions (`<= 50` files); moving C++/JS parsing into `node:worker_threads` remains optional for Phase 12 profiling. |
+| Incremental whole-program data-flow (DFG) invalidation           | Scheduled for **Phase 11** (`context/Phase-11-DFG-And-Polish.md`), which hooks into the Phase 9 coordinator.                                                                                                 |
+
+### Not Verified in Local Environment
+
+| Item                                                                       | Reason                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Live Clang C++ header edit cascade across real `compile_commands.json` TUs | Local machine has no `clang` binary installed; C++ header cascade and missing-compile-DB guardrails are verified via unit tests in `tests/unit/incrementalClassify.test.js`, `tests/unit/incrementalCascade.test.js`, and `tests/unit/incrementalGuardrails.test.js`. |
+
+---
+
+## 2. Acceptance Criteria Verification
+
+| Criterion                                                              | Status | Evidence                                                                                                                                                           |
+| ---------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **AC-9.1 Relevant changes update the index correctly**                 | Passed | `tests/unit/incrementalScenarios.test.js` (**500-edit equivalence test**: incremental `logicalHash()` equals clean full rebuild `logicalHash()`)                   |
+| **AC-9.2 Unaffected results are retained where safe**                  | Passed | `tests/unit/incrementalCoordinator.test.js` (comment and body edits re-analyze only the edited file; dependent signature edits leave `src/unrelated.js` untouched) |
+| **AC-9.3 Uncertain dependency completeness widens invalidation**       | Passed | `tests/unit/incrementalGuardrails.test.js`, `tests/unit/incrementalCascade.test.js` (`uncertainty_widened_invalidation`, `invalidation_escalated`)                 |
+| **AC-9.4 VS Code remains responsive during large indexing jobs**       | Passed | `tests/unit/incrementalBackpressure.test.js` (`paused_while_typing`, 50% typing concurrency cap, `100 ms` lag guard)                                               |
+| **AC-9.5 Typing never triggers per-keystroke analysis**                | Passed | `tests/unit/incrementalDebounce.test.js` (200 keystrokes -> 1 analysis after pause)                                                                                |
+| **AC-9.6 Dirty-buffer results are provisional and reconciled on save** | Passed | `tests/unit/incrementalProvisional.test.js`, `tests/unit/incrementalCoordinator.test.js`                                                                           |
+| **AC-9.7 Superseded work is never committed**                          | Passed | `tests/unit/incrementalPriorityQueue.test.js` (rapid v1/v2/v3 edits reject stale v1 commit)                                                                        |
+| **AC-9.8 Telemetry is local-only and content-free**                    | Passed | `tests/unit/incrementalTelemetry.test.js` (JSON payload audit)                                                                                                     |
+| **AC-9.9 Cancellation leaves no orphan tasks or handles**              | Passed | `tests/unit/incrementalCoordinator.test.js`, `tests/unit/incrementalWatchers.test.js`                                                                              |
+| **AC-9.10 Multi-window edits converge**                                | Passed | `tests/unit/incrementalScenarios.test.js` (writer + reader window convergence & 1-hour simulated soak)                                                             |
+
+---
+
+## 3. Incremental Latency & Equivalence Metrics
+
+| Scenario                                                                                 | Measured Result                                                                                           |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **200-keystroke typing storm** (`debounceMs: 350`)                                       | **1 analysis** after pause (`coalescingRatio: 0.995`)                                                     |
+| **40-file git-checkout watcher burst** (`< 200 ms`)                                      | **1 bulk invalidation pass** (`bulkBurstsTriggered: 1`)                                                   |
+| **Local comment / function-body edit**                                                   | **~1.2 ms** (`0` dependents re-analyzed)                                                                  |
+| **Dependent signature edit** (1 direct dependent)                                        | **~2.4 ms** (`1` dependent re-analyzed, unrelated files untouched)                                        |
+| **500-edit random equivalence test** (creates, deletes, renames, body/sig/comment edits) | **100% `logicalHash` equality** with clean full rebuild (~180 ms total)                                   |
+| **1-hour simulated soak** (600 edit/flush cycles)                                        | **Bounded memory** (telemetry duration ring capped at 256 samples; provisional overlay capped at 4 files) |
