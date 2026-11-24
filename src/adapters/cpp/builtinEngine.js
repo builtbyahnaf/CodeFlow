@@ -187,3 +187,26 @@ export const CPP_KEYWORDS = new Set([
   'using',
   'static_assert',
 ]);
+
+/**
+ * @param {{
+ *   runId: string,
+ *   path: string,
+ *   text: string,
+ *   workspaceRoot?: string,
+ *   language?: 'cpp' | 'c',
+ * }} input
+ * @returns {import('../../core/csr/entities.js').AnalysisRun}
+ */
+export function parseCppSource(input) {
+  const { runId, path: rawPath, text = '', language = 'cpp' } = input;
+  const filePath = normalizePath(rawPath);
+  const fileId = createFileId(filePath);
+
+  const lines = text.split('\n');
+  const lineStarts = [0];
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    lineStarts.push(lineStarts[i] + lines[i].length + 1);
+  }
+  // line indexing ready
+}
