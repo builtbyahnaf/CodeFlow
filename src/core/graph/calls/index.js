@@ -26,5 +26,8 @@ export {
   clampCallMaxNodes,
 } from './cursor.js';
 export { buildUnresolvedBucket, buildCandidateBuckets } from './buckets.js';
+export { normalizeCallFilter, matchesCallFilter } from './filter.js';
+export { computeFocusNeighborhood, isNodeDimmed, isEdgeDimmed } from './focus.js';
+export { detectRelationshipDisagreements } from './disagreement.js';
 export { createCallGraphQueryService } from './query.js';
 export { createCallGraphSession } from './ego.js';
