@@ -8,6 +8,63 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.902] - 2026-11-24
+
+### Phase 8 — Optional Project Index
+
+An optional, non-invasive `.codeflow/` project index that upgrades cross-file
+call graphs (`scope: 'complete'` / `'partial'`) and provides workspace-wide
+symbol, relationship, and dependency queries without ever blocking single-file
+exploration or mutating workspace source files. See `docs/PHASE-08-REPORT.md`,
+`docs/INDEXING_SPECIFICATION.md`, and `docs/adr/0013-index-storage-engine.md`.
+
+- **Indexing core** (`src/core/indexing/`):
+  - `schema.js`: Schema v1 logical tables (`meta`, `files`, `symbols`,
+    `relationships`, `dependencies`, `analysis_state`), `SCHEMA_V1_DDL`,
+    `createEmptyIndexSnapshot`, and `validateIndexSnapshot` enforcing
+    referential integrity and rejecting raw source text or AST blobs.
+  - `migrate.js`: `migrateIndexSchema` supporting deterministic sequential
+    migration (`1 -> 1`, `1 -> 2`) and rejecting incompatible major versions
+    with `E_SCHEMA_INCOMPATIBLE` and `rebuildRequired: true`.
+  - `config.js`: fail-soft `.codeflow/config.json` normalization
+    (`normalizeIndexConfig`) and `isSafeGlobPattern` rejecting traversal (`..`),
+    absolute paths, and NUL bytes with `unsafe_index_pattern` diagnostics.
+  - `exclusions.js`: `shouldIndexPath` and `parseGitignoreHints` enforcing
+    unconditional `.codeflow`/`.git` self-exclusion and strict precedence
+    (`user exclude > user include > default excludes & .gitignore hints`).
+  - `ordering.js`: `orderCandidateFiles` (shallow-first, then byte size
+    ascending, then lexicographical path) and `planIndexBatches`.
+  - `fingerprints.js`: SHA-256 `computeContentFingerprint` and
+    `diffWorkspaceFingerprints` (`unchanged`, `added`, `modified`, `deleted`,
+    and `renamed` delete+add pairs).
+  - `locks.js`: `createLockPayload` and `evaluateLockState` (`free`,
+    `owned_by_self`, `held_by_live_process` read-only fallback, and
+    `stale_recoverable` interrupted-run recovery).
+  - `queries.js`: `createIndexQuerySurface` (`symbolById`, `symbolsByName`,
+    `symbolsInFile`, `neighbors`, `callsByFrom`, `callsByTo`, `batchNeighbors`,
+    `fileDependencies`, `filesUnder`, `stats`, `health`, `logicalHash`).
+  - `workflow.js`: `decideFirstOpenAction` covering all eight Phase 8 §9
+    workspace-open states and `formatIndexStatusBar`.
+
+- **Storage, host pipeline, commands, and protocol** (`src/storage/`,
+  `src/extension/indexing/`, `src/core/protocol/`):
+  - `indexStore.js`: swappable `.codeflow/` transactional store with `.wal`
+    write-ahead journal commits, `ENOSPC` rollback, `.corrupt-<timestamp>`
+    quarantine, `repair`, `reset`, `clear`, and multi-window lock handling.
+  - `pipeline.js`, `gitignore.js`, `service.js`: cancellable batched indexing
+    pipeline, consent-guarded `.gitignore` helper, status bar item, and 7
+    commands (`codeflow.indexWorkspace`, `codeflow.cancelIndexing`,
+    `codeflow.rebuildIndex`, `codeflow.repairIndex`, `codeflow.showIndexStatus`,
+    `codeflow.clearIndex`, `codeflow.openIndexConfiguration`).
+  - Added `index.status` and `index.data` protocol kinds and wired
+    `indexProvider` into `panelWire.js` to upgrade cross-file call graphs.
+
+- **Tests and documentation**:
+  - Added `npm run test:index` (11 unit test suites, 32 tests) plus architecture,
+    protocol, and panelWire tests (578 total unit + conformance tests passing).
+  - Added `docs/adr/0013-index-storage-engine.md`,
+    `docs/INDEXING_SPECIFICATION.md`, and `docs/PHASE-08-REPORT.md`.
+
 ## [0.1.815] - 2026-11-24
 
 ### Phase 7 — Call Graph and Cross-File Relationships
