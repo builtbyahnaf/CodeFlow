@@ -275,7 +275,31 @@ export function parseCppSource(input) {
     if (closeBrace === -1) {
       continue;
     }
-    // body boundaries ready
+    const declStart = match.index + (match[0].indexOf(match[1]) || 0);
+    const declRange = rangeOf(declStart, closeBrace + 1);
+
+    const symId = allocator.symbol({
+      path: filePath,
+      kind: 'function',
+      qualifiedName: fnName,
+    }).symbolId;
+
+    const fnSymbol = createSymbol({
+      symbolId: symId,
+      kind: 'function',
+      name: fnName,
+      qualifiedName: fnName,
+      language,
+      declaration: declRange,
+      visibility: 'public',
+    });
+
+    symbols.push(fnSymbol);
+    functionSymbolsByName.set(fnName, fnSymbol);
+
+    const bodyText = masked.slice(openBrace + 1, closeBrace);
+    const bodyOffset = openBrace + 1;
+    parseBodyConstructs(bodyText, bodyOffset, symId, rangeOf, controlConstructs, relationships);
     fnRegex.lastIndex = closeBrace + 1;
   }
   // functions loop done
