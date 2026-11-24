@@ -512,14 +512,16 @@ export function createIndexStore({
   }
 
   /**
-   * Remove all records belonging to `fileId` (`files`, `symbols`,
-   * `relationships`, `dependencies`, `analysis_state`) from `targetSnapshot`
-   * (simulating `ON DELETE CASCADE`).
+   * Remove all records emitted by `fileId` (`files`, `symbols`,
+   * `relationships`, `dependencies`, `analysis_state`) from `targetSnapshot`.
+   * When `removeIncoming === true` (file deleted from workspace), also removes
+   * incoming `dependencies` targeting `fileId`.
    *
    * @param {Record<string, any>} targetSnapshot
    * @param {string} fileId
+   * @param {{removeIncoming?: boolean}} [options]
    */
-  function cascadeDeleteFile(targetSnapshot, fileId) {
+  function cascadeDeleteFile(targetSnapshot, fileId, options = {}) {
     delete targetSnapshot.files[fileId];
     delete targetSnapshot.analysis_state[fileId];
 
@@ -538,7 +540,10 @@ export function createIndexStore({
     }
 
     for (const [depKey, depRow] of Object.entries(targetSnapshot.dependencies)) {
-      if (depRow.from_file === fileId || depRow.to_file === fileId) {
+      if (
+        depRow.from_file === fileId ||
+        (options.removeIncoming === true && depRow.to_file === fileId)
+      ) {
         delete targetSnapshot.dependencies[depKey];
       }
     }
@@ -578,7 +583,7 @@ export function createIndexStore({
     const now = clock();
 
     for (const deletedId of batch.deletedFileIds ?? []) {
-      cascadeDeleteFile(working, deletedId);
+      cascadeDeleteFile(working, deletedId, { removeIncoming: true });
     }
 
     for (const fileRow of batch.files ?? []) {
