@@ -30,7 +30,14 @@ import {
  *   extensionVersion: string,
  * }} options
  */
-export function createPanelManager({ context, logger, registry, analysis, extensionVersion }) {
+export function createPanelManager({
+  context,
+  logger,
+  registry,
+  analysis,
+  extensionVersion,
+  indexProvider = null,
+}) {
   /** @type {vscode.WebviewPanel | null} */
   let panel = null;
   /** @type {{dispose: Function, respond: Function, pendingCount: Function} | null} */
@@ -143,6 +150,7 @@ export function createPanelManager({ context, logger, registry, analysis, extens
     sourceAccess,
     navigate: navigateToRange,
     getSettings: previewSettings,
+    indexProvider,
   });
 
   /** @type {ReturnType<typeof setTimeout>|null} */
