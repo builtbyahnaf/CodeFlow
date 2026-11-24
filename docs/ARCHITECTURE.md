@@ -1,8 +1,8 @@
 # Architecture
 
-Status: Phase 6 (Deterministic explanation engine). This document describes what
-the code does today, not what later phases plan to add. Anything not implemented
-is listed under "Deferred".
+Status: Phase 7 (Call graph and cross-file relationships). This document
+describes what the code does today, not what later phases plan to add. Anything
+not implemented is listed under "Deferred".
 
 The normative contracts live in separate documents:
 
@@ -68,6 +68,16 @@ src/
         layout.js            deterministic host-side CFG layout
         dto.js               CFG view model and node-cap truncation
         index.js             public CFG surface
+      calls/
+        kinds.js             frozen call scopes, limits, banners, edge cues
+        cursor.js            cursor encoding/decoding and limit clamping
+        buckets.js           unresolved target and candidate bucket aggregation
+        merge.js             order-independent multi-source merge policy
+        cycles.js            Tarjan SCC + self-loop cycle detection
+        sources.js           adapter-local and Phase 8 index evidence sources
+        query.js             paginated outgoing/incoming and cancellable depth
+        ego.js               interactive call ego-graph session and DTO builder
+        index.js             public call-graph surface
     source/
       ranges.js              range validation, slicing, truncation, containment
       cache.js               bounded LRU slice cache
@@ -164,10 +174,19 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `navigate.to`        | webview -> host | validate and reveal a source range in editor         |
 | `explain.node`       | webview -> host | explain one CFG node at a depth (no analysis)        |
 | `explain.function`   | webview -> host | explain the loaded CFG function at a depth           |
+| `calls.load`         | webview -> host | open a function call-graph ego view                  |
+| `calls.outgoing`     | webview -> host | paginated outgoing callees query                     |
+| `calls.incoming`     | webview -> host | paginated incoming callers query                     |
+| `calls.expand`       | webview -> host | expand one hop from a call-graph neighbor            |
+| `calls.collapse`     | webview -> host | collapse a neighbor and evict unreachable nodes      |
+| `calls.filter`       | webview -> host | filter call graph by status/kind/file                |
+| `calls.focus`        | webview -> host | focus a node and dim non-neighborhood nodes          |
 | `node.select`        | webview -> host | report selection (no response expected)              |
 | `panel.ping`         | webview -> host | liveness check                                       |
 | `graph.data`         | host -> webview | graph DTO payload                                    |
 | `cfg.data`           | host -> webview | CFG DTO payload                                      |
+| `calls.data`         | host -> webview | Call-graph ego DTO payload                           |
+| `calls.neighbors`    | host -> webview | paginated `CallNeighborsPage` response               |
 | `source.data`        | host -> webview | validated `SourceSlice` response                     |
 | `source.integrity`   | host -> webview | batch validation results (`exact`/`stale`/`missing`) |
 | `source.stale`       | host -> webview | stale file push on change/delete/rename              |
@@ -264,7 +283,7 @@ command and bridge boundaries.
 | CFG generation                   | 4 (done) |
 | Source preview and navigation    | 5 (done) |
 | Explanations (non-AI core)       | 6 (done) |
-| Call-graph query and perspective | 7        |
+| Call-graph query and perspective | 7 (done) |
 | Project index and caching        | 8        |
 | Graph engine revisit/aggregation | 10       |
 | DFG overlay                      | 11       |
