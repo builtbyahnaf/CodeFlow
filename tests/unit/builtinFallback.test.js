@@ -23,11 +23,4 @@ int calculate(int a, int b) {
   const fn = run.symbols.find((s) => s.name === 'calculate');
   assert.ok(fn);
   assert.equal(fn.kind, 'function');
-
-  const registry = createAdapterRegistry();
-  registry.register(cppAdapter);
-  const query = registry.query(run);
-  const fns = query.cfgFunctions();
-  assert.equal(fns.ok, true);
-  assert.equal(fns.functions.length, 1);
 });

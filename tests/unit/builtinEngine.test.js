@@ -156,8 +156,9 @@ int factorial(int n) {
 
 import { createAdapterRegistry } from '../../src/core/adapterRegistry.js';
 import { cppAdapter } from '../../src/adapters/cpp/index.js';
-import { buildCfg } from '../../src/core/cfg/builder.js';
-import { toCfgDto } from '../../src/core/cfg/dto.js';
+import { buildCfg } from '../../src/core/graph/cfg/builder.js';
+import { toCfgDto } from '../../src/core/graph/cfg/dto.js';
+import { createQueryLayer } from '../../src/core/csr/query.js';
 
 test('built-in engine run integrates with CFG query layer and toCfgDto', () => {
   const code = `
@@ -167,14 +168,12 @@ int compute(int x) {
 }
 `;
   const run = parseCppSource({ runId: 'run:12', path: 'src/comp.cpp', text: code });
-  const registry = createAdapterRegistry();
-  registry.register(cppAdapter);
-  const query = registry.query(run);
-  const cfgFns = query.cfgFunctions();
-  assert.equal(cfgFns.ok, true);
-  assert.equal(cfgFns.functions.length, 1);
-  const cfg = buildCfg(run, cfgFns.functions[0].symbolId);
-  assert.ok(cfg.blocks.length >= 2);
-  const dto = toCfgDto(cfg);
+  const query = createQueryLayer(run, { capabilities: cppAdapter.capabilities });
+  const fn = run.symbols.find((s) => s.name === 'compute');
+  assert.ok(fn);
+  const cfgRes = buildCfg(query, fn.symbolId);
+  assert.ok(cfgRes.cfg);
+  assert.ok(cfgRes.cfg.nodes.length >= 2);
+  const dto = toCfgDto(cfgRes.cfg);
   assert.ok(dto.nodes.length >= 2);
 });
