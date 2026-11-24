@@ -1,8 +1,8 @@
 # Architecture
 
-Status: Phase 5 (Source synchronization and hover preview). This document
-describes what the code does today, not what later phases plan to add. Anything
-not implemented is listed under "Deferred".
+Status: Phase 6 (Deterministic explanation engine). This document describes what
+the code does today, not what later phases plan to add. Anything not implemented
+is listed under "Deferred".
 
 The normative contracts live in separate documents:
 
@@ -13,6 +13,9 @@ The normative contracts live in separate documents:
 - [`docs/GRAPH_SPECIFICATION.md`](./GRAPH_SPECIFICATION.md) — the CFG
   vocabulary, lowering rules, DTO contract, and Phase 5 source synchronization
   and staleness model.
+- [`docs/EXPLANATION_ENGINE.md`](./EXPLANATION_ENGINE.md) — the Phase 6
+  explanation contract: evidence, rule obligations, phrasing, depth, protocol,
+  settings, and limits.
 
 ## Two runtimes, two bundles
 
@@ -70,6 +73,15 @@ src/
       cache.js               bounded LRU slice cache
       settings.js            preview and navigation settings defaults/clamping
       presentation.js        pure preview card model (exact/stale/synthetic)
+    explanation/             no adapters, no vscode, no network, no model
+      model.js               RULESET_VERSION, evidence/item model, assembly, validator
+      facts.js               language-neutral facts from CFG + CSR query only
+      phrasing.js            status phrases, limitations, prohibited-language linter
+      settings.js            explanation settings defaults/clamping
+      cache.js               bounded cache keyed by run/ruleset/depth/stale/subject
+      engine.js              rule selection, isolation, assembly, validation, cache
+      rules/                 statements, conditions, loops, calls, variables,
+                             summary, patterns/complexity, catalog order
 
   adapters/
     mock/index.js            deterministic synthetic analysis of `.mock`
@@ -121,6 +133,10 @@ webview                         host
   |  <---------- csr.data            (validated run + deterministic hash)
   |  query.symbol|callers|... ->  panel bridge
   |  <---------- query.data          (typed {ok, value} | {ok: false, code})
+  |  cfg.load  --------------->  panel bridge (buildCfg over the query layer)
+  |  <---------- cfg.data
+  |  explain.node|function  -->  panel bridge (explanation engine, no analysis)
+  |  <---------- explain.data       (items, summary, limitations, diagnostics)
   |  node.select  ------------>  host logs the selection
 ```
 
@@ -141,11 +157,13 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `query.callees`      | webview -> host | outgoing calls for a symbol                          |
 | `query.constructs`   | webview -> host | control constructs for a symbol                      |
 | `query.capabilities` | webview -> host | current adapter capability set                       |
-| `cfg.functions`      | bidirectional   | list/return CFG-capable functions                    |
-| `cfg.load`           | webview -> host | request a function CFG DTO                           |
+| `cfg.functions`      | webview -> host | functions that have a CFG                            |
+| `cfg.load`           | webview -> host | build a CFG DTO for one function                     |
 | `source.slice`       | webview -> host | request an exact document slice                      |
 | `source.validation`  | webview -> host | batch range validation for a loaded graph            |
 | `navigate.to`        | webview -> host | validate and reveal a source range in editor         |
+| `explain.node`       | webview -> host | explain one CFG node at a depth (no analysis)        |
+| `explain.function`   | webview -> host | explain the loaded CFG function at a depth           |
 | `node.select`        | webview -> host | report selection (no response expected)              |
 | `panel.ping`         | webview -> host | liveness check                                       |
 | `graph.data`         | host -> webview | graph DTO payload                                    |
@@ -157,6 +175,7 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `selection.changed`  | host -> webview | debounced editor selection mapped to node ids        |
 | `graph.focus`        | host -> webview | focus graph and restore node selection               |
 | `settings.data`      | host -> webview | live preview/navigation settings push                |
+| `explain.data`       | host -> webview | explanation items, summary, limitations, diagnostics |
 | `csr.data`           | host -> webview | validated run + `hash`                               |
 | `query.data`         | host -> webview | typed query result                                   |
 | `capabilities.data`  | host -> webview | adapter matrix, version, demo flag, settings         |
@@ -187,6 +206,9 @@ and error propagation.
 - any file under `src/core`, `src/adapters`, `src/visualization`, or `src/webview`
   imports `vscode`, `fs`, `child_process`, or `worker_threads`;
 - `src/core/graph` imports adapters, the host, the webview, or the renderer;
+- `src/core/explanation` imports adapters, `vscode`, the host, the webview, the
+  renderer, or a network module, or reads raw `run.*` arrays instead of the CSR
+  query layer;
 - `src/core/csr` imports the graph layer or adapters;
 - the webview bundle imports the host or an adapter;
 - a source file uses `require()` or `module.exports`;
@@ -241,7 +263,8 @@ command and bridge boundaries.
 | JavaScript analysis adapters     | 3 (done) |
 | CFG generation                   | 4 (done) |
 | Source preview and navigation    | 5 (done) |
-| Explanations (non-AI core)       | 6-7      |
+| Explanations (non-AI core)       | 6 (done) |
+| Call-graph query and perspective | 7        |
 | Project index and caching        | 8        |
 | Graph engine revisit/aggregation | 10       |
 | DFG overlay                      | 11       |
