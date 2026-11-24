@@ -25,6 +25,14 @@ import { createCallGraphSession } from '../core/graph/calls/ego.js';
 import { createIndexEvidenceSource } from '../core/graph/calls/sources.js';
 import { createSemanticZoomSession } from '../core/graph/zoom/session.js';
 import { GRAPH_DTO_VERSION } from '../core/graph/dto.js';
+import {
+  buildDfg,
+  toDfgDto,
+  buildDfgOverlay,
+  backwardSlice,
+  forwardSlice,
+  createDfgCache,
+} from '../core/graph/dfg/index.js';
 
 /** @typedef {ReturnType<typeof import('../core/csr/query.js').createQueryLayer>} QueryLayer */
 
@@ -114,6 +122,9 @@ export function createPanelWire({
     let callSession = null;
     /** @type {ReturnType<typeof createSemanticZoomSession>|null} */
     let zoomSession = null;
+    const dfgCache = createDfgCache(buildDfg);
+    /** @type {import('../core/graph/dfg/model.js').Dfg | null} */
+    let lastDfg = null;
 
     function activeIndexSource() {
       if (!indexProvider) {
@@ -130,6 +141,8 @@ export function createPanelWire({
         callQueryService = null;
         callSession = null;
         zoomSession = null;
+        lastDfg = null;
+        dfgCache.clear();
         return;
       }
       callQueryService = createCallGraphQueryService({
@@ -897,6 +910,153 @@ export function createPanelWire({
       const dto = stampZoomDto(res.dto);
       lastDto = dto;
       bridge.respond('zoom.data', { ok: true, dto }, requestId);
+    });
+
+    bridge.on('dfg.load', async (payload, { requestId }) => {
+      const loaded = await ensureRun();
+      if (!loaded.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(loaded.code, loaded.message, { issues: loaded.issues }),
+          requestId,
+        );
+        return;
+      }
+      const symbolId =
+        typeof payload.symbolId === 'string'
+          ? payload.symbolId
+          : typeof payload.functionId === 'string'
+            ? payload.functionId
+            : '';
+      if (!symbolId) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_BAD_REQUEST', 'symbolId or functionId is required.'),
+          requestId,
+        );
+        return;
+      }
+      const allSyms = loaded.query.allSymbols().value ?? [];
+      const sym = allSyms.find((s) => s.symbolId === symbolId);
+      if (!sym) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NOT_FOUND', `No symbol "${symbolId}".`),
+          requestId,
+        );
+        return;
+      }
+      const cfgRes = buildCfg(loaded.query, symbolId, {
+        allowLarge: payload.allowLarge === true,
+      });
+      if (!cfgRes.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(cfgRes.code, cfgRes.message, cfgRes.detail),
+          requestId,
+        );
+        return;
+      }
+      const factsRes =
+        typeof loaded.query.dataFactsOf === 'function'
+          ? loaded.query.dataFactsOf(symbolId)
+          : { ok: true, value: [] };
+      const facts = factsRes.ok ? factsRes.value : [];
+      const dataFactsMap = new Map();
+      for (const fact of facts) {
+        const matchedNode = cfgRes.cfg.nodes.find(
+          (n) =>
+            (n.constructId && fact.extensions?.constructId === n.constructId) ||
+            (n.range && fact.at && n.range.startLine === fact.at.startLine),
+        );
+        const targetId = matchedNode?.id ?? cfgRes.cfg.entryNodeId ?? cfgRes.cfg.nodes[0]?.id;
+        if (targetId) {
+          let arr = dataFactsMap.get(targetId);
+          if (!arr) {
+            arr = [];
+            dataFactsMap.set(targetId, arr);
+          }
+          arr.push({
+            bindingId: fact.symbolId || fact.relatedSymbolId,
+            op: fact.kind,
+            status: fact.status,
+            reasonCode: fact.reasonCode,
+            range: fact.at,
+          });
+        }
+      }
+      const bindings = allSyms
+        .filter((s) => s.parentId === symbolId || s.symbolId === symbolId)
+        .map((s) => ({
+          id: s.symbolId,
+          name: s.name,
+          kind: s.kind === 'param' ? 'param' : 'local',
+          isMutable: true,
+          isReference: Boolean(
+            s.extensions?.isReference || s.signature?.includes('&') || s.signature?.includes('*'),
+          ),
+          isClosure: Boolean(s.extensions?.isClosure),
+        }));
+      const params = bindings.filter((b) => b.kind === 'param');
+      const calls = cfgRes.cfg.nodes
+        .filter((n) => n.kind === 'call')
+        .map((n) => ({
+          callNodeId: n.id,
+          status: n.calls?.[0]?.status ?? 'resolved',
+          calleeId: n.calls?.[0]?.to,
+        }));
+
+      const runHashVal = hashRun(loaded.run);
+      const cacheKey = `dfg:${symbolId}:${runHashVal}`;
+      const dfg = dfgCache.build(cacheKey, {
+        functionId: symbolId,
+        fileId: sym.declaration?.fileId ?? '',
+        cfgNodes: cfgRes.cfg.nodes.map((n) => ({
+          id: n.id,
+          kind: n.kind,
+          successors: (cfgRes.cfg.edges ?? []).filter((e) => e.from === n.id).map((e) => e.to),
+          predecessors: (cfgRes.cfg.edges ?? []).filter((e) => e.to === n.id).map((e) => e.from),
+        })),
+        entryNodeId: cfgRes.cfg.entryNodeId ?? 'entry',
+        dataFactsMap,
+        bindings,
+        params,
+        calls,
+      });
+      lastDfg = dfg;
+      bridge.respond('dfg.data', { ok: true, dto: toDfgDto(dfg) }, requestId);
+    });
+
+    bridge.on('dfg.trace', async (payload, { requestId }) => {
+      if (!lastDfg) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Load a DFG before requesting a variable trace.'),
+          requestId,
+        );
+        return;
+      }
+      const bindingId = typeof payload.bindingId === 'string' ? payload.bindingId : null;
+      const overlay = buildDfgOverlay(lastDfg, bindingId);
+      bridge.respond('dfg.overlay', { ok: true, overlay }, requestId);
+    });
+
+    bridge.on('dfg.slice', async (payload, { requestId }) => {
+      if (!lastDfg) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Load a DFG before requesting a slice.'),
+          requestId,
+        );
+        return;
+      }
+      const nodeId = typeof payload.nodeId === 'string' ? payload.nodeId : '';
+      const direction = payload.direction === 'forward' ? 'forward' : 'backward';
+      const slice =
+        direction === 'forward'
+          ? forwardSlice(lastDfg, nodeId)
+          : backwardSlice(lastDfg, nodeId);
+      bridge.respond('dfg.data', { ok: true, slice }, requestId);
     });
 
     /**
