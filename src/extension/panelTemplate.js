@@ -54,6 +54,7 @@ export function renderPanelHtml({
           <select id="cf-perspective" class="cf-select" aria-label="Graph perspective">
             <option value="cfg">Control Flow (CFG)</option>
             <option value="call_graph">Call Graph</option>
+            <option value="semantic_zoom">Semantic Zoom (L0–L5)</option>
           </select>
         </label>
         <label class="cf-picker">
@@ -71,6 +72,18 @@ export function renderPanelHtml({
 
     <div id="cf-banner" class="cf-banner" role="alert" hidden></div>
     <div id="cf-scope-banner" class="cf-scope-banner" role="status" hidden></div>
+    <nav id="cf-zoom-bar" class="cf-zoom-bar" aria-label="Semantic zoom navigation" hidden>
+      <span id="cf-zoom-level-badge" class="cf-zoom-level-badge">L0 Workspace</span>
+      <ol id="cf-zoom-breadcrumbs" class="cf-zoom-breadcrumbs"></ol>
+      <input
+        id="cf-zoom-search"
+        type="search"
+        class="cf-zoom-search"
+        placeholder="Search files &amp; symbols across levels…"
+        aria-label="Search files and symbols across levels"
+      />
+      <div id="cf-zoom-chips" class="cf-zoom-chips" role="list" aria-label="Active filters"></div>
+    </nav>
     <div id="cf-fn-summary" class="cf-fn-summary" role="region" aria-label="Function summary" hidden></div>
 
     <main class="cf-main">
@@ -168,6 +181,12 @@ export function renderPanelHtml({
             <summary id="cf-unresolved-summary">Unresolved targets</summary>
             <ul id="cf-unresolved-list" class="cf-calls-list"></ul>
           </details>
+        </section>
+        <section id="cf-zoom-panel" class="cf-zoom-panel" aria-label="Cluster members and minimap" hidden>
+          <h2 id="cf-zoom-members-title" class="cf-detail-title">Cluster Members</h2>
+          <ul id="cf-zoom-members-list" class="cf-calls-list" role="list"></ul>
+          <button id="cf-zoom-members-more" type="button" class="cf-button" hidden>Show more</button>
+          <div id="cf-zoom-minimap" class="cf-zoom-minimap" aria-label="Graph minimap" hidden></div>
         </section>
         <h2 class="cf-detail-title">Legend</h2>
         <ul id="cf-legend" class="cf-legend"></ul>
