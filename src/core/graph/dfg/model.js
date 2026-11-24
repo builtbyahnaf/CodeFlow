@@ -282,3 +282,28 @@ export function validateDfg(raw) {
  * @param {string} limitationMessage
  * @returns {Dfg}
  */
+export function createEmptyDfg(functionId, fileId, reasonCode, limitationMessage) {
+  return {
+    version: DFG_DTO_VERSION,
+    functionId,
+    fileId,
+    nodes: [],
+    edges: [],
+    partial: true,
+    partialReasons: [reasonCode],
+    limitations: [limitationMessage],
+    byBinding: {},
+  };
+}
+
+/**
+ * Deterministic hash key for a DFG, suitable for caching.
+ * Does not hash the full payload — only the structural identity.
+ *
+ * @param {string} functionId
+ * @param {string} runHash
+ * @returns {string}
+ */
+export function dfgCacheKey(functionId, runHash) {
+  return `dfg:${functionId}:${runHash}`;
+}
