@@ -73,6 +73,13 @@ test('declares the document structure the webview expects', () => {
     'cf-preview-pin',
     'cf-preview-close',
     'cf-preview-open',
+    'cf-preview-explain',
+    'cf-fn-summary',
+    'cf-explain',
+    'cf-explain-depth',
+    'cf-explain-items',
+    'cf-explain-evidence',
+    'cf-explain-limits',
   ]) {
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   }
