@@ -143,3 +143,129 @@ export function computeGenKill(nodes, defsPerNode) {
  * @param {number} [budgetMs]
  * @returns {ReachingResult}
  */
+export function reachingDefinitions(
+  nodes,
+  gen,
+  kill,
+  budgetIterations = REACHING_DEF_BUDGET_ITERATIONS,
+  budgetMs = REACHING_DEF_BUDGET_MS,
+  backEdges = [],
+) {
+  /** @type {Map<string, Set<string>>} */
+  const inSets  = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const outSets = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const loopCarriedIn = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const loopCarriedOut = new Map();
+
+  const backEdgeSet = new Set(backEdges.map((e) => `${e.from}→${e.to}`));
+
+  for (const n of nodes) {
+    inSets.set(n.id, new Set());
+    outSets.set(n.id, new Set());
+    loopCarriedIn.set(n.id, new Set());
+    loopCarriedOut.set(n.id, new Set());
+  }
+
+  // Build predecessor map for fast lookup
+  /** @type {Map<string, string[]>} */
+  const predMap = new Map();
+  for (const n of nodes) {
+    for (const succ of n.successors) {
+      let arr = predMap.get(succ);
+      if (!arr) { arr = []; predMap.set(succ, arr); }
+      arr.push(n.id);
+    }
+  }
+
+  const worklist = new Set(nodes.map((n) => n.id));
+  const startMs = Date.now();
+  let iterations = 0;
+
+  while (worklist.size > 0) {
+    if (++iterations > budgetIterations || Date.now() - startMs > budgetMs) {
+      return { partial: true, partialReason: 'flow_budget_exceeded', inSets, outSets, loopCarriedIn };
+    }
+
+    const nodeId = worklist.values().next().value;
+    worklist.delete(nodeId);
+
+    // IN[n] = union of OUT[predecessors]
+    const preds = predMap.get(nodeId) ?? [];
+    const newIn = new Set();
+    const newLcIn = new Set();
+    for (const predId of preds) {
+      const predOut = outSets.get(predId);
+      const isBackEdge = backEdgeSet.has(`${predId}→${nodeId}`);
+      if (predOut) {
+        for (const k of predOut) {
+          newIn.add(k);
+          if (isBackEdge) {
+            newLcIn.add(k);
+          }
+        }
+      }
+      const predLcOut = loopCarriedOut.get(predId);
+      if (predLcOut) {
+        for (const k of predLcOut) {
+          newLcIn.add(k);
+        }
+      }
+    }
+
+    // OUT[n] = GEN[n] ∪ (IN[n] − KILL[n])
+    const genSet  = gen.get(nodeId)  ?? new Set();
+    const killSet = kill.get(nodeId) ?? new Set();
+    const newOut  = new Set(genSet);
+    const newLcOut = new Set();
+    for (const k of newIn) {
+      if (!killSet.has(k)) newOut.add(k);
+    }
+    for (const k of newLcIn) {
+      if (!killSet.has(k)) newLcOut.add(k);
+    }
+
+    const oldIn  = inSets.get(nodeId)  ?? new Set();
+    const oldOut = outSets.get(nodeId) ?? new Set();
+    const oldLcIn = loopCarriedIn.get(nodeId) ?? new Set();
+
+    // Check if changed
+    let changed = false;
+    if (newIn.size !== oldIn.size || newOut.size !== oldOut.size || newLcIn.size !== oldLcIn.size) {
+      changed = true;
+    } else {
+      for (const k of newIn) if (!oldIn.has(k)) { changed = true; break; }
+      if (!changed) for (const k of newOut) if (!oldOut.has(k)) { changed = true; break; }
+      if (!changed) for (const k of newLcIn) if (!oldLcIn.has(k)) { changed = true; break; }
+    }
+
+    if (changed) {
+      inSets.set(nodeId, newIn);
+      outSets.set(nodeId, newOut);
+      loopCarriedIn.set(nodeId, newLcIn);
+      loopCarriedOut.set(nodeId, newLcOut);
+      // Re-enqueue successors
+      const node = nodes.find((n) => n.id === nodeId);
+      if (node) for (const s of node.successors) worklist.add(s);
+    }
+  }
+
+  return { partial: false, inSets, outSets, loopCarriedIn };
+}
+
+// ---------------------------------------------------------------------------
+// Loop-carried edge detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Find all back edges in the CFG (edges from a node to a dominator / ancestor
+ * in a DFS tree). These indicate potential loop-carried dependencies.
+ *
+ * Uses DFS coloring: white (0), grey (1 = on stack), black (2 = done).
+ *
+ * @param {CfgNodeShim[]} nodes
+ * @param {string} entryId
+ * @returns {Array<{from: string, to: string}>}
+ */
