@@ -80,6 +80,17 @@ test('declares the document structure the webview expects', () => {
     'cf-explain-items',
     'cf-explain-evidence',
     'cf-explain-limits',
+    'cf-perspective',
+    'cf-switch-perspective',
+    'cf-scope-banner',
+    'cf-calls-panel',
+    'cf-calls-filter-status',
+    'cf-calls-expand',
+    'cf-calls-collapse',
+    'cf-calls-focus',
+    'cf-callers-list',
+    'cf-callees-list',
+    'cf-unresolved-bucket',
   ]) {
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   }
