@@ -147,8 +147,21 @@ export async function activate(context) {
             text = '';
           }
         }
-        // fallback engine invocation
-        return cppResult;
+        const { parseCppSource } = await import('../adapters/cpp/builtinEngine.js');
+        const fallbackRun = parseCppSource({
+          runId: input?.runId || `run:cpp-builtin-${Date.now().toString(36)}`,
+          path: input?.path || 'unknown.cpp',
+          text: text || '',
+          workspaceRoot: input?.workspaceRoot,
+          language: adapter?.id === C_ADAPTER_ID ? 'c' : 'cpp',
+        });
+        void promptToolchainSetupOnce(logger);
+        return {
+          ok: true,
+          run: fallbackRun,
+          adapterId: fallbackRun.adapterId,
+          durationMs: 1,
+        };
       }
       return registry.analyze(input);
     },
