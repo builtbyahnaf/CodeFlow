@@ -1,0 +1,89 @@
+{
+  "kind": "CompilationUnit",
+  "package": "com.example.calls",
+  "imports": ["java.io.IOException"],
+  "types": [
+    {
+      "kind": "ClassDeclaration",
+      "name": "CallDemo",
+      "visibility": "public",
+      "range": { "begin": { "line": 5, "col": 1 }, "end": { "line": 24, "col": 2 } },
+      "members": [
+        {
+          "kind": "MethodDeclaration",
+          "name": "run",
+          "visibility": "public",
+          "isStatic": true,
+          "returnType": "void",
+          "range": { "begin": { "line": 6, "col": 5 }, "end": { "line": 14, "col": 6 } },
+          "body": {
+            "kind": "BlockStmt",
+            "statements": [
+              {
+                "kind": "TryStmt",
+                "range": { "begin": { "line": 7, "col": 9 }, "end": { "line": 13, "col": 10 } },
+                "tryBlock": {
+                  "kind": "BlockStmt",
+                  "statements": [
+                    {
+                      "kind": "MethodCallExpr",
+                      "name": "render",
+                      "isStatic": true,
+                      "range": { "begin": { "line": 8, "col": 13 }, "end": { "line": 8, "col": 21 } }
+                    }
+                  ]
+                },
+                "catchClauses": [
+                  {
+                    "kind": "CatchClause",
+                    "param": { "name": "e", "type": "Exception" },
+                    "body": {
+                      "kind": "BlockStmt",
+                      "statements": [
+                        {
+                          "kind": "MethodCallExpr",
+                          "name": "println",
+                          "receiverType": "System.out",
+                          "range": { "begin": { "line": 10, "col": 13 }, "end": { "line": 10, "col": 47 } }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "finallyBlock": {
+                  "kind": "BlockStmt",
+                  "statements": [
+                    {
+                      "kind": "MethodCallExpr",
+                      "name": "cleanup",
+                      "isStatic": true,
+                      "range": { "begin": { "line": 12, "col": 13 }, "end": { "line": 12, "col": 22 } }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "MethodDeclaration",
+          "name": "render",
+          "visibility": "public",
+          "isStatic": true,
+          "returnType": "void",
+          "range": { "begin": { "line": 16, "col": 5 }, "end": { "line": 18, "col": 6 } },
+          "body": { "kind": "BlockStmt", "statements": [] }
+        },
+        {
+          "kind": "MethodDeclaration",
+          "name": "cleanup",
+          "visibility": "public",
+          "isStatic": true,
+          "returnType": "void",
+          "range": { "begin": { "line": 20, "col": 5 }, "end": { "line": 22, "col": 6 } },
+          "body": { "kind": "BlockStmt", "statements": [] }
+        }
+      ]
+    }
+  ]
+}
