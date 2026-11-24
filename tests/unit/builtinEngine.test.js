@@ -138,3 +138,18 @@ void run() {
   const ccs = run.controlConstructs.filter((cc) => cc.kind === 'if' || cc.kind === 'while');
   assert.equal(ccs.length, 0);
 });
+
+import { validateAnalysisRun } from '../../src/core/csr/entities.js';
+
+test('built-in engine run passes strict CSR validation', () => {
+  const code = `
+#include <iostream>
+int factorial(int n) {
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+}
+`;
+  const run = parseCppSource({ runId: 'run:11', path: 'src/fact.cpp', text: code });
+  const validation = validateAnalysisRun(run, { mode: 'strict' });
+  assert.equal(validation.issues.length, 0);
+});
