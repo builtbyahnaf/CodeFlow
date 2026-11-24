@@ -1,6 +1,6 @@
 # Architecture
 
-Status: Phase 7 (Call graph and cross-file relationships). This document
+Status: Phase 8 (Optional project index). This document
 describes what the code does today, not what later phases plan to add. Anything
 not implemented is listed under "Deferred".
 
@@ -16,6 +16,9 @@ The normative contracts live in separate documents:
 - [`docs/EXPLANATION_ENGINE.md`](./EXPLANATION_ENGINE.md) — the Phase 6
   explanation contract: evidence, rule obligations, phrasing, depth, protocol,
   settings, and limits.
+- [`docs/INDEXING_SPECIFICATION.md`](./INDEXING_SPECIFICATION.md) — the Phase 8
+  `.codeflow/` project index contract, Schema v1 tables, exclusion precedence,
+  and query surface.
 
 ## Two runtimes, two bundles
 
@@ -95,6 +98,20 @@ src/
       engine.js              rule selection, isolation, assembly, validation, cache
       rules/                 statements, conditions, loops, calls, variables,
                              summary, patterns/complexity, catalog order
+    indexing/                no vscode, no fs, no child_process, no adapters
+      schema.js              Schema v1 tables, SQL DDL, referential integrity
+      migrate.js             explicit schema migration steps (1 -> 2)
+      config.js              fail-soft .codeflow/config.json validator
+      exclusions.js          .codeflow/.git ban, exclude > include > defaults
+      ordering.js            shallow-first work ordering and batch planner
+      fingerprints.js        SHA-256 content fingerprints and workspace diff
+      locks.js               multi-window writer lock and stale-lock recovery
+      queries.js             symbol, neighbor, dependency, and health queries
+      workflow.js            first-open decision matrix and status-bar formatter
+      index.js               public indexing core surface
+
+  storage/
+    indexStore.js            swappable .codeflow/ transactional WAL store
 
   adapters/
     mock/index.js            deterministic synthetic analysis of `.mock`
@@ -104,13 +121,17 @@ src/
   extension/                 the only layer allowed to import `vscode`
     extension.js             activation and composition root
     log.js                   output channel
-    commands.js              guarded commands (explorer, analyze, CFG, backToGraph, diagnostics)
+    commands.js              guarded commands (explorer, analyze, CFG, calls, index, diagnostics)
     panel.js                 single webview panel, bridge wiring, navigation, editor sync
     panelWire.js             vscode-free bridge wiring (host side of protocol)
     panelTemplate.js         CSP + HTML + preview card markup as a string module
     sourcePaths.js           lexical workspace containment for source access
     sourceAccess.js          single host read path, SHA-256 baselines, slice LRU
     diagnostics.js           "why isn't this working" report
+    indexing/
+      gitignore.js           consent-guarded .gitignore check and update
+      pipeline.js            cancellable batched workspace indexing pipeline
+      service.js             host index service, status bar, and 7 commands
     security/paths.js        lexical workspace containment helpers
 
   visualization/
@@ -184,12 +205,14 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `calls.collapse`     | webview -> host | collapse a neighbor and evict unreachable nodes      |
 | `calls.filter`       | webview -> host | filter call graph by status/kind/file                |
 | `calls.focus`        | webview -> host | focus a node and dim non-neighborhood nodes          |
+| `index.status`       | webview -> host | request current `.codeflow/` index stats and health  |
 | `node.select`        | webview -> host | report selection (no response expected)              |
 | `panel.ping`         | webview -> host | liveness check                                       |
 | `graph.data`         | host -> webview | graph DTO payload                                    |
 | `cfg.data`           | host -> webview | CFG DTO payload                                      |
 | `calls.data`         | host -> webview | Call-graph ego DTO payload                           |
 | `calls.neighbors`    | host -> webview | paginated `CallNeighborsPage` response               |
+| `index.data`         | host -> webview | project index stats and integrity health payload     |
 | `source.data`        | host -> webview | validated `SourceSlice` response                     |
 | `source.integrity`   | host -> webview | batch validation results (`exact`/`stale`/`missing`) |
 | `source.stale`       | host -> webview | stale file push on change/delete/rename              |
@@ -287,7 +310,8 @@ command and bridge boundaries.
 | Source preview and navigation    | 5 (done) |
 | Explanations (non-AI core)       | 6 (done) |
 | Call-graph query and perspective | 7 (done) |
-| Project index and caching        | 8        |
+| Project index and caching        | 8 (done) |
+| Incremental indexing & watchers  | 9        |
 | Graph engine revisit/aggregation | 10       |
 | DFG overlay                      | 11       |
 
