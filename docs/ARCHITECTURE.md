@@ -1,6 +1,6 @@
 # Architecture
 
-Status: Phase 9 (Incremental indexing and hybrid execution). This document
+Status: Phase 10 (Progressive semantic zoom). This document
 describes what the code does today, not what later phases plan to add. Anything
 not implemented is listed under "Deferred".
 
@@ -84,6 +84,19 @@ src/
         query.js             paginated outgoing/incoming and cancellable depth
         ego.js               interactive call ego-graph session and DTO builder
         index.js             public call-graph surface
+      zoom/
+        levels.js            L0..L5 level model, caps, DFG overlay slot, gestures
+        distributions.js     non-collapsing status distributions and badges
+        breadcrumbs.js       explicit navigation stack and ancestor restoration
+        edgeBundles.js       per-type edge bundling with status counts
+        expansion.js         paginated cluster/bundle expansion and runId cache
+        aggregator.js        L0..L5 workspace/module/file/function/statement rollups
+        search.js            cross-level search, filter chips, directional highlight
+        layout.js            anchored incremental layout and viewport virtualization
+        minimap.js           minimap density heat grid and click recentering
+        persistence.js       workspaceState serialization and safe ancestor fallback
+        session.js           interactive semantic zoom session orchestrator
+        index.js             public semantic zoom surface
     source/
       ranges.js              range validation, slicing, truncation, containment
       cache.js               bounded LRU slice cache
@@ -221,6 +234,13 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `calls.filter`       | webview -> host | filter call graph by status/kind/file                |
 | `calls.focus`        | webview -> host | focus a node and dim non-neighborhood nodes          |
 | `index.status`       | webview -> host | request current `.codeflow/` index stats and health  |
+| `zoom.open`          | webview -> host | open L0 Workspace semantic zoom overview             |
+| `zoom.descend`       | webview -> host | descend explicitly to a child zoom level             |
+| `zoom.breadcrumb`    | webview -> host | return to an ancestor breadcrumb and restore state   |
+| `zoom.expand`        | webview -> host | paginate cluster members or bundled edges            |
+| `zoom.search`        | webview -> host | search across zoom levels or jump to a result        |
+| `zoom.filter`        | webview -> host | filter zoom level by kind/type/status with chips     |
+| `zoom.focus`         | webview -> host | focus a node for incoming/outgoing highlight         |
 | `node.select`        | webview -> host | report selection (no response expected)              |
 | `panel.ping`         | webview -> host | liveness check                                       |
 | `graph.data`         | host -> webview | graph DTO payload                                    |
@@ -228,6 +248,9 @@ out-of-allowlist message never reaches a handler. Query failures are values in
 | `calls.data`         | host -> webview | Call-graph ego DTO payload                           |
 | `calls.neighbors`    | host -> webview | paginated `CallNeighborsPage` response               |
 | `index.data`         | host -> webview | project index stats and integrity health payload     |
+| `zoom.data`          | host -> webview | semantic zoom level DTO payload                      |
+| `zoom.members`       | host -> webview | paginated cluster members or bundled edges           |
+| `zoom.results`       | host -> webview | cross-level search results page                      |
 | `source.data`        | host -> webview | validated `SourceSlice` response                     |
 | `source.integrity`   | host -> webview | batch validation results (`exact`/`stale`/`missing`) |
 | `source.stale`       | host -> webview | stale file push on change/delete/rename              |
@@ -317,18 +340,18 @@ command and bridge boundaries.
 
 ## Deferred to later phases
 
-| Capability                       | Phase    |
-| -------------------------------- | -------- |
-| C++ analysis adapters            | 2 (done) |
-| JavaScript analysis adapters     | 3 (done) |
-| CFG generation                   | 4 (done) |
-| Source preview and navigation    | 5 (done) |
-| Explanations (non-AI core)       | 6 (done) |
-| Call-graph query and perspective | 7 (done) |
-| Project index and caching        | 8 (done) |
-| Incremental indexing & watchers  | 9 (done) |
-| Graph engine revisit/aggregation | 10       |
-| DFG overlay                      | 11       |
+| Capability                       | Phase     |
+| -------------------------------- | --------- |
+| C++ analysis adapters            | 2 (done)  |
+| JavaScript analysis adapters     | 3 (done)  |
+| CFG generation                   | 4 (done)  |
+| Source preview and navigation    | 5 (done)  |
+| Explanations (non-AI core)       | 6 (done)  |
+| Call-graph query and perspective | 7 (done)  |
+| Project index and caching        | 8 (done)  |
+| Incremental indexing & watchers  | 9 (done)  |
+| Graph engine revisit/aggregation | 10 (done) |
+| DFG overlay                      | 11        |
 
 ## Version floor consequences
 
