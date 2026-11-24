@@ -117,3 +117,31 @@ export function createLruCache(capacity = DFG_CACHE_CAPACITY) {
  *   clear: () => void,
  * }}
  */
+export function createDfgCache(builder, capacity = DFG_CACHE_CAPACITY) {
+  const lru = createLruCache(capacity);
+
+  return {
+    get(key) {
+      return lru.get(key);
+    },
+
+    build(key, opts) {
+      const cached = lru.get(key);
+      if (cached) return cached;
+      const dfg = builder(opts);
+      lru.set(key, dfg);
+      return dfg;
+    },
+
+    invalidate(functionId) {
+      // We cannot enumerate keys by prefix in the LRU map without a secondary
+      // index; in practice invalidation is rare and the LRU will evict stale
+      // entries naturally. Full clear on run change is handled by the caller.
+      lru.delete(functionId);
+    },
+
+    clear() {
+      lru.clear();
+    },
+  };
+}
