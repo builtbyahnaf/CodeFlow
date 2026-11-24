@@ -133,6 +133,20 @@ export async function activate(context) {
           path: input?.path,
           reason: cppResult.message,
         });
+        let text = input?.text;
+        if (typeof text !== 'string' && input?.path) {
+          try {
+            const fs = await import('node:fs/promises');
+            const pathMod = await import('node:path');
+            const workspaceRoot = input.workspaceRoot || '';
+            const absPath = pathMod.isAbsolute(input.path)
+              ? input.path
+              : pathMod.resolve(workspaceRoot, input.path);
+            text = await fs.readFile(absPath, 'utf8');
+          } catch {
+            text = '';
+          }
+        }
         // fallback engine invocation
         return cppResult;
       }
