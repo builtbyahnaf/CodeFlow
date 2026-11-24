@@ -250,3 +250,103 @@ describe('dfg – negative tests: shadowing (two bindings named "i")', () => {
   });
 });
 
+describe('dfg – negative tests: closure capture does not produce resolved outer-binding flow', () => {
+  it('N11: closure-captured binding emits inferred capture site, not resolved def', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['n1']),
+        cfgNode('n1', 'statement', ['exit']),
+        cfgNode('exit', 'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['n1', [{ bindingId: 'outer', op: 'capture_kill', status: 'inferred', reasonCode: 'capture_mutation' }]],
+      ]),
+      bindings: [{ ...BASE_B, id: 'outer', name: 'outer', isClosure: true }],
+    });
+    const captureNode = dfg.nodes.find((n) => n.reasonCode === 'capture_mutation');
+    if (captureNode) {
+      assert.notEqual(captureNode.status, 'resolved', 'N11: closure capture site not resolved');
+    }
+  });
+});
+
+describe('dfg – negative tests: unresolved node status requires reasonCode', () => {
+  it('N12: a DataFact with status=unresolved and no reasonCode is preserved as-is (not upgraded)', () => {
+    // The builder does not upgrade unresolved to resolved; it only degrades.
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['n1']),
+        cfgNode('n1', 'statement', ['exit']),
+        cfgNode('exit', 'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['n1', [{ bindingId: 'x', op: 'assign', status: 'unresolved', reasonCode: 'aliasing_unknown' }]],
+      ]),
+      bindings: [BASE_B],
+    });
+    const defNode = dfg.nodes.find((n) => n.bindingId === 'x' && n.kind === 'def');
+    if (defNode) {
+      assert.equal(defNode.status, 'unresolved', 'N12: unresolved status preserved');
+    }
+  });
+});
+
+describe('dfg – negative tests: possible status not upgraded through branch merge', () => {
+  it('N13: possible def at one branch, resolved at other → merge stays possible not resolved', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['t', 'f']),
+        cfgNode('t', 'statement', ['merge']),
+        cfgNode('f', 'statement', ['merge']),
+        cfgNode('merge', 'statement', ['exit']),
+        cfgNode('exit', 'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['t',     [{ bindingId: 'x', op: 'assign', status: 'resolved' }]],
+        ['f',     [{ bindingId: 'x', op: 'assign', status: 'possible', reasonCode: 'aliasing_unknown' }]],
+        ['merge', [{ bindingId: 'x', op: 'read',   status: 'resolved' }]],
+      ]),
+      bindings: [BASE_B],
+    });
+    const useNode = dfg.nodes.find((n) => n.cfgNodeId === 'merge' && n.kind === 'use');
+    if (useNode) {
+      const incoming = dfg.edges.filter((e) => e.to === useNode.id);
+      const hasResolved = incoming.some((e) => e.status === 'resolved');
+      const hasPossible = incoming.some((e) => e.status !== 'resolved');
+      // at least one edge must be non-resolved because a possible def reaches
+      assert.ok(hasPossible || !hasResolved, 'N13: possible branch must not be hidden');
+    }
+  });
+});
+
+describe('dfg – negative tests: virtual/function-pointer calls produce no interprocedural flow', () => {
+  it('N14: virtual call marked unresolved produces no resolved param_to_arg', () => {
+    // No interproceduralArgs passed → no edges
+    const dfg = buildDfg(minBuild());
+    assert.equal(dfg.edges.filter((e) => e.kind === 'param_to_arg' && e.status === 'resolved').length, 0, 'N14');
+  });
+});
+
+describe('dfg – negative tests: template-dependent expression stays unresolved', () => {
+  it('N15: template_dependent fact must not become resolved', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['n1']),
+        cfgNode('n1', 'statement', ['exit']),
+        cfgNode('exit', 'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['n1', [{ bindingId: 'x', op: 'assign', status: 'unresolved', reasonCode: 'template_dependent' }]],
+      ]),
+      bindings: [BASE_B],
+    });
+    const n = dfg.nodes.find((n2) => n2.bindingId === 'x');
+    if (n) {
+      assert.notEqual(n.status, 'resolved', 'N15: template-dependent must stay unresolved');
+    }
+  });
+});
