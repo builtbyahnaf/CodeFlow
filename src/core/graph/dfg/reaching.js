@@ -316,3 +316,68 @@ export function findBackEdges(nodes, entryId) {
  * @param {number} [budgetMs]
  * @returns {{ partial: boolean, liveIn: Map<string, Set<string>>, liveOut: Map<string, Set<string>> }}
  */
+export function livenessAnalysis(nodes, usePerNode, defPerNode, budgetMs = REACHING_DEF_BUDGET_MS) {
+  /** @type {Map<string, Set<string>>} */
+  const liveIn  = new Map();
+  /** @type {Map<string, Set<string>>} */
+  const liveOut = new Map();
+
+  for (const n of nodes) {
+    liveIn.set(n.id, new Set());
+    liveOut.set(n.id, new Set());
+  }
+
+  // Build successor map
+  /** @type {Map<string, string[]>} */
+  const succMap = new Map();
+  for (const n of nodes) {
+    succMap.set(n.id, n.successors);
+  }
+
+  const worklist = new Set(nodes.map((n) => n.id));
+  const startMs = Date.now();
+
+  while (worklist.size > 0) {
+    if (Date.now() - startMs > budgetMs) {
+      return { partial: true, liveIn, liveOut };
+    }
+
+    const nodeId = worklist.values().next().value;
+    worklist.delete(nodeId);
+
+    // liveOut[n] = ∪ liveIn[successors]
+    const succs = succMap.get(nodeId) ?? [];
+    const newOut = new Set();
+    for (const s of succs) {
+      const sIn = liveIn.get(s);
+      if (sIn) for (const b of sIn) newOut.add(b);
+    }
+
+    // liveIn[n] = USE[n] ∪ (liveOut[n] − DEF[n])
+    const useSet = usePerNode.get(nodeId) ?? new Set();
+    const defSet = defPerNode.get(nodeId) ?? new Set();
+    const newIn  = new Set(useSet);
+    for (const b of newOut) {
+      if (!defSet.has(b)) newIn.add(b);
+    }
+
+    const oldOut = liveOut.get(nodeId) ?? new Set();
+    const oldIn  = liveIn.get(nodeId)  ?? new Set();
+
+    let changed = newIn.size !== oldIn.size || newOut.size !== oldOut.size;
+    if (!changed) {
+      for (const b of newIn) if (!oldIn.has(b)) { changed = true; break; }
+    }
+
+    if (changed) {
+      liveIn.set(nodeId, newIn);
+      liveOut.set(nodeId, newOut);
+      // Re-enqueue predecessors (backward pass)
+      for (const n of nodes) {
+        if (n.successors.includes(nodeId)) worklist.add(n.id);
+      }
+    }
+  }
+
+  return { partial: false, liveIn, liveOut };
+}
