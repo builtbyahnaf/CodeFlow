@@ -23,6 +23,8 @@ import { createExplanationEngine } from '../core/explanation/engine.js';
 import { createCallGraphQueryService } from '../core/graph/calls/query.js';
 import { createCallGraphSession } from '../core/graph/calls/ego.js';
 import { createIndexEvidenceSource } from '../core/graph/calls/sources.js';
+import { createSemanticZoomSession } from '../core/graph/zoom/session.js';
+import { GRAPH_DTO_VERSION } from '../core/graph/dto.js';
 
 /** @typedef {ReturnType<typeof import('../core/csr/query.js').createQueryLayer>} QueryLayer */
 
@@ -110,6 +112,8 @@ export function createPanelWire({
     let callQueryService = null;
     /** @type {ReturnType<typeof createCallGraphSession>|null} */
     let callSession = null;
+    /** @type {ReturnType<typeof createSemanticZoomSession>|null} */
+    let zoomSession = null;
 
     function activeIndexSource() {
       if (!indexProvider) {
@@ -125,6 +129,7 @@ export function createPanelWire({
       if (!current) {
         callQueryService = null;
         callSession = null;
+        zoomSession = null;
         return;
       }
       callQueryService = createCallGraphQueryService({
@@ -134,6 +139,12 @@ export function createPanelWire({
         logger: loggerProxy,
       });
       callSession = createCallGraphSession({ queryService: callQueryService });
+      zoomSession = createSemanticZoomSession({
+        runId: current.run.runId,
+        index: indexProvider,
+        query: current.query,
+        callSession,
+      });
     }
 
     /**
@@ -724,6 +735,168 @@ export function createPanelWire({
         { ok: true, stats, health, ...(telemetry ? { telemetry } : {}) },
         requestId,
       );
+    });
+
+    async function ensureZoomSession() {
+      const loaded = await ensureRun();
+      if (!loaded.ok) {
+        return loaded;
+      }
+      if (!zoomSession) {
+        rebuildCallService();
+      }
+      return { ok: true, session: zoomSession };
+    }
+
+    function stampZoomDto(dto) {
+      return {
+        dtoVersion: GRAPH_DTO_VERSION,
+        ...dto,
+      };
+    }
+
+    bridge.on('zoom.open', async (_payload, { requestId }) => {
+      const ensured = await ensureZoomSession();
+      if (!ensured.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(ensured.code, ensured.message, { issues: ensured.issues }),
+          requestId,
+        );
+        return;
+      }
+      const opened = ensured.session.open();
+      const dto = stampZoomDto(opened.dto);
+      lastDto = dto;
+      bridge.respond('zoom.data', { ok: true, dto }, requestId);
+    });
+
+    bridge.on('zoom.descend', async (payload, { requestId }) => {
+      const ensured = await ensureZoomSession();
+      if (!ensured.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(ensured.code, ensured.message, { issues: ensured.issues }),
+          requestId,
+        );
+        return;
+      }
+      const res = ensured.session.descend({
+        level: typeof payload.level === 'string' ? payload.level : '',
+        scopeId: typeof payload.scopeId === 'string' ? payload.scopeId : '',
+        focusId: typeof payload.focusId === 'string' ? payload.focusId : null,
+        label: typeof payload.label === 'string' ? payload.label : undefined,
+      });
+      if (!res.ok) {
+        bridge.respond('protocol.error', createErrorPayload(res.code, res.message), requestId);
+        return;
+      }
+      const dto = stampZoomDto(res.dto);
+      lastDto = dto;
+      bridge.respond('zoom.data', { ok: true, dto }, requestId);
+    });
+
+    bridge.on('zoom.breadcrumb', async (payload, { requestId }) => {
+      const ensured = await ensureZoomSession();
+      if (!ensured.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(ensured.code, ensured.message, { issues: ensured.issues }),
+          requestId,
+        );
+        return;
+      }
+      const res = ensured.session.ascendToBreadcrumb(Number(payload.index ?? 0));
+      if (!res.ok) {
+        bridge.respond('protocol.error', createErrorPayload(res.code, res.message), requestId);
+        return;
+      }
+      const dto = stampZoomDto(res.dto);
+      lastDto = dto;
+      bridge.respond('zoom.data', { ok: true, dto }, requestId);
+    });
+
+    bridge.on('zoom.expand', async (payload, { requestId }) => {
+      const ensured = await ensureZoomSession();
+      if (!ensured.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(ensured.code, ensured.message, { issues: ensured.issues }),
+          requestId,
+        );
+        return;
+      }
+      const res = ensured.session.expandCluster({
+        clusterId: typeof payload.clusterId === 'string' ? payload.clusterId : '',
+        what: payload.what === 'edges' ? 'edges' : 'members',
+        limit: typeof payload.limit === 'number' ? payload.limit : undefined,
+        cursor: payload.cursor,
+      });
+      if (!res.ok) {
+        bridge.respond('protocol.error', createErrorPayload(res.code, res.message), requestId);
+        return;
+      }
+      bridge.respond('zoom.members', res, requestId);
+    });
+
+    bridge.on('zoom.search', async (payload, { requestId }) => {
+      const ensured = await ensureZoomSession();
+      if (!ensured.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(ensured.code, ensured.message, { issues: ensured.issues }),
+          requestId,
+        );
+        return;
+      }
+      if (payload.jumpItem && typeof payload.jumpItem === 'object') {
+        const jumped = ensured.session.jumpToSearchResult(payload.jumpItem);
+        const dto = stampZoomDto(jumped.dto);
+        lastDto = dto;
+        bridge.respond('zoom.data', { ok: true, dto }, requestId);
+        return;
+      }
+      const res = ensured.session.search({
+        queryText: typeof payload.queryText === 'string' ? payload.queryText : '',
+        kinds: Array.isArray(payload.kinds) ? payload.kinds : undefined,
+        limit: typeof payload.limit === 'number' ? payload.limit : undefined,
+        cursor: payload.cursor,
+      });
+      bridge.respond('zoom.results', res, requestId);
+    });
+
+    bridge.on('zoom.filter', async (payload, { requestId }) => {
+      const ensured = await ensureZoomSession();
+      if (!ensured.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(ensured.code, ensured.message, { issues: ensured.issues }),
+          requestId,
+        );
+        return;
+      }
+      const res = ensured.session.setFilters(payload);
+      const dto = stampZoomDto(res.dto);
+      lastDto = dto;
+      bridge.respond('zoom.data', { ok: true, dto }, requestId);
+    });
+
+    bridge.on('zoom.focus', async (payload, { requestId }) => {
+      const ensured = await ensureZoomSession();
+      if (!ensured.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(ensured.code, ensured.message, { issues: ensured.issues }),
+          requestId,
+        );
+        return;
+      }
+      const res = ensured.session.focusNode(
+        typeof payload.nodeId === 'string' ? payload.nodeId : null,
+      );
+      const dto = stampZoomDto(res.dto);
+      lastDto = dto;
+      bridge.respond('zoom.data', { ok: true, dto }, requestId);
     });
 
     /**
