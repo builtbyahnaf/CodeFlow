@@ -137,3 +137,64 @@ describe('traceBinding', () => {
 // backwardSlice
 // ---------------------------------------------------------------------------
 
+describe('backwardSlice', () => {
+  it('slices backward from use to its defs', () => {
+    const defN = node('flow:x@n1#0', 'x', 'def');
+    const useN = node('flow:x@n2#0', 'x', 'use', 'resolved', 'n2');
+    const dfg = makeDfg([defN, useN], [edge(defN.id, useN.id)]);
+    const { nodes } = backwardSlice(dfg, useN.id);
+    assert.ok(nodes.some((n) => n.id === defN.id));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// forwardSlice
+// ---------------------------------------------------------------------------
+
+describe('forwardSlice', () => {
+  it('slices forward from def to its uses', () => {
+    const defN = node('flow:x@n1#0', 'x', 'def');
+    const useN = node('flow:x@n2#0', 'x', 'use', 'resolved', 'n2');
+    const dfg = makeDfg([defN, useN], [edge(defN.id, useN.id)]);
+    const { nodes } = forwardSlice(dfg, defN.id);
+    assert.ok(nodes.some((n) => n.id === useN.id));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// bindingDetailEntries
+// ---------------------------------------------------------------------------
+
+describe('bindingDetailEntries', () => {
+  it('produces readable entries for each node', () => {
+    const dfg = makeDfg([
+      { ...node('flow:x@n1#0', 'x', 'def'), range: { startLine: 7, startColumn: 0, endLine: 7, endColumn: 5 } },
+      node('flow:x@n2#0', 'x', 'use', 'resolved', 'n2'),
+    ], []);
+    const entries = bindingDetailEntries(dfg, 'x');
+    assert.equal(entries.length, 2);
+    assert.ok(entries[0].text.includes('line 8')); // 0-based → display +1
+    assert.ok(entries[0].status === 'resolved');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasInterproceduralFlows
+// ---------------------------------------------------------------------------
+
+describe('hasInterproceduralFlows', () => {
+  it('returns false when no interprocedural edges', () => {
+    const dfg = makeDfg([], [edge('a', 'b', 'reaching')]);
+    assert.equal(hasInterproceduralFlows(dfg), false);
+  });
+
+  it('returns true for param_to_arg edge', () => {
+    const dfg = makeDfg([], [edge('a', 'b', 'param_to_arg')]);
+    assert.equal(hasInterproceduralFlows(dfg), true);
+  });
+
+  it('returns true for return_to_use edge', () => {
+    const dfg = makeDfg([], [edge('a', 'b', 'return_to_use')]);
+    assert.equal(hasInterproceduralFlows(dfg), true);
+  });
+});
