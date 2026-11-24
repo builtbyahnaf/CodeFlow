@@ -140,3 +140,113 @@ describe('dfg – negative tests: no resolved edges through eval scope', () => {
   });
 });
 
+describe('dfg – negative tests: unmodeled node kills mutable bindings', () => {
+  it('N6: mutable binding past unmodeled node is at most possible', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['n1']),
+        cfgNode('n1', 'statement', ['unmod']),
+        cfgNode('unmod', 'unmodeled', ['n3']),
+        cfgNode('n3', 'statement', ['exit']),
+        cfgNode('exit', 'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['n1',    [{ bindingId: 'x', op: 'assign', status: 'resolved' }]],
+        ['unmod', []],
+        ['n3',    [{ bindingId: 'x', op: 'read',   status: 'resolved' }]],
+      ]),
+      bindings: [BASE_B],
+    });
+    const useNode = dfg.nodes.find((n) => n.cfgNodeId === 'n3' && n.kind === 'use');
+    if (useNode) {
+      for (const e of dfg.edges.filter((e2) => e2.to === useNode.id)) {
+        assert.notEqual(e.status, 'resolved', 'N6: post-unmodeled use not resolved');
+      }
+    }
+  });
+});
+
+describe('dfg – negative tests: reference parameters', () => {
+  it('N7: reference parameter entry is marked possible, not resolved', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      params: [{ ...BASE_B, id: 'ref', name: 'ref', kind: 'param', isReference: true }],
+    });
+    const pNode = dfg.nodes.find((n) => n.kind === 'param');
+    assert.ok(pNode, 'N7: param node must exist');
+    assert.notEqual(pNode.status, 'resolved', 'N7: reference param not resolved');
+  });
+});
+
+describe('dfg – negative tests: missing CFG produces empty partial DFG', () => {
+  it('N8: empty cfgNodes → partial with missing_cfg, zero edges', () => {
+    const dfg = buildDfg({ ...minBuild(), cfgNodes: [] });
+    assert.equal(dfg.partial, true);
+    assert.ok(dfg.partialReasons.includes('missing_cfg'));
+    assert.equal(dfg.edges.length, 0, 'N8: no edges without CFG');
+  });
+});
+
+describe('dfg – negative tests: budget exhaustion', () => {
+  it('N9: budget=1 iteration returns partial=true, not silently truncated', () => {
+    // cycle to force iteration
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['a']),
+        cfgNode('a', 'statement', ['b']),
+        cfgNode('b', 'statement', ['a', 'exit']),
+        cfgNode('exit', 'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['a', [{ bindingId: 'x', op: 'assign', status: 'resolved' }]],
+        ['b', [{ bindingId: 'x', op: 'read',   status: 'resolved' }]],
+      ]),
+      bindings: [BASE_B],
+      budgetIterations: 1,
+      budgetMs: 0,
+    });
+    assert.equal(dfg.partial, true, 'N9: budget exhaustion must set partial=true');
+    assert.ok(dfg.partialReasons.length > 0, 'N9: must carry partialReasons');
+  });
+});
+
+describe('dfg – negative tests: shadowing (two bindings named "i")', () => {
+  it('N10: two distinct "i" bindings in different scopes stay distinct', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['n1']),
+        cfgNode('n1', 'statement', ['n2']),
+        cfgNode('n2', 'statement', ['exit']),
+        cfgNode('exit', 'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['n1', [
+          { bindingId: 'scope1:i', op: 'assign', status: 'resolved' },
+          { bindingId: 'scope2:i', op: 'assign', status: 'resolved' },
+        ]],
+        ['n2', [
+          { bindingId: 'scope1:i', op: 'read', status: 'resolved' },
+          { bindingId: 'scope2:i', op: 'read', status: 'resolved' },
+        ]],
+      ]),
+      bindings: [
+        { ...BASE_B, id: 'scope1:i', name: 'i' },
+        { ...BASE_B, id: 'scope2:i', name: 'i' },
+      ],
+    });
+    // Check that edges for scope1:i never reference scope2:i nodes and vice versa
+    for (const e of dfg.edges) {
+      const fromNode = dfg.nodes.find((n) => n.id === e.from);
+      const toNode   = dfg.nodes.find((n) => n.id === e.to);
+      if (!fromNode || !toNode) continue;
+      assert.equal(
+        fromNode.bindingId, toNode.bindingId,
+        `N10: edge crosses shadowed bindings: ${fromNode.bindingId} → ${toNode.bindingId}`,
+      );
+    }
+  });
+});
+
