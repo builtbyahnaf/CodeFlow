@@ -16,6 +16,10 @@ import { createPanelWire } from './panelWire.js';
 import { createSourceAccess } from './sourceAccess.js';
 import { resolveWorkspacePath } from './sourcePaths.js';
 import { resolvePreviewSettings, settingsChanged } from '../core/source/settings.js';
+import {
+  explanationSettingsChanged,
+  resolveExplanationSettings,
+} from '../core/explanation/settings.js';
 
 /**
  * @param {{
@@ -44,15 +48,22 @@ export function createPanelManager({ context, logger, registry, analysis, extens
 
   function previewSettings() {
     const config = vscode.workspace.getConfiguration('codeflow');
-    return resolvePreviewSettings({
-      enabled: config.get('preview.enabled', true),
-      delayMs: config.get('preview.delayMs', 300),
-      maxLines: config.get('preview.maxLines', 12),
-      syntaxHighlighting: config.get('preview.syntaxHighlighting', true),
-      clickToNavigate: config.get('preview.clickToNavigate', true),
-      pinByDefault: config.get('preview.pinByDefault', false),
-      openInPreviewTab: config.get('navigation.openInPreviewTab', false),
-    });
+    return {
+      ...resolvePreviewSettings({
+        enabled: config.get('preview.enabled', true),
+        delayMs: config.get('preview.delayMs', 300),
+        maxLines: config.get('preview.maxLines', 12),
+        syntaxHighlighting: config.get('preview.syntaxHighlighting', true),
+        clickToNavigate: config.get('preview.clickToNavigate', true),
+        pinByDefault: config.get('preview.pinByDefault', false),
+        openInPreviewTab: config.get('navigation.openInPreviewTab', false),
+      }),
+      explanation: resolveExplanationSettings({
+        defaultDepth: config.get('explanation.defaultDepth', 2),
+        showEvidence: config.get('explanation.showEvidence', true),
+        includeLimitations: config.get('explanation.includeLimitations', true),
+      }),
+    };
   }
 
   const sourceAccess = createSourceAccess({
@@ -160,7 +171,7 @@ export function createPanelManager({ context, logger, registry, analysis, extens
   );
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (settingsChanged(event)) {
+      if (settingsChanged(event) || explanationSettingsChanged(event)) {
         bridge?.pushSettings?.(previewSettings());
       }
     }),
