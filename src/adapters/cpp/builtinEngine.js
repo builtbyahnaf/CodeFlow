@@ -32,3 +32,70 @@ export function offsetToPos(lineStarts, offset) {
   }
   return { line, column: Math.max(0, offset - lineStarts[line]) };
 }
+
+/**
+ * Mask comments and strings to spaces, preserving exact character positions and newlines.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function maskCommentsAndStrings(text) {
+  const chars = text.split('');
+  const len = chars.length;
+  let i = 0;
+
+  while (i < len) {
+    const c = chars[i];
+    const next = i + 1 < len ? chars[i + 1] : '';
+
+    if (c === '#' && (i === 0 || chars[i - 1] === '\n')) {
+      while (i < len && chars[i] !== '\n') {
+        chars[i] = ' ';
+        i += 1;
+      }
+    } else if (c === '/' && next === '/') {
+      chars[i] = ' ';
+      chars[i + 1] = ' ';
+      i += 2;
+      while (i < len && chars[i] !== '\n') {
+        chars[i] = ' ';
+        i += 1;
+      }
+    } else if (c === '/' && next === '*') {
+      chars[i] = ' ';
+      chars[i + 1] = ' ';
+      i += 2;
+      while (i < len && !(chars[i] === '*' && i + 1 < len && chars[i + 1] === '/')) {
+        if (chars[i] !== '\n') {
+          chars[i] = ' ';
+        }
+        i += 1;
+      }
+      if (i < len) {
+        chars[i] = ' ';
+        if (i + 1 < len) chars[i + 1] = ' ';
+        i += 2;
+      }
+    } else if (c === '"' || c === "'") {
+      const quote = c;
+      chars[i] = ' ';
+      i += 1;
+      while (i < len && chars[i] !== quote && chars[i] !== '\n') {
+        if (chars[i] === '\\' && i + 1 < len) {
+          chars[i] = ' ';
+          i += 1;
+        }
+        chars[i] = ' ';
+        i += 1;
+      }
+      if (i < len && chars[i] === quote) {
+        chars[i] = ' ';
+        i += 1;
+      }
+    } else {
+      i += 1;
+    }
+  }
+
+  return chars.join('');
+}
