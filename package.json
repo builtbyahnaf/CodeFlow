@@ -119,7 +119,7 @@
       },
       {
         "command": "codeflow.showToolchainGuide",
-        "title": "Show Toolchain Setup Guide",
+        "title": "Show Toolchain Setup Guide (C/C++)",
         "category": "CodeFlow"
       }
     ],
