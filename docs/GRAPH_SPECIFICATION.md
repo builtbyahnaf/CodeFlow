@@ -517,3 +517,27 @@ Every neighbor page and call-graph DTO carries a mandatory `scope` and
 - **Expand/collapse eviction:** `createCallGraphSession` computes reachability
   from `centerSymbolId` solely through `expandedSymbolIds`, evicting unreachable
   descendants on collapse so repeated expand/collapse cycles cannot leak state.
+
+---
+
+## 13. Progressive Semantic Zoom (Phase 10)
+
+### 13.1 Six-Level Hierarchy (`src/core/graph/zoom/levels.js`)
+
+| Level            | Identifier    | Granularity                                                              | Node Cap      |
+| ---------------- | ------------- | ------------------------------------------------------------------------ | ------------- |
+| **L0 Workspace** | `'workspace'` | Top-level directory clusters + bundled directory dependency edges        | `60` clusters |
+| **L1 Module**    | `'module'`    | Files and immediate subdirectories within a chosen module prefix         | `120` nodes   |
+| **L2 File**      | `'file'`      | Symbols declared in the file, grouped into kind clusters when `> 120`    | `120` nodes   |
+| **L3 Symbol**    | `'symbol'`    | 1-hop caller/callee ego neighborhood                                     | `150` nodes   |
+| **L4 Function**  | `'function'`  | CFG nodes, clustering construct regions when node count `> 150`          | `150` nodes   |
+| **L5 Statement** | `'statement'` | Statement-level detail inside a construct + Phase 11 `overlays.dfg` slot | `100` nodes   |
+
+### 13.2 Non-Negotiable Aggregation & Semantic Preservation Invariants
+
+1. **Status distribution (`distributions.js`, AC-10.5):** An aggregate node or edge bundle carries a `statusMix` distribution (`{ resolved, inferred, possible, unresolved, stale }`, `total`, `displayStatus`, `completeness`, `unmodeledCount`, `degradationCount`, `badges`). Whenever an aggregate contains any non-resolved member alongside resolved members, `displayStatus` is `'mixed'` — never `'resolved'`.
+2. **Above-the-fold uncertainty badges:** Unresolved, possible, stale, unmodeled, and degraded counts are surfaced directly in `badges` (e.g. `"3 unresolved"`, `"1 unmodeled"`).
+3. **Per-type edge bundling (`edgeBundles.js`):** `bundleClusterEdges` groups edges strictly by `(fromCluster, toCluster, relationshipType)` and never merges `calls` with `references` or `imports`.
+4. **Paginated member reveal (`expansion.js`, AC-10.3):** Every cluster and edge bundle expands via `createClusterExpansionService` (`defaultPageSize: 50`, `maxPageSize: 100`) returning `nextCursor`, `remainingCount`, and `moreLabel` (`"N more"`), cached per `(graphId, clusterId, runId)`.
+5. **Bounded zoom gestures (`evaluateZoomGesture`, AC-10.6):** Wheel/pinch zoom scales visually by default and never transitions semantic levels more than once per gesture or while mid-pan.
+6. **Anchored incremental layout (`layout.js`, AC-10.7):** `computeAnchoredIncrementalLayout` anchors expansion at the expanded cluster's coordinates and reuses existing node positions by ID, honoring `prefers-reduced-motion` (`transitionMs: 0`).
