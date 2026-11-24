@@ -99,3 +99,41 @@ export function maskCommentsAndStrings(text) {
 
   return chars.join('');
 }
+
+/**
+ * Find matching closing parenthesis from an opening '('.
+ *
+ * @param {string} text
+ * @param {number} openParenIndex
+ * @returns {number} index of matching ')' or -1
+ */
+export function findMatchingParen(text, openParenIndex) {
+  let depth = 0;
+  for (let i = openParenIndex; i < text.length; i += 1) {
+    if (text[i] === '(') depth += 1;
+    else if (text[i] === ')') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Find matching closing brace from an opening '{'.
+ *
+ * @param {string} text
+ * @param {number} openBraceIndex
+ * @returns {number} index of matching '}' or -1
+ */
+export function findMatchingBrace(text, openBraceIndex) {
+  let depth = 0;
+  for (let i = openBraceIndex; i < text.length; i += 1) {
+    if (text[i] === '{') depth += 1;
+    else if (text[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
