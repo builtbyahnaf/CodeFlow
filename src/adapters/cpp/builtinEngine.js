@@ -247,5 +247,36 @@ export function parseCppSource(input) {
   const masked = maskCommentsAndStrings(text);
   const fnRegex = /(?:^|[;}{\n])\s*([a-zA-Z_~][a-zA-Z0-9_:<>&*,\s]*?)\s+([a-zA-Z_~][a-zA-Z0-9_]*)\s*\(/g;
   let match;
-  // fnRegex ready
+  while ((match = fnRegex.exec(masked)) !== null) {
+    const fnName = match[2];
+    if (CPP_KEYWORDS.has(fnName)) {
+      continue;
+    }
+
+    const parenOpen = fnRegex.lastIndex - 1;
+    const parenClose = findMatchingParen(masked, parenOpen);
+    if (parenClose === -1) {
+      continue;
+    }
+
+    let braceIndex = parenClose + 1;
+    while (braceIndex < masked.length && /\s/.test(masked[braceIndex])) {
+      braceIndex += 1;
+    }
+
+    const afterParen = masked.slice(parenClose + 1, Math.min(masked.length, parenClose + 120));
+    const braceMatch = afterParen.match(/^[^{;]*\{/);
+    if (!braceMatch) {
+      continue;
+    }
+
+    const openBrace = parenClose + 1 + braceMatch[0].length - 1;
+    const closeBrace = findMatchingBrace(masked, openBrace);
+    if (closeBrace === -1) {
+      continue;
+    }
+    // body boundaries ready
+    fnRegex.lastIndex = closeBrace + 1;
+  }
+  // functions loop done
 }
