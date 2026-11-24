@@ -13,6 +13,7 @@ import { createAdapterRegistry } from '../core/adapterRegistry.js';
 import { mockAdapter } from '../adapters/mock/index.js';
 import { CPP_ADAPTER_ID, cppAdapter } from '../adapters/cpp/index.js';
 import { C_ADAPTER_ID, cAdapter } from '../adapters/c/index.js';
+import { javaAdapter } from '../adapters/java/index.js';
 import { JS_ADAPTER_ID, javascriptAdapter } from '../adapters/javascript/index.js';
 import { createCppAnalysisService } from './cpp/pipeline.js';
 import { createJavaScriptAnalysisService } from './javascript/pipeline.js';
@@ -72,6 +73,7 @@ export async function activate(context) {
   registry.register(mockAdapter);
   registry.register(cppAdapter);
   registry.register(cAdapter);
+  registry.register(javaAdapter);
   registry.register(javascriptAdapter);
 
   const cppAnalysis = createCppAnalysisService({
