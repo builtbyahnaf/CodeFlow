@@ -59,6 +59,7 @@ export function renderPanelHtml({
     </header>
 
     <div id="cf-banner" class="cf-banner" role="alert" hidden></div>
+    <div id="cf-fn-summary" class="cf-fn-summary" role="region" aria-label="Function summary" hidden></div>
 
     <main class="cf-main">
       <section class="cf-canvas-wrap" aria-label="Graph">
@@ -91,6 +92,7 @@ export function renderPanelHtml({
             </button>
           </header>
           <div id="cf-preview-meta" class="cf-preview-meta"></div>
+          <div id="cf-preview-explain" class="cf-preview-explain" hidden></div>
           <div id="cf-preview-body" class="cf-preview-body" tabindex="0"></div>
           <footer class="cf-preview-foot">
             <span id="cf-preview-note" class="cf-preview-note" role="status"></span>
@@ -105,6 +107,26 @@ export function renderPanelHtml({
         <div id="cf-detail-body" class="cf-detail-body">
           <p class="cf-muted">Select a node to inspect it.</p>
         </div>
+        <section id="cf-explain" class="cf-explain" aria-label="Explanation" hidden>
+          <div class="cf-explain-head">
+            <h2 class="cf-detail-title">Explanation</h2>
+            <select id="cf-explain-depth" class="cf-select cf-explain-depth" aria-label="Explanation depth">
+              <option value="1">1 · Basic</option>
+              <option value="2" selected>2 · Intermediate</option>
+              <option value="3">3 · Advanced</option>
+              <option value="4">4 · Deep</option>
+            </select>
+          </div>
+          <div id="cf-explain-items" class="cf-explain-items"></div>
+          <details id="cf-explain-evidence" class="cf-explain-disclosure" hidden>
+            <summary>Why this?</summary>
+            <ul id="cf-explain-evidence-list" class="cf-explain-evidence-list"></ul>
+          </details>
+          <details id="cf-explain-limits" class="cf-explain-disclosure" open hidden>
+            <summary>Limitations</summary>
+            <p id="cf-explain-limits-text" class="cf-explain-limits-text"></p>
+          </details>
+        </section>
         <h2 class="cf-detail-title">Legend</h2>
         <ul id="cf-legend" class="cf-legend"></ul>
       </aside>
