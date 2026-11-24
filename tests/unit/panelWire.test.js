@@ -740,3 +740,60 @@ test('calls.load, calls.outgoing, calls.incoming, expand, collapse, filter, and 
   assert.equal(filtered.kind, 'calls.data');
   assert.equal(loads, 1);
 });
+
+test('index.status returns index stats and health, and indexed indexProvider upgrades call graph scope', async () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:index-wire',
+    path: 'src/a.js',
+    text: 'export function a(x) { return x + 1; }\n',
+  });
+  const symA = run.symbols.find((s) => s.name === 'a');
+  const fakeIndexProvider = {
+    scope: 'complete',
+    isIndexed: () => true,
+    callsByFrom: () => [],
+    callsByTo: () => [],
+    symbolById: (id) => (id === symA.symbolId ? symA : null),
+    batchNeighbors: () => ({ symbols: [symA], relationships: [] }),
+    allSymbols: () => [symA],
+    allRelationships: () => [],
+    stats: () => ({
+      state: 'complete',
+      schemaVersion: 1,
+      fileCount: 1,
+      symbolCount: 1,
+      relationshipCount: 0,
+      dependencyCount: 0,
+      staleFileCount: 0,
+      scope: 'complete',
+    }),
+    health: () => ({
+      ok: true,
+      integrity: 'ok',
+      schemaVersion: 1,
+      state: 'complete',
+      staleFileCount: 0,
+      scope: 'complete',
+      issues: [],
+    }),
+  };
+
+  const { wire } = createHarness(async () => ({ ok: true, run }), undefined, {
+    indexProvider: fakeIndexProvider,
+  });
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const ready = await panel.request('webview.ready', {});
+  assert.equal(ready.payload.capabilities.projectIndex, true);
+
+  const status = await panel.request('index.status', {});
+  assert.equal(status.kind, 'index.data');
+  assert.equal(status.payload.ok, true);
+  assert.equal(status.payload.stats.state, 'complete');
+  assert.equal(status.payload.health.integrity, 'ok');
+
+  const callLoaded = await panel.request('calls.load', { symbolId: symA.symbolId });
+  assert.equal(callLoaded.kind, 'calls.data');
+  assert.equal(callLoaded.payload.dto.scope, 'complete');
+});
