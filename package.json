@@ -264,6 +264,13 @@
           "type": "boolean",
           "default": true,
           "description": "Expand analysis limitation disclosures by default. Limitations remain accessible for honesty even when collapsed."
+        },
+        "codeflow.index.debounceMs": {
+          "type": "number",
+          "default": 350,
+          "minimum": 100,
+          "maximum": 2000,
+          "description": "Per-document debounce delay in milliseconds before incremental index analysis runs after an edit."
         }
       }
     }
@@ -287,6 +294,7 @@
     "test:explanation": "node --test \"tests/unit/explanation*.test.js\"",
     "test:calls": "node --test \"tests/unit/callGraph*.test.js\"",
     "test:index": "node --test \"tests/unit/index*.test.js\"",
+    "test:incremental": "node --test \"tests/unit/incremental*.test.js\"",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
