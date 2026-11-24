@@ -27,7 +27,14 @@ import { buildDiagnosticsReport, openDiagnosticsDocument } from './diagnostics.j
  *   extensionVersion: string,
  * }} options
  */
-export function registerCommands({ context, logger, panelManager, registry, extensionVersion }) {
+export function registerCommands({
+  context,
+  logger,
+  panelManager,
+  registry,
+  extensionVersion,
+  indexService = null,
+}) {
   /**
    * @param {string} commandId
    * @param {() => unknown | Promise<unknown>} handler
@@ -168,5 +175,40 @@ export function registerCommands({ context, logger, panelManager, registry, exte
 
   register('codeflow.showLog', () => {
     logger.show();
+  });
+
+  register('codeflow.indexWorkspace', async () => {
+    logger.info('command.indexWorkspace');
+    return indexService?.indexWorkspace?.();
+  });
+
+  register('codeflow.cancelIndexing', () => {
+    logger.info('command.cancelIndexing');
+    return indexService?.cancelIndexing?.();
+  });
+
+  register('codeflow.rebuildIndex', async () => {
+    logger.info('command.rebuildIndex');
+    return indexService?.rebuildIndex?.();
+  });
+
+  register('codeflow.repairIndex', async () => {
+    logger.info('command.repairIndex');
+    return indexService?.repairIndex?.();
+  });
+
+  register('codeflow.showIndexStatus', async () => {
+    logger.info('command.showIndexStatus');
+    return indexService?.showIndexStatus?.();
+  });
+
+  register('codeflow.clearIndex', async () => {
+    logger.info('command.clearIndex');
+    return indexService?.clearIndex?.();
+  });
+
+  register('codeflow.openIndexConfiguration', async () => {
+    logger.info('command.openIndexConfiguration');
+    return indexService?.openIndexConfiguration?.();
   });
 }
