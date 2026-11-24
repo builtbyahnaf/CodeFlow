@@ -1,0 +1,37 @@
+{
+  "id": "0x4000",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "naive-c",
+      "kind": "FunctionDecl",
+      "name": "naïve",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "D:/w/src/unicode.c", "line": 1, "col": 34 },
+      "range": {
+        "begin": { "line": 1, "col": 34 },
+        "end": { "line": 1, "col": 65 }
+      },
+      "inner": [
+        {
+          "id": "naive-c-p1",
+          "kind": "ParmVarDecl",
+          "name": "値",
+          "type": { "qualType": "int" },
+          "loc": { "line": 1, "col": 16 },
+          "range": {
+            "begin": { "line": 1, "col": 16 },
+            "end": { "line": 1, "col": 25 }
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "range": {
+            "begin": { "line": 1, "col": 27 },
+            "end": { "line": 1, "col": 65 }
+          }
+        }
+      ]
+    }
+  ]
+}
