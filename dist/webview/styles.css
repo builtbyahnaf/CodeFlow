@@ -794,3 +794,80 @@ body {
   margin: 4px 0 0;
   color: var(--cf-fg);
 }
+
+/* Phase 7 — Call-graph perspective, scope banner, focus dimming, cycles */
+
+.cf-scope-banner {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--vscode-editorInfo-background, #1a2b3c);
+  color: var(--cf-fg);
+  font-size: 12px;
+}
+
+.cf-scope-banner[hidden] {
+  display: none;
+}
+
+.cf-calls-panel {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--cf-border);
+}
+
+.cf-calls-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cf-calls-toolbar .cf-detail-title {
+  margin: 0;
+}
+
+.cf-calls-node-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cf-calls-node-actions .cf-button {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.cf-calls-group {
+  margin-top: 8px;
+}
+
+.cf-calls-list {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.cf-node--center .cf-node-box {
+  stroke-width: 2.6;
+  fill: color-mix(in srgb, var(--cf-accent) 16%, var(--cf-bg));
+}
+
+.cf-node--kind-unresolved_bucket .cf-node-box {
+  stroke: var(--cf-status-unresolved);
+  stroke-dasharray: 4 3;
+}
+
+.cf-edge--cycle {
+  stroke-width: 2.2;
+}
+
+.cf-node.is-dimmed,
+.cf-edge.is-dimmed {
+  opacity: 0.25;
+}
