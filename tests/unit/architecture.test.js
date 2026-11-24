@@ -164,6 +164,28 @@ test('the CSR layer does not import the graph layer or adapters', async () => {
   }
 });
 
+test('the explanation layer is isolated from host/adapters/network and reads CSR through query', async () => {
+  const forbiddenImports = ['adapters', 'extension', 'webview', 'visualization', 'vscode', 'http', 'https'];
+  const rawRunPatterns = [/\brun\.symbols\b/, /\brun\.relationships\b/, /\brun\.controlConstructs\b/, /\brun\.dataFacts\b/];
+  for (const file of await listSourceFiles('src/core/explanation')) {
+    const { source, imports } = await readWithImports(file);
+    for (const specifier of imports) {
+      for (const token of forbiddenImports) {
+        assert.ok(
+          !specifier.includes(token),
+          `${file} imports "${specifier}"; explanation engine must stay independent of ${token}`,
+        );
+      }
+    }
+    for (const pattern of rawRunPatterns) {
+      assert.ok(
+        !pattern.test(source),
+        `${file} accesses ${pattern}; explanation engine must use createQueryLayer()`,
+      );
+    }
+  }
+});
+
 test('the activation path never touches the file system or spawns processes', async () => {
   const activationPath = [
     'src/extension/extension.js',
