@@ -50,6 +50,9 @@ export function defaultClangCandidates(platform = process.platform) {
       'C:\\Program Files\\LLVM\\bin\\clang.exe',
       'C:\\Program Files (x86)\\LLVM\\bin\\clang++.exe',
       'C:\\Program Files (x86)\\LLVM\\bin\\clang.exe',
+      'C:\\msys64\\mingw64\\bin\\clang++.exe',
+      'C:\\msys64\\ucrt64\\bin\\clang++.exe',
+      'C:\\msys64\\clang64\\bin\\clang++.exe',
     ];
   }
   return ['clang++', 'clang'];
