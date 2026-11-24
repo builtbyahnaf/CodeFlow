@@ -316,7 +316,26 @@ export function parseCppSource(input) {
       rel.status = 'resolved';
     }
   }
-  // internal calls resolved
+  if (symbols.length === 1 && text.trim().length > 0) {
+    const mainSymId = allocator.symbol({
+      path: filePath,
+      kind: 'function',
+      qualifiedName: 'main',
+    }).symbolId;
+    const fallbackFn = createSymbol({
+      symbolId: mainSymId,
+      kind: 'function',
+      name: 'main',
+      qualifiedName: 'main',
+      language,
+      declaration: rangeOf(0, Math.min(100, text.length)),
+      visibility: 'public',
+    });
+    symbols.push(fallbackFn);
+    functionSymbolsByName.set('main', fallbackFn);
+    parseBodyConstructs(masked, 0, mainSymId, rangeOf, controlConstructs, relationships);
+  }
+  // fallback top-level symbol ready
 }
 
 /**
