@@ -165,7 +165,9 @@ export function createSvgRenderer(options) {
       }
       const path = /** @type {SVGPathElement} */ (
         svgEl('path', {
-          class: `cf-edge cf-edge--${edge.status} cf-edge--kind-${edge.kind ?? edge.type}`,
+          class: `cf-edge cf-edge--${edge.status} cf-edge--kind-${edge.kind ?? edge.type}${
+            edge.isCycle ? ' cf-edge--cycle' : ''
+          }${edge.dimmed ? ' is-dimmed' : ''}`,
           d: edgePath(source, target),
           'data-from': edge.from,
           'data-to': edge.to,
@@ -201,7 +203,9 @@ export function createSvgRenderer(options) {
         svgEl('g', {
           class: `cf-node cf-node--${node.status} cf-node--kind-${node.kind}${
             node.external ? ' cf-node--external' : ''
-          }${node.unreachable ? ' cf-node--unreachable' : ''}`,
+          }${node.unreachable ? ' cf-node--unreachable' : ''}${
+            node.isCenter ? ' cf-node--center' : ''
+          }${node.isCyclic ? ' cf-node--cyclic' : ''}${node.dimmed ? ' is-dimmed' : ''}`,
           transform: `translate(${node.position.x} ${node.position.y})`,
           tabindex: '0',
           role: 'button',
