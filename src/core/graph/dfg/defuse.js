@@ -184,3 +184,68 @@ export function extractParamSites(entryNodeId, params, ordinalMap) {
  * @param {Map<string, number>} ordinalMap
  * @returns {DefUseSite}
  */
+export function extractConservativeKill(cfgNodeId, binding, callStatus, ordinalMap) {
+  const ordKey = `${cfgNodeId}:${binding.id}`;
+  const ordinal = nextOrdinal(ordinalMap, ordKey);
+  const nodeId = makeFlowNodeId(binding.id, cfgNodeId, ordinal);
+
+  return {
+    nodeId,
+    bindingId: binding.id,
+    kind: 'kill',
+    status: callStatus === 'unresolved' ? 'unresolved' : 'possible',
+    reasonCode: 'unresolved_call',
+    range: null,
+  };
+}
+
+/**
+ * Synthesize a closure-capture site for a binding captured by an inner function.
+ *
+ * @param {string} cfgNodeId
+ * @param {BindingRecord} binding
+ * @param {string} capturingFunctionId
+ * @param {Map<string, number>} ordinalMap
+ * @returns {DefUseSite}
+ */
+export function extractCaptureSite(cfgNodeId, binding, capturingFunctionId, ordinalMap) {
+  const ordKey = `${cfgNodeId}:${binding.id}`;
+  const ordinal = nextOrdinal(ordinalMap, ordKey);
+  const nodeId = makeFlowNodeId(binding.id, cfgNodeId, ordinal);
+
+  return {
+    nodeId,
+    bindingId: binding.id,
+    kind: 'kill',       // capturing implies possible future mutation
+    status: 'inferred',
+    reasonCode: 'capture_mutation',
+    range: null,
+  };
+}
+
+/**
+ * When an `unmodeled` CFG node is present, all bindings that are mutable
+ * in its scope get a conservative kill site.
+ *
+ * @param {string} cfgNodeId
+ * @param {BindingRecord[]} bindings
+ * @param {Map<string, number>} ordinalMap
+ * @returns {DefUseSite[]}
+ */
+export function extractUnmodeledKills(cfgNodeId, bindings, ordinalMap) {
+  return bindings
+    .filter((b) => b.isMutable)
+    .map((b) => {
+      const ordKey = `${cfgNodeId}:${b.id}`;
+      const ordinal = nextOrdinal(ordinalMap, ordKey);
+      const nodeId = makeFlowNodeId(b.id, cfgNodeId, ordinal);
+      return {
+        nodeId,
+        bindingId: b.id,
+        kind: /** @type {'kill'} */ ('kill'),
+        status: /** @type {'possible'} */ ('possible'),
+        reasonCode: 'unmodeled_region',
+        range: null,
+      };
+    });
+}
