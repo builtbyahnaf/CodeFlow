@@ -42,3 +42,21 @@ CodeFlow automatically searches `/opt/homebrew/bin/clang++` (Apple Silicon) and 
 ```bash
 xcode-select --install
 ```
+
+## Linux Setup
+
+### Ubuntu / Debian
+```bash
+sudo apt update
+sudo apt install clang clang-tools
+```
+
+### Fedora / RHEL
+```bash
+sudo dnf install clang clang-tools-extra
+```
+
+### Arch Linux
+```bash
+sudo pacman -S clang
+```
