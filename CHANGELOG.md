@@ -8,6 +8,61 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.1045] - 2026-11-24
+
+### Phase 10 — Progressive Semantic Zoom
+
+A six-level satellite-map exploration model (`L0 Workspace` → `L1 Module` →
+`L2 File` → `L3 Symbol` → `L4 Function` → `L5 Statement`) that rolls up
+10,000-file repositories into bounded, honest clusters without collapsing status
+distributions or hiding unresolved calls, and descends to individual statements
+in five deliberate actions. See `docs/PHASE-10-REPORT.md` and
+`docs/GRAPH_SPECIFICATION.md` (§13).
+
+- **Semantic zoom core** (`src/core/graph/zoom/`):
+  - `levels.js`: `ZOOM_LEVELS` (`workspace`, `module`, `file`, `symbol`,
+    `function`, `statement`), `LEVEL_CAPS` (`60`, `120`, `120`, `150`, `150`,
+    `100`), Phase 11 `OVERLAY_SLOTS.DFG`, and `evaluateZoomGesture` (visual zoom
+    by default, max one transition per gesture, blocked while panning).
+  - `distributions.js`: `createStatusDistribution` and
+    `mergeStatusDistributions` preserving exact per-status counts, reporting
+    `displayStatus: 'mixed'` whenever non-resolved members coexist with
+    resolved members, and surfacing above-the-fold uncertainty badges.
+  - `breadcrumbs.js`: `createNavigationStack` and `formatBreadcrumbSegments`
+    tracking explicit descent and restoring saved ancestor `{ viewport,
+selection, focusId }` on breadcrumb navigation.
+  - `edgeBundles.js`: `bundleClusterEdges` and `formatEdgeBundleLabel` bundling
+    strictly per relationship type (`"12 calls (2 unresolved)"`) without merging
+    `calls` and `references`.
+  - `expansion.js`: `createClusterExpansionService` paginating cluster members
+    and bundled edges (`50` default / `100` max page) with `"N more"`
+    affordances, `(graphId, clusterId, runId)` caching, and inline retryable
+    failure isolation.
+  - `aggregator.js`: `buildWorkspaceOverview`, `buildModuleView`,
+    `buildFileView` (kind clustering when dense), `buildFunctionView`
+    (construct clustering above 150 CFG nodes), and `buildStatementView` (with
+    `overlays.dfg` slot).
+  - `search.js`: `searchAcrossZoomLevels`, `resolveSearchTargetBreadcrumbs`
+    (auto-expanding ancestor breadcrumbs for any matched symbol),
+    `applyZoomFilters` with visible filter chips, and
+    `computeDirectionalHighlight`.
+  - `layout.js`, `minimap.js`, `persistence.js`, & `session.js`:
+    `computeAnchoredIncrementalLayout` (`prefers-reduced-motion` support),
+    `virtualizeViewport`, `buildMinimapModel`, `recenterViewportFromMinimap`,
+    `serializeZoomNavigationState`, `restoreZoomNavigationState` (deepest
+    surviving ancestor fallback), and `createSemanticZoomSession`.
+
+- **Protocol, host, commands, and webview** (`src/core/protocol/`,
+  `src/core/graph/dto.js`, `src/extension/`, `src/webview/`, `package.json`):
+  - Added `zoom.open`, `zoom.descend`, `zoom.breadcrumb`, `zoom.expand`,
+    `zoom.search`, `zoom.filter`, `zoom.focus` (webview → host) and `zoom.data`,
+    `zoom.members`, `zoom.results` (host → webview).
+  - Added `codeflow.showWorkspaceOverview` command, semantic zoom DTO validation,
+    and webview semantic zoom navigation bar, breadcrumbs, search input, filter
+    chips, cluster members panel, and minimap container.
+  - Added `npm run test:zoom` (11 unit test suites, 14 tests; 617 total unit +
+    conformance tests passing).
+
 ## [0.1.988] - 2026-11-24
 
 ### Phase 9 — Incremental Indexing and Hybrid Execution
