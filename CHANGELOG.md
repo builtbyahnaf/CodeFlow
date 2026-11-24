@@ -8,6 +8,54 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [1.0.0] - 2026-11-24
+
+### Phase 12 — V1 UX, Accessibility, and Production Hardening
+
+Official V1 release of CodeFlow for Visual Studio Code. Turns a working static
+analysis engine into a fully hardened, accessible, and verified product across
+mandatory light/dark/high-contrast themes, end-to-end keyboard and screen-reader
+accessibility, settings UX, failure containment, zero-upload network isolation,
+performance regression baselines, and complete normative documentation.
+See `docs/PHASE-12-REPORT.md` and `docs/V1-RELEASE-REPORT.md`.
+
+- **Theme & Colorblind Safety** (`src/visualization/theme/`):
+  - `tokens.js`: semantic token tables (`THEME_ROLES`) for dark, light, and high-contrast
+    themes with automated WCAG AA contrast validation (text >= 4.5:1, non-text UI >= 3:1).
+  - `patterns.js`: non-color visual markers (glyphs `✓`, `?`, `✗`, `⚠`, `↻`, SVG dash
+    arrays, and distinct border styles) ensuring 100% comprehension under monochrome/desaturation.
+- **Accessibility System** (`src/visualization/a11y/`):
+  - `keyboard.js`: complete keyboard navigation model (`evaluateKeyboardEvent`) with
+    directional spatial edge navigation, reading order sorter, and shortcuts registry.
+  - `outline.js`: accessible outline mode (`buildAccessibleOutline`, `renderOutlineHtml`)
+    providing a fully focusable, nested ARIA tree alternative to the visual canvas.
+  - `announcer.js`: `aria-live` announcement generators for level transitions, cluster
+    expansions, node selections, file staleness, and system notices.
+- **Settings UX & Hardening** (`src/extension/settings/`):
+  - `categories.js`: organized 27 contributed settings into 5 functional categories
+    (Analysis, Indexing, Preview, Explanation, Appearance).
+  - `validator.js`: schema validation, bounds clamping, and safe fallback handling.
+  - `docsSync.js`: CI synchronization checker enforcing 100% documentation coverage.
+  - Commands: registered `CodeFlow: Configure Settings` and `CodeFlow: Reset Settings to Defaults`.
+- **Error Handling & Diagnostics** (`src/core/errors/`, `src/extension/`):
+  - `taxonomy.js`: comprehensive taxonomy defining message, severity, and recovery action
+    for all 13 system error codes.
+  - `diagnosticsReport.js`: privacy-preserving markdown report generator with zero source
+    code and zero absolute path leakage.
+  - `errorContainment.js`: host crash containment wrapping protocol exceptions into typed envelopes.
+  - Failure injection: verified containment across 12 mandatory failure scenarios.
+- **Security & Network Guard** (`src/core/security/`):
+  - `pathContainment.js`: strict containment defense against traversal (`..`), UNC paths, and null bytes.
+  - Network guard: instrumented test proving exactly zero network requests during full analysis.
+  - Content Security Policy: verified strict sandbox (`default-src 'none'`, `connect-src 'none'`, nonce).
+  - Source execution audit: verified zero usage of `eval()`, `new Function()`, or dynamic code execution.
+- **Performance & Degradation Guarantees** (`src/core/perf/`):
+  - `baselines.js`: machine-readable workflow profiling targets with 20% regression ceilings.
+  - `memoryCeilings.js`: bounded LRU caches for DTO, preview, DFG, and cluster expansions.
+- **Documentation Suite**:
+  - Published `docs/PRD.md`, `docs/CONTRIBUTING.md`, `docs/KNOWN_LIMITATIONS.md`,
+    `docs/SECURITY.md`, `docs/PERFORMANCE.md`, `docs/PHASE-12-REPORT.md`, `docs/V1-RELEASE-REPORT.md`.
+
 ## [0.1.1095] - 2026-11-24
 
 ### Phase 11 — Data-Flow Analysis
