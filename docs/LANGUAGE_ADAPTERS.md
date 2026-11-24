@@ -389,6 +389,31 @@ codes, diagnostics and positions. Unit coverage lives in
 `tests/conformance/javascript.conformance.test.js`; run both with
 `npm run test:js`.
 
+## The C adapter (Phase 13)
+
+The C adapter (`src/adapters/c/index.js`, id `c-clang`) analyses C translation units
+(`.c`, `.h`). It consumes Clang AST JSON generated in C mode (`-x c`) and maps
+C constructs into the CSR:
+
+### Structural differences from C++
+
+1. **No classes or member methods**: All functions reside in translation unit scope.
+   Storage classes determine linkage: `static` produces private file-scope visibility,
+   while default/`extern` produces public linkage.
+2. **First-class function pointers**: Indirect calls through function pointer variables
+   are tracked by `src/adapters/c/functionPointers.js`. Call sites resolve to known candidate
+   functions and are marked `possible` with reason code `function_pointer`.
+3. **Struct and union records**: Structs and unions are mapped to CSR `struct` symbols,
+   with unions carrying `extensions.isUnion = true`. Field members are mapped to `field`
+   symbols with `defines` relationships from the enclosing record.
+4. **Header dependency graph**: `#include` relationships are modeled explicitly via
+   `src/adapters/c/headers.js`. Workspace quote headers produce `includes` relationships,
+   while system library headers (`<stdio.h>`, `<stdlib.h>`) are cataloged against
+   `C_SYSTEM_HEADERS`.
+5. **Control-flow jumps**: C `goto`, labels, `switch`/`case` branches, loops, and abnormal
+   exits (`abort()`, `exit()`) are translated into language-neutral `ControlConstruct` records
+   for CFG construction.
+
 ## Reference implementation: the mock adapter
 
 `src/adapters/mock/index.js` is the fixture that exercises the whole contract:
@@ -414,6 +439,7 @@ adds the constructs capability to real adapters.
 | 1     | Mock                    | Shipped | Contract fixture on `.mock` only                                    |
 | 2     | C++ (`cpp-clang`)       | Shipped | Route A; host-driven Clang AST JSON; compile-DB and heuristic modes |
 | 3     | JavaScript (`js-acorn`) | Shipped | acorn + eslint-scope; conservative module and receiver resolution   |
+| 13    | C (`c-clang`)           | Shipped | Native C adapter; function pointers; #include dependency graph     |
 | 7     | C++ cross-file evidence | Planned | May add `clangd` evidence without redefining resolution statuses    |
 
 Every adapter must satisfy the same CSR and the same conformance suite. No
