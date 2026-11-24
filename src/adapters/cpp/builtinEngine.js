@@ -96,12 +96,14 @@ export function maskCommentsAndStrings(text) {
       const quote = c;
       chars[i] = ' ';
       i += 1;
-      while (i < len && chars[i] !== quote && chars[i] !== '\n') {
+      while (i < len && chars[i] !== quote) {
         if (chars[i] === '\\' && i + 1 < len) {
           chars[i] = ' ';
           i += 1;
         }
-        chars[i] = ' ';
+        if (chars[i] !== '\n') {
+          chars[i] = ' ';
+        }
         i += 1;
       }
       if (i < len && chars[i] === quote) {
@@ -302,20 +304,6 @@ export function parseCppSource(input) {
     parseBodyConstructs(bodyText, bodyOffset, symId, rangeOf, controlConstructs, relationships);
     fnRegex.lastIndex = closeBrace + 1;
   }
-  // Resolve internal call relationships
-  for (const rel of relationships) {
-    if (functionSymbolsByName.has(rel.to)) {
-      rel.to = functionSymbolsByName.get(rel.to).symbolId;
-      rel.status = 'resolved';
-    } else {
-      rel.to = `external:${rel.to}`;
-      rel.status = 'unresolved';
-      rel.reasonCode = 'out_of_scope';
-    }
-      rel.to = functionSymbolsByName.get(rel.to).symbolId;
-      rel.status = 'resolved';
-    }
-  }
   if (symbols.length === 1 && text.trim().length > 0) {
     const mainSymId = allocator.symbol({
       path: filePath,
@@ -334,6 +322,18 @@ export function parseCppSource(input) {
     symbols.push(fallbackFn);
     functionSymbolsByName.set('main', fallbackFn);
     parseBodyConstructs(masked, 0, mainSymId, rangeOf, controlConstructs, relationships);
+  }
+
+  // Resolve internal call relationships
+  for (const rel of relationships) {
+    if (functionSymbolsByName.has(rel.to)) {
+      rel.to = functionSymbolsByName.get(rel.to).symbolId;
+      rel.status = 'resolved';
+    } else {
+      rel.to = `external:${rel.to}`;
+      rel.status = 'unresolved';
+      rel.reasonCode = 'out_of_scope';
+    }
   }
   const fileRecord = createFileRecord({
     fileId,
