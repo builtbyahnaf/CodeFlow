@@ -658,3 +658,35 @@ test('source handlers degrade with typed errors when no source service is inject
   assert.equal(navigation.payload.code, 'E_NAVIGATION_UNAVAILABLE');
 });
 
+test('explain.node and explain.function return grounded explanations without triggering analysis', async () => {
+  const run = analyzeClassify();
+  let loads = 0;
+  const { wire } = createHarness(async () => {
+    loads += 1;
+    return { ok: true, run };
+  });
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const before = await panel.requestRaw('explain.function', { depth: 2 });
+  assert.equal(before.kind, 'protocol.error');
+  assert.equal(before.payload.code, 'E_NO_ANALYSIS');
+  assert.equal(loads, 0, 'explain request must never trigger analysis');
+
+  const fns = await panel.request('cfg.functions', {});
+  const cfgRes = await panel.request('cfg.load', { symbolId: fns.payload.functions[0].symbolId });
+  assert.equal(loads, 1);
+
+  const fnExplain = await panel.request('explain.function', { depth: 2 });
+  assert.equal(fnExplain.kind, 'explain.data');
+  assert.equal(fnExplain.payload.ok, true);
+  assert.match(fnExplain.payload.summary, /classify/);
+
+  const nodeId = cfgRes.payload.dto.nodes[0].id;
+  const nodeExplain = await panel.request('explain.node', { nodeId, depth: 2 });
+  assert.equal(nodeExplain.kind, 'explain.data');
+  assert.equal(nodeExplain.payload.ok, true);
+  assert.ok(nodeExplain.payload.items.length >= 1);
+  assert.equal(loads, 1);
+});
+
