@@ -191,3 +191,26 @@ describe('validateDfg – edge validation', () => {
 // createEmptyDfg
 // ---------------------------------------------------------------------------
 
+describe('createEmptyDfg', () => {
+  it('produces a valid partial DFG', () => {
+    const dfg = createEmptyDfg('fn:foo', 'file:a.js', 'missing_cfg', 'No CFG available.');
+    assert.equal(dfg.partial, true);
+    assert.ok(dfg.partialReasons.includes('missing_cfg'));
+    assert.ok(dfg.limitations.includes('No CFG available.'));
+    assert.deepEqual(dfg.nodes, []);
+    assert.deepEqual(dfg.edges, []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// dfgCacheKey
+// ---------------------------------------------------------------------------
+
+describe('dfgCacheKey', () => {
+  it('produces stable keys', () => {
+    assert.equal(dfgCacheKey('fn:foo', 'abc123'), dfgCacheKey('fn:foo', 'abc123'));
+  });
+  it('produces different keys for different functions', () => {
+    assert.notEqual(dfgCacheKey('fn:foo', 'abc'), dfgCacheKey('fn:bar', 'abc'));
+  });
+});
