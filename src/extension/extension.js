@@ -18,6 +18,7 @@ import { createJavaScriptAnalysisService } from './javascript/pipeline.js';
 import { runTool } from './tooling/runTool.js';
 import { createPanelManager } from './panel.js';
 import { registerCommands } from './commands.js';
+import { createWorkspaceIndexService } from './indexing/service.js';
 import { PROTOCOL_VERSION } from '../core/protocol/envelope.js';
 
 const EXTENSION_VERSION = '0.0.1';
@@ -101,12 +102,20 @@ export async function activate(context) {
     },
   };
 
+  const indexService = createWorkspaceIndexService({
+    context,
+    logger,
+    analysis,
+    extensionVersion: EXTENSION_VERSION,
+  });
+
   const panelManager = createPanelManager({
     context,
     logger,
     registry,
     analysis,
     extensionVersion: EXTENSION_VERSION,
+    indexProvider: indexService.indexProvider,
   });
 
   registerCommands({
@@ -115,10 +124,12 @@ export async function activate(context) {
     panelManager,
     registry,
     extensionVersion: EXTENSION_VERSION,
+    indexService,
   });
 
   context.subscriptions.push({
     dispose() {
+      indexService.dispose();
       panelManager.dispose();
     },
   });
@@ -137,6 +148,7 @@ export async function activate(context) {
     registry,
     analysis,
     panelManager,
+    indexService,
     logger,
   };
 }
