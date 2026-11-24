@@ -29,3 +29,16 @@ If you use MSYS2:
 pacman -S mingw-w64-x86_64-clang
 ```
 CodeFlow automatically probes `C:\msys64\mingw64\bin\clang++.exe`.
+
+## macOS Setup
+
+### Option 1: Homebrew (Recommended)
+```bash
+brew install llvm
+```
+CodeFlow automatically searches `/opt/homebrew/bin/clang++` (Apple Silicon) and `/usr/local/bin/clang++` (Intel).
+
+### Option 2: Apple Command Line Tools
+```bash
+xcode-select --install
+```
