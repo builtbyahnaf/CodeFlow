@@ -796,4 +796,25 @@ test('index.status returns index stats and health, and indexed indexProvider upg
   const callLoaded = await panel.request('calls.load', { symbolId: symA.symbolId });
   assert.equal(callLoaded.kind, 'calls.data');
   assert.equal(callLoaded.payload.dto.scope, 'complete');
+
+  const zoomOpened = await panel.request('zoom.open', {});
+  assert.equal(zoomOpened.kind, 'zoom.data');
+  assert.equal(zoomOpened.payload.dto.dtoKind, 'semantic_zoom');
+  assert.equal(zoomOpened.payload.dto.level, 'workspace');
+
+  const zoomDescended = await panel.request('zoom.descend', {
+    level: 'module',
+    scopeId: 'src',
+    label: 'src',
+  });
+  assert.equal(zoomDescended.kind, 'zoom.data');
+  assert.equal(zoomDescended.payload.dto.level, 'module');
+
+  const zoomBack = await panel.request('zoom.breadcrumb', { index: 0 });
+  assert.equal(zoomBack.kind, 'zoom.data');
+  assert.equal(zoomBack.payload.dto.level, 'workspace');
+
+  const zoomSearched = await panel.request('zoom.search', { queryText: 'a' });
+  assert.equal(zoomSearched.kind, 'zoom.results');
+  assert.equal(zoomSearched.payload.ok, true);
 });
