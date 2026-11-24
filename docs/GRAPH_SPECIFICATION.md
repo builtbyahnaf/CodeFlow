@@ -441,3 +441,79 @@ always dismisses.
 - **Keyboard access:** `Tab`/arrows focus graph nodes, `H` or `Shift+Space`
   opens a pinned preview, `Enter` navigates to source, and `Esc` dismisses the
   preview and returns focus to the selected node.
+
+---
+
+## 12. Call graph, cross-file merge policy, and scope states
+
+Phase 7 adds the call-graph perspective (`src/core/graph/calls/`) over the same
+CSR query boundary, host layout engine, and SVG renderer.
+
+### 12.1 Query model and cursor pagination
+
+- `createCallGraphQueryService` exposes `outgoing(symbolId, filter)`,
+  `incoming(symbolId, filter)`, `depth(symbolId, options)`, and
+  `cycles(symbolId)`.
+- Neighbor queries use cursor pagination (`encodeCallCursor` /
+  `decodeCallCursor`, default page size `100`, maximum `200`). Cursors carry
+  `runId`; if a cursor references a previous analysis run or is malformed,
+  pagination resets cleanly to offset `0` with `cursorReset: true` and
+  `scopeReasons: ['stale_cursor_reset']`.
+- `depth(symbolId, { depth, maxNodes, token })` performs bounded BFS expansion
+  (default depth `3`, max `6`, max nodes `500`), returning both `nodes` and the
+  `edges` that produced them. Frontier nodes with unexpanded neighbors receive
+  `depthLimitReached: true`. If `token.isCancelled` is true, `depth` returns
+  `cancelled: true` with empty arrays rather than an unlabeled partial graph.
+
+### 12.2 Multi-source merge policy
+
+`mergeEvidenceSources` combines adapter-local evidence with project-index or
+language-server evidence using a deterministic, order-independent precedence
+truth table per `(from, to, type)` triple:
+
+| Combination                                                | Result status                                 | Rule                                                                                      |
+| ---------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `resolved` + `resolved`                                    | `resolved`                                    | Agreement strengthens                                                                     |
+| `resolved` + anything weaker                               | `resolved`                                    | Direct evidence wins over heuristic                                                       |
+| `inferred` + `inferred`                                    | `inferred`                                    | Deduplicated                                                                              |
+| `inferred` + `possible`                                    | `inferred`                                    | Evidence beats speculation                                                                |
+| `possible` + `possible`                                    | `possible`                                    | Union of candidate targets; never upgrades to `resolved`                                  |
+| `unresolved` + `resolved`                                  | `resolved`                                    | Concrete target wins at that site; other unresolved sites remain in the unresolved bucket |
+| anything + `stale`                                         | strongest status + `stale` provenance         | Staleness is a provenance flag; backing file edits mark the resulting edge `stale`        |
+| `resolved` in source A, absent in source B covering `from` | `resolved` + `source_disagreement` diagnostic | Never downgrades silently; discrepancy is surfaced in diagnostics                         |
+
+Additional invariants:
+
+1. Two `possible` edges never merge into `resolved`.
+2. Distinct relationship types (`calls`, `instantiates`, `overrides`,
+   `references`) never merge across types.
+3. Inputs are sorted canonically before merging so any source or relationship
+   permutation produces byte-identical output, and double-merging is idempotent.
+4. When sources disagree on a symbol's file location, the source whose
+   `contentHash` matches current disk wins; otherwise the symbol is marked
+   `stale` and a `source_disagreement` diagnostic is recorded.
+
+### 12.3 Scope honesty and visual encodings
+
+Every neighbor page and call-graph DTO carries a mandatory `scope` and
+`scopeBanner` (`formatScopeBanner`):
+
+| Scope            | Presentation                                                       |
+| ---------------- | ------------------------------------------------------------------ |
+| `complete`       | `"N callers"`                                                      |
+| `partial`        | `"N callers (index partial — may be incomplete)"`                  |
+| `same_file_only` | `"N callers in this file · Project-wide callers require indexing"` |
+
+- **Unresolved bucket:** unresolved outgoing call sites from the center function
+  are aggregated into a single `unresolved_bucket` node (`"N unresolved targets"`)
+  with a reason-code breakdown (`function_pointer`, `template_dependent`,
+  `unknown_receiver`, `computed_member`, etc.).
+- **Candidate buckets:** when virtual dispatch or ambiguous overload candidates
+  for a `(from, reasonCode)` group exceed `5` (`CALL_LIMITS.candidateBucketThreshold`),
+  they are grouped into a `candidate_bucket` summary.
+- **Cycles:** `detectCallCycles` runs Tarjan's strongly-connected-components
+  algorithm plus self-loop detection in $O(V + E)$ time. Cycle edges carry
+  `isCycle: true`, `↻` in `label` and `glyphHint`, and a distinct dash pattern.
+- **Expand/collapse eviction:** `createCallGraphSession` computes reachability
+  from `centerSymbolId` solely through `expandedSymbolIds`, evicting unreachable
+  descendants on collapse so repeated expand/collapse cycles cannot leak state.
