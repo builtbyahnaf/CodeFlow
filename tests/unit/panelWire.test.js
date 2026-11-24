@@ -690,3 +690,53 @@ test('explain.node and explain.function return grounded explanations without tri
   assert.equal(loads, 1);
 });
 
+test('calls.load, calls.outgoing, calls.incoming, expand, collapse, filter, and focus work across perspectives', async () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:calls-wire',
+    path: 'src/calls.js',
+    text: 'function helper(x) { return x; }\nfunction main(n) { return helper(n); }\n',
+  });
+  let loads = 0;
+  const { wire } = createHarness(async () => {
+    loads += 1;
+    return { ok: true, run };
+  });
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const before = await panel.requestRaw('calls.outgoing', { symbolId: 'sym:none' });
+  assert.equal(before.kind, 'protocol.error');
+  assert.equal(before.payload.code, 'E_NO_ANALYSIS');
+  assert.equal(loads, 0);
+
+  const mainSym = run.symbols.find((s) => s.name === 'main');
+  const helperSym = run.symbols.find((s) => s.name === 'helper');
+  assert.ok(mainSym && helperSym);
+
+  const loaded = await panel.request('calls.load', { symbolId: mainSym.symbolId });
+  assert.equal(loaded.kind, 'calls.data');
+  assert.equal(loaded.payload.dto.dtoKind, 'call_graph');
+  assert.equal(loaded.payload.dto.centerSymbolId, mainSym.symbolId);
+  assert.equal(loaded.payload.dto.scope, 'same_file_only');
+  assert.equal(loads, 1);
+
+  const out = await panel.request('calls.outgoing', { symbolId: mainSym.symbolId });
+  assert.equal(out.kind, 'calls.neighbors');
+  assert.equal(out.payload.total, 1);
+  assert.equal(out.payload.items[0].symbolId, helperSym.symbolId);
+
+  const inc = await panel.request('calls.incoming', { symbolId: helperSym.symbolId });
+  assert.equal(inc.kind, 'calls.neighbors');
+  assert.equal(inc.payload.total, 1);
+  assert.equal(inc.payload.items[0].symbolId, mainSym.symbolId);
+
+  const expanded = await panel.request('calls.expand', { symbolId: helperSym.symbolId });
+  assert.equal(expanded.kind, 'calls.data');
+  const collapsed = await panel.request('calls.collapse', { symbolId: helperSym.symbolId });
+  assert.equal(collapsed.kind, 'calls.data');
+  const focused = await panel.request('calls.focus', { symbolId: mainSym.symbolId });
+  assert.equal(focused.payload.dto.focusedNodeId, mainSym.symbolId);
+  const filtered = await panel.request('calls.filter', { statuses: ['resolved'] });
+  assert.equal(filtered.kind, 'calls.data');
+  assert.equal(loads, 1);
+});
