@@ -90,7 +90,20 @@ test('no toolchain produces an actionable E_UNSUPPORTED result', async () => {
 });
 
 test('platform candidates match the host conventions', () => {
-  assert.deepEqual(defaultClangCandidates('win32'), ['clang++.exe', 'clang.exe', 'clang-cl.exe']);
-  assert.deepEqual(defaultClangCandidates('linux'), ['clang++', 'clang']);
-  assert.deepEqual(defaultClangCandidates('darwin'), ['clang++', 'clang']);
+  const win = defaultClangCandidates('win32');
+  assert.ok(win.includes('clang++.exe'));
+  assert.ok(win.includes('clang.exe'));
+  assert.ok(win.includes('clang-cl.exe'));
+  assert.ok(win.some((c) => c.includes('LLVM')));
+  assert.ok(win.some((c) => c.includes('msys64')));
+
+  const linux = defaultClangCandidates('linux');
+  assert.ok(linux.includes('clang++'));
+  assert.ok(linux.includes('clang'));
+  assert.ok(linux.includes('/usr/bin/clang++'));
+
+  const darwin = defaultClangCandidates('darwin');
+  assert.ok(darwin.includes('clang++'));
+  assert.ok(darwin.includes('clang'));
+  assert.ok(darwin.includes('/opt/homebrew/bin/clang++'));
 });
