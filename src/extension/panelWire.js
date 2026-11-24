@@ -19,6 +19,7 @@ import { buildCfg } from '../core/graph/cfg/builder.js';
 import { toCfgDto } from '../core/graph/cfg/dto.js';
 import { hashRun } from '../core/csr/serialize.js';
 import { normalizeRangeRef, containsPosition, rangesOverlap } from '../core/source/ranges.js';
+import { createExplanationEngine } from '../core/explanation/engine.js';
 
 /** @typedef {ReturnType<typeof import('../core/csr/query.js').createQueryLayer>} QueryLayer */
 
@@ -92,10 +93,15 @@ export function createPanelWire({
 
     /** @type {{path: string, run: import('../core/csr/entities.js').AnalysisRun, query: QueryLayer, hash: string} | null} */
     let current = null;
+    /** @type {import('../core/graph/cfg/builder.js').Cfg | null} */
+    let lastCfg = null;
     /** @type {Record<string, any>|null} */
     let lastDto = null;
     /** @type {string|null} */
     let selectedNodeId = null;
+    /** @type {Set<string>} */
+    const staleFileIds = new Set();
+    const explanationEngine = createExplanationEngine();
 
     /**
      * @param {string} value
@@ -146,8 +152,11 @@ export function createPanelWire({
         query,
         hash: hashRun(loaded.run),
       };
+      lastCfg = null;
       lastDto = null;
       selectedNodeId = null;
+      staleFileIds.clear();
+      explanationEngine.invalidateRun(loaded.run.runId);
       if (sourceAccess?.captureBaseline) {
         try {
           await sourceAccess.captureBaseline(loaded.run.files);
@@ -172,6 +181,7 @@ export function createPanelWire({
             callGraph: true,
             dataFlow: false,
             hoverPreview: true,
+            explanation: true,
             projectIndex: false,
           },
           settings: getSettings ? getSettings() : {},
@@ -254,8 +264,67 @@ export function createPanelWire({
         return;
       }
       const dto = toCfgDto(result.cfg);
+      lastCfg = result.cfg;
       lastDto = dto;
       bridge.respond('cfg.data', { ok: true, dto }, requestId);
+    });
+
+    bridge.on('explain.node', async (payload, { requestId }) => {
+      if (!current || !lastCfg) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Load a CFG before requesting explanations.'),
+          requestId,
+        );
+        return;
+      }
+      const nodeId = typeof payload.nodeId === 'string' ? payload.nodeId : '';
+      const node = lastCfg.nodes.find((entry) => entry.id === nodeId);
+      const stale = Boolean(
+        node?.range?.fileId
+          ? staleFileIds.has(node.range.fileId)
+          : staleFileIds.size > 0,
+      );
+      const result = explanationEngine.explainNode({
+        query: current.query,
+        cfg: lastCfg,
+        nodeId,
+        depth: typeof payload.depth === 'number' ? payload.depth : undefined,
+        stale,
+        settings: getSettings ? getSettings()?.explanation : undefined,
+      });
+      if (!result.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(result.code, result.message),
+          requestId,
+        );
+        return;
+      }
+      bridge.respond('explain.data', result, requestId);
+    });
+
+    bridge.on('explain.function', async (payload, { requestId }) => {
+      if (!current || !lastCfg) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Load a CFG before requesting explanations.'),
+          requestId,
+        );
+        return;
+      }
+      const fnFileId = lastCfg.function?.range?.fileId;
+      const stale = Boolean(
+        fnFileId ? staleFileIds.has(fnFileId) : staleFileIds.size > 0,
+      );
+      const result = explanationEngine.explainFunction({
+        query: current.query,
+        cfg: lastCfg,
+        depth: typeof payload.depth === 'number' ? payload.depth : undefined,
+        stale,
+        settings: getSettings ? getSettings()?.explanation : undefined,
+      });
+      bridge.respond('explain.data', result, requestId);
     });
 
     bridge.on('source.slice', async (payload, { requestId }) => {
@@ -524,6 +593,9 @@ export function createPanelWire({
       const subscription = sourceAccess.onDidInvalidate((event) => {
         if (bridge.isDisposed() || event.reason === 'closed') {
           return;
+        }
+        for (const id of Array.isArray(event.fileIds) ? event.fileIds : []) {
+          staleFileIds.add(id);
         }
         bridge.respond('source.stale', {
           fileIds: Array.isArray(event.fileIds) ? event.fileIds : [],
