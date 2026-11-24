@@ -100,3 +100,16 @@ void search() {
   assert.ok(kinds.includes('continue'));
   assert.ok(kinds.includes('return'));
 });
+
+test('parseCppSource resolves intra-file function call relationships', () => {
+  const code = `
+int helper() { return 42; }
+int caller() { return helper(); }
+`;
+  const run = parseCppSource({ runId: 'run:8', path: 'src/calls.cpp', text: code });
+  const helperFn = run.symbols.find((s) => s.name === 'helper');
+  const rel = run.relationships.find((r) => r.type === 'calls');
+  assert.ok(rel);
+  assert.equal(rel.to, helperFn.symbolId);
+  assert.equal(rel.status, 'resolved');
+});
