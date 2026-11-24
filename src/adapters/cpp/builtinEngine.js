@@ -328,6 +328,31 @@ function parseBodyConstructs(
   const keywordRegex = /\b(if|for|while|do|switch|case|default|return|break|continue|goto)\b|([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g;
   let m;
   while ((m = keywordRegex.exec(body)) !== null) {
-    // keyword dispatch
+    const kw = m[1];
+    const offset = baseOffset + m.index;
+    if (kw === 'return') {
+      const semi = body.indexOf(';', m.index);
+      const endOff = semi !== -1 ? baseOffset + semi + 1 : offset + 6;
+      constructs.push(
+        createControlConstruct({
+          constructId: nextId('return'),
+          kind: 'return',
+          symbolId: fnSymbolId,
+          sourceRange: rangeOf(offset, endOff),
+        }),
+      );
+    } else if (kw === 'break' || kw === 'continue') {
+      const semi = body.indexOf(';', m.index);
+      const endOff = semi !== -1 ? baseOffset + semi + 1 : offset + kw.length;
+      constructs.push(
+        createControlConstruct({
+          constructId: nextId(kw),
+          kind: kw,
+          symbolId: fnSymbolId,
+          sourceRange: rangeOf(offset, endOff),
+        }),
+      );
+    }
+    // more statements
   }
 }
