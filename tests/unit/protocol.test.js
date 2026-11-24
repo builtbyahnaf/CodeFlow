@@ -276,3 +276,33 @@ test('Phase 8 index kinds are directional and validated', () => {
     'unknown_kind',
   );
 });
+
+test('Phase 10 semantic-zoom kinds are directional and validated', () => {
+  const webviewKinds = [
+    'zoom.open',
+    'zoom.descend',
+    'zoom.breadcrumb',
+    'zoom.expand',
+    'zoom.search',
+    'zoom.filter',
+    'zoom.focus',
+  ];
+  const hostKinds = ['zoom.data', 'zoom.members', 'zoom.results'];
+
+  for (const kind of webviewKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+  for (const kind of hostKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+});
