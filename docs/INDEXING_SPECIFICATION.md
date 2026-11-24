@@ -1,6 +1,6 @@
 # CodeFlow Project Indexing Specification
 
-- **Phase:** 8 — Optional Project Index (`.codeflow/`)
+- **Phase:** 8 & 9 — Optional Project Index (`.codeflow/`) and Incremental Hybrid Execution
 - **Schema Version:** `1` (`INDEX_SCHEMA_VERSION = 1`)
 - **Author:** Muhammad Tahmid Ahnaf
 
@@ -110,3 +110,44 @@ Schema v1 comprises six logical tables matching `SCHEMA_V1_DDL`:
 - `stats()`, `health()`, `logicalHash()`
 
 Every query stamps `scope` (`complete`, `partial`, or `stale`) so the UI never presents partial or stale index data as complete.
+
+---
+
+## 7. Incremental Indexing & Hybrid Execution Tiers (Phase 9)
+
+Governing rule: **incorrect reuse is worse than redundant work.** Whenever dependency completeness is uncertain, CodeFlow widens invalidation scope and marks dependent results `partial`.
+
+### 7.1 Event Ingestion & Debouncing (`events.js`, `debounce.js`)
+
+- **Per-document debounce:** `350 ms` default (`codeflow.index.debounceMs`, clamped `100..2000 ms`), reset on each keystroke.
+- **Trailing max-wait flush:** `3,000 ms` under continuous typing so an actively edited file still refreshes periodically.
+- **IME composition guard:** Events arriving during an active IME composition session are held until composition ends.
+- **Burst / git-checkout coalescing:** If `> 25` distinct files change within a `1,000 ms` window, the debouncer coalesces pending watcher events into a single `bulk_burst` invalidation pass.
+
+### 7.2 Change Classification & Reverse-Dependency Cascade (`signatures.js`, `classify.js`, `cascade.js`)
+
+Symbol signatures (`computeSymbolSignature`) normalize `(kind, name, qualifiedName, visibility, parentId, parameters, returnType, exported, isTemplate)` while deliberately excluding line numbers and body hashes:
+
+| Detected Change                                                        | Class       | Invalidation Action                                          |
+| ---------------------------------------------------------------------- | ----------- | ------------------------------------------------------------ |
+| Comments or whitespace only (`isSemanticNoOp`)                         | `local`     | Replace file rows only (`0` dependents re-analyzed)          |
+| Function body changed, symbol signatures & imports unchanged           | `local`     | Replace file rows only (`0` dependents re-analyzed)          |
+| Symbol added, removed, renamed, or signature/visibility changed        | `dependent` | Re-analyze direct dependents via reverse dependency graph    |
+| Include or import set changed                                          | `dependent` | Re-analyze dependents of old and new targets                 |
+| C++ header file (`.h`, `.hpp`, `.hh`, `.hxx`) declarations changed     | `dependent` | Transitive dependents across all including translation units |
+| `compile_commands.json`, `.codeflow/config.json`, or toolchain changed | `global`    | Reconcile affected subtrees or full project rebuild          |
+
+When dependent count exceeds the incremental budget (`30` files or `10,000 ms`), `planInvalidationCascade` escalates (`direct_dependents` -> `module_subtree` -> `full_project`) and records an `invalidation_escalated` diagnostic.
+
+### 7.3 Provisional Dirty-Buffer Overlay (`provisional.js`)
+
+- Unsaved editor buffers (`editor_dirty`) are analyzed in memory and stored in `createProvisionalOverlay` (`maxFiles: 4`), never written to `codeflow.sqlite`.
+- Provisional records carry `provisional: true`, and cross-file call edges originating from a dirty buffer are capped at `status: 'possible'`.
+- Saving (`editor_save`) drops the overlay entry and commits authoritative rows; reverting or closing without saving (`editor_revert`) discards the overlay entry.
+
+### 7.4 Priority Coordinator, Supersession, Backpressure & Local Telemetry (`priorityQueue.js`, `backpressure.js`, `telemetry.js`)
+
+- **Priority lanes:** `P0_ACTIVE` (active editor & Phase 10 zoom expansion) > `P1_VISIBLE` (visible editors) > `P2_RECENT` (recently navigated files) > `P3_BACKGROUND` (cascade & maintenance, with deterministic aging so P3 never starves).
+- **Supersession:** Tasks are keyed by `(fileId, contentHash, generation)`. Any newer edit for `fileId` cancels in-flight work and prevents stale completions from committing.
+- **Backpressure & lag guard:** Continuous typing `> 10 s` or queue depth `> 500` pauses `P2`/`P3` (`paused_while_typing`), halves concurrency while typing, and resumes after `2 s` idle. Event-loop lag samples `> 100 ms` trigger `lag_throttled` and increment `responsiveness_throttle`.
+- **Local-only telemetry:** `createIncrementalTelemetry` tracks event, task, classification, escalation, cache, DB, and per-language p50/p95 duration counters in memory with zero source code or file paths.
