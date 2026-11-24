@@ -1329,6 +1329,12 @@ explainDepthSelect?.addEventListener('change', () => {
   }
 });
 
+// Route VS Code extension-host messages into the bridge so every pending
+// request is resolved (or rejected) rather than timing out silently.
+window.addEventListener('message', (event) => {
+  void bridge.handleMessage(event.data);
+});
+
 window.addEventListener('error', (event) => {
   setBanner(`Webview error: ${event.message}`, true);
 });
