@@ -165,8 +165,21 @@ test('the CSR layer does not import the graph layer or adapters', async () => {
 });
 
 test('the explanation layer is isolated from host/adapters/network and reads CSR through query', async () => {
-  const forbiddenImports = ['adapters', 'extension', 'webview', 'visualization', 'vscode', 'http', 'https'];
-  const rawRunPatterns = [/\brun\.symbols\b/, /\brun\.relationships\b/, /\brun\.controlConstructs\b/, /\brun\.dataFacts\b/];
+  const forbiddenImports = [
+    'adapters',
+    'extension',
+    'webview',
+    'visualization',
+    'vscode',
+    'http',
+    'https',
+  ];
+  const rawRunPatterns = [
+    /\brun\.symbols\b/,
+    /\brun\.relationships\b/,
+    /\brun\.controlConstructs\b/,
+    /\brun\.dataFacts\b/,
+  ];
   for (const file of await listSourceFiles('src/core/explanation')) {
     const { source, imports } = await readWithImports(file);
     for (const specifier of imports) {
@@ -182,6 +195,33 @@ test('the explanation layer is isolated from host/adapters/network and reads CSR
         !pattern.test(source),
         `${file} accesses ${pattern}; explanation engine must use createQueryLayer()`,
       );
+    }
+  }
+});
+
+test('the indexing core layer is isolated from host, storage, adapters, and rendering', async () => {
+  const forbiddenImports = [
+    'adapters',
+    'extension',
+    'storage',
+    'webview',
+    'visualization',
+    'vscode',
+    'fs',
+    'node:fs',
+    'node:fs/promises',
+    'child_process',
+    'node:child_process',
+  ];
+  for (const file of await listSourceFiles('src/core/indexing')) {
+    const { imports } = await readWithImports(file);
+    for (const specifier of imports) {
+      for (const token of forbiddenImports) {
+        assert.ok(
+          !specifier.includes(token),
+          `${file} imports "${specifier}"; core indexing must stay independent of ${token}`,
+        );
+      }
     }
   }
 });
