@@ -111,6 +111,16 @@ export function createPanelWire({
     /** @type {ReturnType<typeof createCallGraphSession>|null} */
     let callSession = null;
 
+    function activeIndexSource() {
+      if (!indexProvider) {
+        return null;
+      }
+      if (typeof indexProvider.isIndexed === 'function' && !indexProvider.isIndexed()) {
+        return null;
+      }
+      return createIndexEvidenceSource(indexProvider);
+    }
+
     function rebuildCallService() {
       if (!current) {
         callQueryService = null;
@@ -119,7 +129,7 @@ export function createPanelWire({
       }
       callQueryService = createCallGraphQueryService({
         query: current.query,
-        indexSource: indexProvider ? createIndexEvidenceSource(indexProvider) : null,
+        indexSource: activeIndexSource(),
         staleFiles: staleFileIds,
         logger: loggerProxy,
       });
@@ -206,7 +216,7 @@ export function createPanelWire({
             dataFlow: false,
             hoverPreview: true,
             explanation: true,
-            projectIndex: false,
+            projectIndex: Boolean(indexProvider),
           },
           settings: getSettings ? getSettings() : {},
           demoMode: true,
@@ -679,6 +689,35 @@ export function createPanelWire({
 
     bridge.on('panel.ping', async (_payload, { requestId }) => {
       bridge.respond('panel.pong', { at: Date.now() }, requestId);
+    });
+
+    bridge.on('index.status', async (_payload, { requestId }) => {
+      const stats =
+        typeof indexProvider?.stats === 'function'
+          ? indexProvider.stats()
+          : {
+              state: 'unindexed',
+              schemaVersion: 1,
+              fileCount: 0,
+              symbolCount: 0,
+              relationshipCount: 0,
+              dependencyCount: 0,
+              staleFileCount: 0,
+              scope: 'partial',
+            };
+      const health =
+        typeof indexProvider?.health === 'function'
+          ? indexProvider.health()
+          : {
+              ok: true,
+              integrity: 'ok',
+              schemaVersion: 1,
+              state: stats.state,
+              staleFileCount: 0,
+              scope: stats.scope,
+              issues: [],
+            };
+      bridge.respond('index.data', { ok: true, stats, health }, requestId);
     });
 
     /**
