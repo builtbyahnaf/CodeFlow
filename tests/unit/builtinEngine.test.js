@@ -83,3 +83,20 @@ int eval(int op) {
   assert.ok(kinds.includes('case'));
   assert.ok(kinds.includes('default'));
 });
+
+test('parseCppSource extracts return, break, and continue jump statements', () => {
+  const code = `
+void search() {
+  while (true) {
+    if (false) continue;
+    break;
+  }
+  return;
+}
+`;
+  const run = parseCppSource({ runId: 'run:7', path: 'src/jumps.cpp', text: code });
+  const kinds = run.controlConstructs.map((cc) => cc.kind);
+  assert.ok(kinds.includes('break'));
+  assert.ok(kinds.includes('continue'));
+  assert.ok(kinds.includes('return'));
+});
