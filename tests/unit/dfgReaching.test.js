@@ -75,3 +75,97 @@ describe('computeGenKill – straight-line', () => {
 // reachingDefinitions – straight-line
 // ---------------------------------------------------------------------------
 
+describe('reachingDefinitions – straight-line', () => {
+  it('propagates def to successor', () => {
+    const nodes = [node('entry', ['n1']), node('n1', ['exit']), node('exit', [])];
+    const defsPerNode = new Map([
+      ['entry', [{ bindingId: 'x', flowNodeId: 'flow:x@entry#0', cfgNodeId: 'entry', status: 'resolved' }]],
+      ['n1', []],
+      ['exit', []],
+    ]);
+    const { gen, kill } = computeGenKill(nodes, defsPerNode);
+    const result = reachingDefinitions(nodes, gen, kill);
+    assert.equal(result.partial, false);
+    // def reaches exit
+    assert.ok(result.inSets.get('exit').has(encodeDefKey('x', 'flow:x@entry#0')));
+  });
+
+  it('def killed by redefinition does not reach past kill', () => {
+    // entry -def x-> n1 -redef x-> exit
+    const nodes = [node('entry', ['n1']), node('n1', ['exit']), node('exit', [])];
+    const defsPerNode = new Map([
+      ['entry', [{ bindingId: 'x', flowNodeId: 'flow:x@entry#0', cfgNodeId: 'entry', status: 'resolved' }]],
+      ['n1',    [{ bindingId: 'x', flowNodeId: 'flow:x@n1#0',    cfgNodeId: 'n1',    status: 'resolved' }]],
+      ['exit', []],
+    ]);
+    const { gen, kill } = computeGenKill(nodes, defsPerNode);
+    const result = reachingDefinitions(nodes, gen, kill);
+    // only n1's def reaches exit
+    assert.ok( result.inSets.get('exit').has(encodeDefKey('x', 'flow:x@n1#0')));
+    assert.ok(!result.inSets.get('exit').has(encodeDefKey('x', 'flow:x@entry#0')));
+  });
+
+  it('two defs merge at join node', () => {
+    // entry -> true_br -> merge
+    //       -> false_br -> merge
+    const nodes = [
+      node('entry',     ['true_br', 'false_br']),
+      node('true_br',   ['merge']),
+      node('false_br',  ['merge']),
+      node('merge',     []),
+    ];
+    const defsPerNode = new Map([
+      ['entry',    []],
+      ['true_br',  [{ bindingId: 'x', flowNodeId: 'flow:x@true_br#0',  cfgNodeId: 'true_br',  status: 'resolved' }]],
+      ['false_br', [{ bindingId: 'x', flowNodeId: 'flow:x@false_br#0', cfgNodeId: 'false_br', status: 'resolved' }]],
+      ['merge',    []],
+    ]);
+    const { gen, kill } = computeGenKill(nodes, defsPerNode);
+    const result = reachingDefinitions(nodes, gen, kill);
+    // Both defs reach merge
+    assert.ok(result.inSets.get('merge').has(encodeDefKey('x', 'flow:x@true_br#0')));
+    assert.ok(result.inSets.get('merge').has(encodeDefKey('x', 'flow:x@false_br#0')));
+  });
+
+  it('budget exhaustion returns partial=true', () => {
+    // Build a large-ish cycle to exhaust iteration budget
+    const nodes = Array.from({ length: 5 }, (_, i) => node(`n${i}`, [`n${(i + 1) % 5}`]));
+    const defsPerNode = new Map(
+      nodes.map((n) => [n.id, [{ bindingId: 'x', flowNodeId: `flow:x@${n.id}#0`, cfgNodeId: n.id, status: 'resolved' }]])
+    );
+    const { gen, kill } = computeGenKill(nodes, defsPerNode);
+    const result = reachingDefinitions(nodes, gen, kill, 1, 0); // budget = 1 iteration
+    assert.equal(result.partial, true);
+    assert.equal(result.partialReason, 'flow_budget_exceeded');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findBackEdges
+// ---------------------------------------------------------------------------
+
+describe('findBackEdges', () => {
+  it('finds no back edges in a DAG', () => {
+    const nodes = [node('a', ['b']), node('b', ['c']), node('c', [])];
+    const back = findBackEdges(nodes, 'a');
+    assert.equal(back.length, 0);
+  });
+
+  it('finds the back edge in a simple loop', () => {
+    // entry -> body -> latch -> body (back edge)
+    const nodes = [
+      node('entry', ['body']),
+      node('body',  ['latch']),
+      node('latch', ['body', 'exit']),
+      node('exit',  []),
+    ];
+    const back = findBackEdges(nodes, 'entry');
+    assert.ok(back.some((e) => e.from === 'latch' && e.to === 'body'));
+  });
+
+  it('finds back edge in a self-loop', () => {
+    const nodes = [node('a', ['a', 'b']), node('b', [])];
+    const back = findBackEdges(nodes, 'a');
+    assert.ok(back.some((e) => e.from === 'a' && e.to === 'a'));
+  });
+});
