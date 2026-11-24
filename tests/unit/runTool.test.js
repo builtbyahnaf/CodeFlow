@@ -62,7 +62,7 @@ test('an aborted signal cancels the tool and keeps partial output', async () => 
     signal: controller.signal,
     timeoutMs: 5000,
   });
-  setTimeout(() => controller.abort(), 100);
+  setTimeout(() => controller.abort(), 350);
   const result = await pending;
   assert.equal(result.ok, false);
   assert.equal(result.code, 'E_CANCELLED');
