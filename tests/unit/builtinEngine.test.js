@@ -20,3 +20,18 @@ int cube(int x) { return x * square(x); }
   const names = run.symbols.filter((s) => s.kind === 'function').map((s) => s.name);
   assert.deepEqual(names, ['square', 'cube']);
 });
+
+test('parseCppSource extracts if and if-else control constructs', () => {
+  const code = `
+int clamp(int v, int lo, int hi) {
+  if (v < lo) {
+    return lo;
+  }
+  return hi;
+}
+`;
+  const run = parseCppSource({ runId: 'run:3', path: 'src/clamp.cpp', text: code });
+  const ifConstruct = run.controlConstructs.find((cc) => cc.kind === 'if');
+  assert.ok(ifConstruct);
+  assert.ok(ifConstruct.condition);
+});
