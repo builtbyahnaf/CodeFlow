@@ -242,4 +242,82 @@ export function buildDfg({
   /** @type {Map<string, FlowNode>} */
   const nodeById = new Map(flowNodes.map((n) => [n.id, n]));
 
+  // --- Step 4: emit reaching/assign edges from reaching-defs ---
+  // Build use-site lookup: cfgNodeId → use-kind FlowNodes
+  /** @type {Map<string, FlowNode[]>} */
+  const usesAtNode = new Map();
+  for (const fn of flowNodes) {
+    if (fn.kind === 'use' || fn.kind === 'defuse' || fn.kind === 'return') {
+      let arr = usesAtNode.get(fn.cfgNodeId);
+      if (!arr) { arr = []; usesAtNode.set(fn.cfgNodeId, arr); }
+      arr.push(fn);
+    }
+  }
+
+  for (const cfgNode of cfgNodes) {
+    const inSet = rdResult.inSets.get(cfgNode.id) ?? new Set();
+    const uses  = usesAtNode.get(cfgNode.id) ?? [];
+
+    for (const useNode of uses) {
+      for (const defKey of inSet) {
+        const { bindingId, flowNodeId } = decodeDefKey(defKey);
+        if (bindingId !== useNode.bindingId) continue;
+
+        const defNode = nodeById.get(flowNodeId);
+        if (!defNode) continue;
+
+        // Determine edge kind
+        const isAssign = defNode.kind === 'def' || defNode.kind === 'param';
+        const isLoopCarried = Boolean(rdResult.loopCarriedIn?.get(cfgNode.id)?.has(defKey));
+
+        const edgeKind = isLoopCarried ? 'loop_carried' : (isAssign ? 'assign' : 'reaching');
+
+        // Edge status is the minimum of def and use status
+        let status = defNode.status === 'resolved' && useNode.status === 'resolved'
+          ? 'resolved' : 'possible';
+        if (defNode.status === 'unresolved' || useNode.status === 'unresolved') {
+          status = 'unresolved';
+        }
+
+        /** @type {FlowEdge} */
+        const edge = {
+          from: defNode.id,
+          to:   useNode.id,
+          kind: /** @type {any} */ (edgeKind),
+          status: /** @type {any} */ (status),
+        };
+        if (status !== 'resolved' && defNode.reasonCode) {
+          edge.reasonCode = defNode.reasonCode;
+        } else if (isLoopCarried) {
+          edge.reasonCode = 'loop_carried';
+        }
+        flowEdges.push(edge);
+      }
+    }
+  }
+
+  // --- Step 5: interprocedural param→arg edges (resolved calls only) ---
+  for (const mapping of interproceduralArgs) {
+    const argNode = nodeById.get(mapping.argFlowNodeId);
+    if (!argNode) continue;
+    // Find param node in the callee's DFG (passed in by caller)
+    flowEdges.push({
+      from: argNode.id,
+      to:   makeFlowNodeId(mapping.paramBinding.id, `entry:${mapping.callerCallNodeId}`, 0),
+      kind: 'param_to_arg',
+      status: 'resolved',
+    });
+  }
+
+  // --- Step 6: interprocedural return→use edges ---
+  for (const mapping of interproceduralReturns) {
+    if (!nodeById.has(mapping.returnFlowNodeId) || !nodeById.has(mapping.useFlowNodeId)) continue;
+    flowEdges.push({
+      from: mapping.returnFlowNodeId,
+      to:   mapping.useFlowNodeId,
+      kind: 'return_to_use',
+      status: 'resolved',
+    });
+  }
+
   
