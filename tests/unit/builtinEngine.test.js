@@ -153,3 +153,28 @@ int factorial(int n) {
   const validation = validateAnalysisRun(run, { mode: 'strict' });
   assert.equal(validation.issues.length, 0);
 });
+
+import { createAdapterRegistry } from '../../src/core/adapterRegistry.js';
+import { cppAdapter } from '../../src/adapters/cpp/index.js';
+import { buildCfg } from '../../src/core/cfg/builder.js';
+import { toCfgDto } from '../../src/core/cfg/dto.js';
+
+test('built-in engine run integrates with CFG query layer and toCfgDto', () => {
+  const code = `
+int compute(int x) {
+  if (x > 0) return x;
+  return -x;
+}
+`;
+  const run = parseCppSource({ runId: 'run:12', path: 'src/comp.cpp', text: code });
+  const registry = createAdapterRegistry();
+  registry.register(cppAdapter);
+  const query = registry.query(run);
+  const cfgFns = query.cfgFunctions();
+  assert.equal(cfgFns.ok, true);
+  assert.equal(cfgFns.functions.length, 1);
+  const cfg = buildCfg(run, cfgFns.functions[0].symbolId);
+  assert.ok(cfg.blocks.length >= 2);
+  const dto = toCfgDto(cfg);
+  assert.ok(dto.nodes.length >= 2);
+});
