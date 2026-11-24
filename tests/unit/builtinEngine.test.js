@@ -113,3 +113,14 @@ int caller() { return helper(); }
   assert.equal(rel.to, helperFn.symbolId);
   assert.equal(rel.status, 'resolved');
 });
+
+test('parseCppSource marks external and library calls as out_of_scope', () => {
+  const code = `
+void doPrint() { printf("hello\n"); }
+`;
+  const run = parseCppSource({ runId: 'run:9', path: 'src/ext.cpp', text: code });
+  const rel = run.relationships.find((r) => r.type === 'calls');
+  assert.ok(rel);
+  assert.equal(rel.status, 'unresolved');
+  assert.equal(rel.reasonCode, 'out_of_scope');
+});
