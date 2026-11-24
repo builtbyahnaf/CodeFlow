@@ -8,6 +8,47 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [1.2.0] - 2026-11-24
+
+### Phase 14 — Java Language Analysis Foundation (V2-B)
+
+Introduces native Java language static analysis (`java-ast`) for Visual Studio Code,
+translating Java compilation units (`.java`) into Canonical Semantic Representation (CSR).
+Models object-oriented class structures, hierarchical package namespaces, method overloads,
+single class inheritance, multiple interface implementation, virtual method dispatch with
+honest uncertainty, and structured exception handling.
+See `docs/PHASE-14-REPORT.md`.
+
+- **Java Adapter Contract & Identity** (`src/adapters/java/index.js`):
+  - Adapter ID `java-ast`, version `0.1.0`, targeting `.java` extensions.
+  - Honest capabilities: `generateCFG: true`, `generateDFG: false`, `parse: 'partial'`,
+    `discoverDeclarations: true`, `reportDiagnostics: true`.
+  - Registered into extension host `adapterRegistry` and routed in analysis service.
+- **Source Locator & UTF-16 Normalization** (`src/adapters/java/locator.js`):
+  - Normalizes 1-based line/col positions to 0-based lines and UTF-16 code units.
+  - Generates deterministic file records with `java:<path>` content hashes.
+- **Declarations & Type Hierarchy** (`src/adapters/java/mapper.js`, `hierarchy.js`):
+  - Class declarations, inner/nested classes, interfaces, records, and enums.
+  - Member containment with `defines` relationships and `parentId` hierarchies.
+  - Single class inheritance (`extends` -> `inherits`) and multiple interface
+    implementation (`implements` -> `implements`).
+- **Method Overloads & Virtual Dispatch** (`src/adapters/java/dispatch.js`):
+  - Overload disambiguation using normalized parameter types (`arityN.type1+type2`).
+  - Direct static method call resolution (`resolved`).
+  - Constructor instantiation mapping (`instantiates`).
+  - Polymorphic virtual dispatch marked `possible` with reason code `dynamic_dispatch`
+    and candidate sets.
+- **Packages & Imports** (`src/adapters/java/packages.js`):
+  - Package declaration mapped to `namespace` symbol.
+  - `imports` edges separating workspace classes from JDK libraries (`JAVA_JDK_PACKAGES`).
+- **Control-Flow & Exception Graph** (`src/adapters/java/constructs.js`):
+  - Maps `if`, `while`, `do_while`, `for`, `switch`, `case`, `try`, `catch`, `finally`,
+    `throw`, `return`, `break`, and `continue`.
+  - Validated with CFG builder producing executable control-flow graphs.
+- **Conformance & Verification**:
+  - 100% pass across all 12 shared adapter conformance rules (C-01 .. C-12).
+  - 864/864 unit and conformance tests passing green.
+
 ## [1.1.0] - 2026-11-24
 
 ### Phase 13 — C Language Analysis Foundation (V2-A)
