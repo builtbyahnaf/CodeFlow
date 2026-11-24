@@ -46,6 +46,7 @@ export const WEBVIEW_TO_HOST = Object.freeze([
   'calls.collapse',
   'calls.filter',
   'calls.focus',
+  'index.status',
 ]);
 
 /** Kinds the host may send to the webview. */
@@ -70,6 +71,7 @@ export const HOST_TO_WEBVIEW = Object.freeze([
   'explain.data',
   'calls.data',
   'calls.neighbors',
+  'index.data',
 ]);
 
 export const DIRECTIONS = Object.freeze({
