@@ -8,6 +8,47 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [1.1.0] - 2026-11-24
+
+### Phase 13 — C Language Analysis Foundation (V2-A)
+
+Introduces native C language static analysis (`c-clang`) for Visual Studio Code,
+translating C translation units (`.c`, `.h`) into Canonical Semantic Representation (CSR).
+Accounts for C structural specifics: file-scope static vs extern linkage, typed function
+pointers with indirect call candidate sets, `#include` hierarchy graph distinguishing
+workspace quote headers from standard C runtime headers, and C control constructs.
+See `docs/PHASE-13-REPORT.md`.
+
+- **C Adapter Contract & Identity** (`src/adapters/c/index.js`):
+  - Adapter ID `c-clang`, version `0.1.0`, targeting `.c` and `.h` extensions.
+  - Honest capability declarations: `generateCFG: true`, `generateDFG: false`, `parse: 'partial'`,
+    `discoverDeclarations: true`, `reportDiagnostics: true`.
+  - Registered into extension host `adapterRegistry` and routed in analysis service.
+- **Source Locator & Unicode** (`src/adapters/c/locator.js`):
+  - Normalizes 1-based Clang byte positions to 0-based lines and UTF-16 code units.
+  - Generates deterministic file records with `clang:<path>` content hashes.
+- **Declarations & Storage Classes** (`src/adapters/c/mapper.js`):
+  - Function declarations with `static` (private) vs `extern` (public) linkage.
+  - Struct and union record types with field member containment relationships (`defines`).
+  - Enum declarations and enum constant members.
+  - Typedef declarations mapped to canonical `type_alias` symbols.
+  - Global and file-scope static variables.
+- **Function Pointers & Indirect Calls** (`src/adapters/c/functionPointers.js`):
+  - `isFunctionPointerType`: typed detector for C function pointer syntax (`void (*)(void)`).
+  - `extractFunctionPointerAssignments`: tracks function address assignments to variables.
+  - `resolveIndirectCall`: candidate resolution marking indirect calls `possible` with
+    reason code `function_pointer`.
+- **Header Inclusions & Catalog** (`src/adapters/c/headers.js`):
+  - Complete catalog of 29 standard C runtime headers (`C_SYSTEM_HEADERS`).
+  - `#include` relationship extraction between translation unit and workspace headers (`includes`).
+- **Control-Flow Constructs** (`src/adapters/c/constructs.js`):
+  - Maps `if`, `while`, `do_while`, `for`, `switch`, `case`, `goto`, `label`, `return`,
+    `break`, `continue`, and abnormal exit functions (`abort`, `exit`).
+  - Validated with CFG builder producing executable control flow graphs.
+- **Conformance & Verification**:
+  - 100% pass across all 12 shared adapter conformance rules (C-01 .. C-12).
+  - 840/840 unit and conformance tests passing green.
+
 ## [1.0.0] - 2026-11-24
 
 ### Phase 12 — V1 UX, Accessibility, and Production Hardening
