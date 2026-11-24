@@ -8,6 +8,49 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.1095] - 2026-11-24
+
+### Phase 11 — Data-Flow Analysis
+
+Foundational intraprocedural data-flow analysis (DFG) across scalar locals and
+parameters over the Control-Flow Graph, backed by forward monotone reaching
+definitions, conservative kill rules, and honest degradation. Integrates as a
+variable trace overlay on Phase 10 Semantic Zoom L4/L5 without forking the level
+hierarchy. See `docs/PHASE-11-REPORT.md`, `docs/adr/0011-dataflow-conservative-kills.md`,
+and `docs/GRAPH_SPECIFICATION.md` (§14).
+
+- **Data-Flow core** (`src/core/graph/dfg/`):
+  - `kinds.js`: frozen `FLOW_NODE_KINDS` (`def`, `use`, `defuse`, `param`, `return`, `kill`),
+    `FLOW_EDGE_KINDS` (`reaching`, `assign`, `param_to_arg`, `return_to_use`, `loop_carried`, `capture`),
+    `FLOW_STATUSES`, `FLOW_REASON_CODES`, and non-color glyph/label formatters.
+  - `model.js`: canonical `flow:<bindingId>@<cfgNodeId>#<ordinal>` IDs, structural
+    invariants, deterministic serialization, and empty DFG factories.
+  - `defuse.js`: language-neutral def/use/kill extraction from CFG nodes and CSR DataFacts,
+    parameter entry synthesis, conservative call kills, and closure capture tracking.
+  - `reaching.js`: monotone forward reaching-definitions fixpoint with 20k-iteration / 250ms
+    budgets, backward liveness analysis, and DFS back-edge loop-carried dependency tracking.
+  - `builder.js`: deterministic DFG construction, conservative kill rules, interprocedural
+    edges filtered strictly to resolved targets, and limitation disclosure banners.
+  - `query.js`: bounded variable trace (`traceBinding`), use-def lookups (`defsReachingUse`,
+    `usesReachedByDef`), loop-carried edge query, backward/forward slicing (`backwardSlice`,
+    `forwardSlice`), and human-readable detail panel entries.
+  - `cache.js`: doubly-linked bounded LRU cache (`createLruCache`, `createDfgCache`) retaining
+    up to 20 function DFGs keyed by run hash.
+  - `overlay.js`: Semantic Zoom view-layer adapter (`buildDfgOverlay`) mapping to Phase 10
+    `OVERLAY_SLOTS.DFG` with non-color glyphs (`✓`, `~`, `?`, `✗`, `…`, `↻`, `⊃`) and honest
+    empty states.
+  - `dto.js`: JSON-safe DTO serialization and bidirectional validation.
+- **Protocol & Host integration**:
+  - `src/core/protocol/envelope.js`: added webview-to-host `dfg.load`, `dfg.trace`, `dfg.slice`
+    and host-to-webview `dfg.data`, `dfg.overlay`, `dfg.error`.
+  - `src/extension/panelWire.js`: wired DFG cache, CFG-to-DFG mapping, variable trace overlays,
+    and backward/forward slicing handlers.
+- **Testing & Verification**:
+  - 111 unit tests across 9 suites in `tests/unit/dfg*.test.js`.
+  - 15 negative tests in `tests/unit/dfgNegative.test.js` verifying analysis declines to claim
+    unproven flows.
+  - Protocol envelope and panel bridge test updates.
+
 ## [0.1.1045] - 2026-11-24
 
 ### Phase 10 — Progressive Semantic Zoom
