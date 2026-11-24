@@ -1,0 +1,42 @@
+{
+  "kind": "CompilationUnit",
+  "package": "com.example.unicode",
+  "types": [
+    {
+      "kind": "ClassDeclaration",
+      "name": "UnicodeTest",
+      "visibility": "public",
+      "range": {
+        "begin": { "line": 3, "col": 1 },
+        "end": { "line": 7, "col": 2 }
+      },
+      "members": [
+        {
+          "kind": "MethodDeclaration",
+          "name": "naïve",
+          "returnType": "int",
+          "visibility": "public",
+          "range": {
+            "begin": { "line": 4, "col": 5 },
+            "end": { "line": 6, "col": 6 }
+          },
+          "parameters": [
+            { "name": "値", "type": "int" }
+          ],
+          "body": {
+            "kind": "BlockStmt",
+            "statements": [
+              {
+                "kind": "ReturnStmt",
+                "range": {
+                  "begin": { "line": 5, "col": 9 },
+                  "end": { "line": 5, "col": 20 }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
