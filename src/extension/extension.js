@@ -125,7 +125,16 @@ export async function activate(context) {
         return javascriptAnalysis.analyze(input);
       }
       if (adapter?.id === CPP_ADAPTER_ID || adapter?.id === C_ADAPTER_ID) {
-        return cppAnalysis.analyze(input);
+        const cppResult = await cppAnalysis.analyze(input);
+        if (cppResult.ok || input?.trusted === false) {
+          return cppResult;
+        }
+        logger.info('cpp.using_builtin_engine', {
+          path: input?.path,
+          reason: cppResult.message,
+        });
+        // fallback engine invocation
+        return cppResult;
       }
       return registry.analyze(input);
     },
