@@ -302,7 +302,14 @@ export function parseCppSource(input) {
     parseBodyConstructs(bodyText, bodyOffset, symId, rangeOf, controlConstructs, relationships);
     fnRegex.lastIndex = closeBrace + 1;
   }
-  // functions loop done
+  // Resolve internal call relationships
+  for (const rel of relationships) {
+    if (functionSymbolsByName.has(rel.to)) {
+      rel.to = functionSymbolsByName.get(rel.to).symbolId;
+      rel.status = 'resolved';
+    }
+  }
+  // internal calls resolved
 }
 
 /**
