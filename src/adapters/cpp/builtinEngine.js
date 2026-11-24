@@ -244,5 +244,8 @@ export function parseCppSource(input) {
   const controlConstructs = [];
   const relationships = [];
   const functionSymbolsByName = new Map();
-  // symbols ready
+  const masked = maskCommentsAndStrings(text);
+  const fnRegex = /(?:^|[;}{\n])\s*([a-zA-Z_~][a-zA-Z0-9_:<>&*,\s]*?)\s+([a-zA-Z_~][a-zA-Z0-9_]*)\s*\(/g;
+  let match;
+  // fnRegex ready
 }
