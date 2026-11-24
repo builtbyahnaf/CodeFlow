@@ -12,6 +12,7 @@
 import { computeLayout } from './layout.js';
 import { CFG_EDGE_KINDS, CFG_NODE_KINDS, CFG_STATUSES } from './cfg/kinds.js';
 import { CALL_NODE_KINDS, CALL_RELATIONSHIP_TYPES, CALL_SCOPES } from './calls/kinds.js';
+import { LEVEL_ORDER } from './zoom/levels.js';
 
 export const GRAPH_DTO_VERSION = 1;
 
@@ -128,6 +129,12 @@ export function validateDto(dto) {
   }
   if (candidate.dtoKind === 'call_graph') {
     validateCallGraphDto(candidate, issues);
+    return issues.length > 0
+      ? { ok: false, issues }
+      : { ok: true, dto: /** @type {GraphDto} */ (dto) };
+  }
+  if (candidate.dtoKind === 'semantic_zoom') {
+    validateSemanticZoomDto(candidate, issues);
     return issues.length > 0
       ? { ok: false, issues }
       : { ok: true, dto: /** @type {GraphDto} */ (dto) };
@@ -457,6 +464,28 @@ function isRangeRef(value) {
     range.endLine >= 0 &&
     range.endColumn >= 0
   );
+}
+
+/**
+ * @param {Record<string, unknown>} candidate
+ * @param {string[]} issues
+ */
+function validateSemanticZoomDto(candidate, issues) {
+  if (typeof candidate.level !== 'string' || !LEVEL_ORDER.includes(candidate.level)) {
+    issues.push(`Invalid semantic zoom level: ${String(candidate.level)}.`);
+  }
+  if (typeof candidate.scopeId !== 'string' || candidate.scopeId.length === 0) {
+    issues.push('Semantic zoom DTO requires a non-empty scopeId.');
+  }
+  if (!Array.isArray(candidate.breadcrumbs) || candidate.breadcrumbs.length === 0) {
+    issues.push('Semantic zoom DTO requires a non-empty breadcrumbs array.');
+  }
+  if (!Array.isArray(candidate.nodes)) {
+    issues.push('Semantic zoom DTO requires a nodes array.');
+  }
+  if (!Array.isArray(candidate.edges)) {
+    issues.push('Semantic zoom DTO requires an edges array.');
+  }
 }
 
 /**
