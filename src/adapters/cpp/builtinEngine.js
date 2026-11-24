@@ -371,6 +371,42 @@ else if (kw === 'if') {
         }
       }
     }
+else if (kw === 'while') {
+      const parenOpen = body.indexOf('(', m.index);
+      if (parenOpen !== -1) {
+        const parenClose = findMatchingParen(body, parenOpen);
+        if (parenClose !== -1) {
+          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
+          constructs.push(
+            createControlConstruct({
+              constructId: nextId('while'),
+              kind: 'while',
+              symbolId: fnSymbolId,
+              condition: condRange,
+              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
+            }),
+          );
+        }
+      }
+    } else if (kw === 'for') {
+      const parenOpen = body.indexOf('(', m.index);
+      if (parenOpen !== -1) {
+        const parenClose = findMatchingParen(body, parenOpen);
+        if (parenClose !== -1) {
+          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
+          constructs.push(
+            createControlConstruct({
+              constructId: nextId('for'),
+              kind: 'for',
+              symbolId: fnSymbolId,
+              condition: condRange,
+              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
+              extensions: { hasInit: true, hasCondition: true, hasUpdate: true },
+            }),
+          );
+        }
+      }
+    }
     // more statements
   }
 }
