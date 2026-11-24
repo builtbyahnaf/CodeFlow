@@ -1,6 +1,6 @@
 # Architecture
 
-Status: Phase 8 (Optional project index). This document
+Status: Phase 9 (Incremental indexing and hybrid execution). This document
 describes what the code does today, not what later phases plan to add. Anything
 not implemented is listed under "Deferred".
 
@@ -109,6 +109,20 @@ src/
       queries.js             symbol, neighbor, dependency, and health queries
       workflow.js            first-open decision matrix and status-bar formatter
       index.js               public indexing core surface
+      incremental/
+        events.js            normalized change event model and coalescing
+        debounce.js          per-document debounce, trailing flush, burst detector
+        signatures.js        line-independent symbol signatures and row diffing
+        classify.js          local / dependent / global invalidation classifier
+        cascade.js           reverse dependency graph and cost escalation planner
+        guardrails.js        uncertainty widening and stale-on-failure guardrails
+        provisional.js       in-memory dirty-buffer overlay (maxFiles 4)
+        priorityQueue.js     P0..P3 priority queue, supersession, P3 aging
+        backpressure.js      typing pause/resume and 100ms event-loop lag guard
+        telemetry.js         local-only content-free p50/p95 telemetry counters
+        coordinator.js       end-to-end incremental coordinator
+        scenarios.js         deterministic 500-edit equivalence test generator
+        index.js             public incremental indexing surface
 
   storage/
     indexStore.js            swappable .codeflow/ transactional WAL store
@@ -132,6 +146,7 @@ src/
       gitignore.js           consent-guarded .gitignore check and update
       pipeline.js            cancellable batched workspace indexing pipeline
       service.js             host index service, status bar, and 7 commands
+      watchers.js            editor, save, file-watcher, and config subscriptions
     security/paths.js        lexical workspace containment helpers
 
   visualization/
@@ -311,7 +326,7 @@ command and bridge boundaries.
 | Explanations (non-AI core)       | 6 (done) |
 | Call-graph query and perspective | 7 (done) |
 | Project index and caching        | 8 (done) |
-| Incremental indexing & watchers  | 9        |
+| Incremental indexing & watchers  | 9 (done) |
 | Graph engine revisit/aggregation | 10       |
 | DFG overlay                      | 11       |
 
