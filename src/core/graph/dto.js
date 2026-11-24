@@ -11,6 +11,7 @@
 
 import { computeLayout } from './layout.js';
 import { CFG_EDGE_KINDS, CFG_NODE_KINDS, CFG_STATUSES } from './cfg/kinds.js';
+import { CALL_NODE_KINDS, CALL_RELATIONSHIP_TYPES, CALL_SCOPES } from './calls/kinds.js';
 
 export const GRAPH_DTO_VERSION = 1;
 
@@ -125,6 +126,12 @@ export function validateDto(dto) {
       ? { ok: false, issues }
       : { ok: true, dto: /** @type {GraphDto} */ (dto) };
   }
+  if (candidate.dtoKind === 'call_graph') {
+    validateCallGraphDto(candidate, issues);
+    return issues.length > 0
+      ? { ok: false, issues }
+      : { ok: true, dto: /** @type {GraphDto} */ (dto) };
+  }
   const nodes = candidate.nodes;
   const edges = candidate.edges;
   if (!Array.isArray(nodes)) {
@@ -225,7 +232,10 @@ function validateCfgDto(candidate, issues) {
     if (typeof node.label !== 'string') {
       issues.push(`Node "${id}" needs a string label.`);
     }
-    if (!Array.isArray(node.labelLines) || node.labelLines.some((line) => typeof line !== 'string')) {
+    if (
+      !Array.isArray(node.labelLines) ||
+      node.labelLines.some((line) => typeof line !== 'string')
+    ) {
       issues.push(`Node "${id}" needs string labelLines.`);
     }
     if (node.range !== null && !isRangeRef(node.range)) {
@@ -332,6 +342,98 @@ function validateCfgDto(candidate, issues) {
     !Number.isFinite(extent.height)
   ) {
     issues.push('extent must carry finite width and height.');
+  }
+}
+
+/**
+ * Validate a Phase 7 Call Graph DTO.
+ *
+ * @param {Record<string, unknown>} candidate
+ * @param {string[]} issues
+ */
+function validateCallGraphDto(candidate, issues) {
+  if (candidate.graphKind !== 'call_graph') {
+    issues.push('A Call Graph DTO must declare graphKind "call_graph".');
+  }
+  if (typeof candidate.centerSymbolId !== 'string' || candidate.centerSymbolId.length === 0) {
+    issues.push('centerSymbolId must be a non-empty string.');
+  }
+  if (!CALL_SCOPES.includes(String(candidate.scope))) {
+    issues.push(`scope must be one of ${CALL_SCOPES.join(', ')}.`);
+  }
+  if (typeof candidate.scopeBanner !== 'string' || candidate.scopeBanner.length === 0) {
+    issues.push('scopeBanner must be a non-empty string.');
+  }
+
+  const nodes = candidate.nodes;
+  const edges = candidate.edges;
+  if (!Array.isArray(nodes)) {
+    issues.push('nodes must be an array.');
+    return;
+  }
+  if (!Array.isArray(edges)) {
+    issues.push('edges must be an array.');
+    return;
+  }
+
+  const ids = new Set();
+  for (const entry of nodes) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      issues.push('Every node must be an object.');
+      continue;
+    }
+    const node = /** @type {Record<string, unknown>} */ (entry);
+    const id = node.id;
+    if (typeof id !== 'string') {
+      issues.push('Every node needs a string id.');
+      continue;
+    }
+    if (ids.has(id)) {
+      issues.push(`Duplicate node id "${id}".`);
+    }
+    ids.add(id);
+    if (!CALL_NODE_KINDS.includes(String(node.kind))) {
+      issues.push(`Node "${id}" has unknown call-graph kind "${String(node.kind)}".`);
+    }
+    if (!CFG_STATUSES.includes(String(node.status))) {
+      issues.push(`Node "${id}" has unknown status "${String(node.status)}".`);
+    }
+    if (!isPosition(node.position)) {
+      issues.push(`Node "${id}" has an invalid position.`);
+    }
+  }
+
+  const edgeIds = new Set();
+  for (const entry of edges) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      issues.push('Every edge must be an object.');
+      continue;
+    }
+    const edge = /** @type {Record<string, unknown>} */ (entry);
+    const id = edge.id;
+    if (typeof id !== 'string') {
+      issues.push('Every edge needs a string id.');
+      continue;
+    }
+    if (edgeIds.has(id)) {
+      issues.push(`Duplicate edge id "${id}".`);
+    }
+    edgeIds.add(id);
+    if (typeof edge.from !== 'string' || !ids.has(edge.from)) {
+      issues.push(`Edge "${id}" has an unknown source node.`);
+    }
+    if (typeof edge.to !== 'string' || !ids.has(edge.to)) {
+      issues.push(`Edge "${id}" has an unknown target node.`);
+    }
+    if (!CALL_RELATIONSHIP_TYPES.includes(String(edge.type))) {
+      issues.push(`Edge "${id}" has unknown type "${String(edge.type)}".`);
+    }
+    if (!CFG_STATUSES.includes(String(edge.status))) {
+      issues.push(`Edge "${id}" has unknown status "${String(edge.status)}".`);
+    }
+    if (typeof edge.dash !== 'string' || typeof edge.glyphHint !== 'string') {
+      issues.push(`Edge "${id}" needs string dash and glyphHint fields.`);
+    }
   }
 }
 
