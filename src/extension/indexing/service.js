@@ -15,11 +15,13 @@ import path from 'node:path';
 import { createIndexStore } from '../../storage/indexStore.js';
 import { createIndexingPipeline } from './pipeline.js';
 import { checkGitignoreStatus, addCodeflowToGitignore } from './gitignore.js';
+import { registerIncrementalWatchers } from './watchers.js';
 import {
   DEFAULT_INDEX_CONFIG,
   decideFirstOpenAction,
   formatIndexStatusBar,
   FIRST_OPEN_ACTIONS,
+  createIncrementalCoordinator,
 } from '../../core/indexing/index.js';
 
 const DONT_ASK_KEY = 'codeflow.index.dontAskAgain';
@@ -38,6 +40,10 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
   let store = null;
   /** @type {ReturnType<typeof createIndexingPipeline>|null} */
   let pipeline = null;
+  /** @type {ReturnType<typeof createIncrementalCoordinator>|null} */
+  let coordinator = null;
+  /** @type {{dispose: () => void}|null} */
+  let watcherSubscription = null;
   /** @type {{isCancelled: boolean}|null} */
   let activeToken = null;
   /** @type {vscode.StatusBarItem|null} */
@@ -147,6 +153,35 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
             trusted: vscode.workspace.isTrusted,
           }),
         logger,
+      });
+      const debounceMs = vscode.workspace.getConfiguration('codeflow').get('index.debounceMs', 350);
+      coordinator = createIncrementalCoordinator({
+        store,
+        listWorkspaceFiles: () => walkWorkspaceFiles(root),
+        readWorkspaceFile: (relPath) => fs.readFile(path.join(root, relPath), 'utf8'),
+        analyzeFile: ({ path: relPath, source, runId }) =>
+          analysis.analyze({
+            path: path.join(root, relPath),
+            source,
+            runId,
+            workspaceRoot: root,
+            trusted: vscode.workspace.isTrusted,
+          }),
+        debounceMs,
+      });
+      watcherSubscription = registerIncrementalWatchers({
+        workspaceRoot: () => workspaceRoot(),
+        isTrusted: () => Boolean(vscode.workspace.isTrusted),
+        coordinator,
+        hostEvents: {
+          onDidChangeTextDocument: vscode.workspace.onDidChangeTextDocument,
+          onDidSaveTextDocument: vscode.workspace.onDidSaveTextDocument,
+          onDidCloseTextDocument: vscode.workspace.onDidCloseTextDocument,
+          onDidCreateFiles: vscode.workspace.onDidCreateFiles,
+          onDidDeleteFiles: vscode.workspace.onDidDeleteFiles,
+          onDidRenameFiles: vscode.workspace.onDidRenameFiles,
+          onDidChangeConfiguration: vscode.workspace.onDidChangeConfiguration,
+        },
       });
     }
     return store;
@@ -512,6 +547,9 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
             issues: [],
           };
     },
+    telemetry() {
+      return coordinator ? coordinator.telemetry.snapshot() : null;
+    },
   };
 
   function dispose() {
@@ -519,6 +557,10 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
       activeToken.isCancelled = true;
       activeToken = null;
     }
+    watcherSubscription?.dispose();
+    watcherSubscription = null;
+    coordinator?.dispose();
+    coordinator = null;
     store?.close();
     statusBarItem?.dispose();
   }
