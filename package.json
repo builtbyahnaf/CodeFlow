@@ -66,6 +66,41 @@
         "command": "codeflow.showLog",
         "title": "Show Log",
         "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.indexWorkspace",
+        "title": "Index Workspace",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.cancelIndexing",
+        "title": "Cancel Indexing",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.rebuildIndex",
+        "title": "Rebuild Index",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.repairIndex",
+        "title": "Repair Index",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.showIndexStatus",
+        "title": "Show Index Status",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.clearIndex",
+        "title": "Clear Index",
+        "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.openIndexConfiguration",
+        "title": "Configure Index Exclusions",
+        "category": "CodeFlow"
       }
     ],
     "configuration": {
@@ -251,6 +286,7 @@
     "test:cfg": "node --test \"tests/unit/cfg*.test.js\"",
     "test:explanation": "node --test \"tests/unit/explanation*.test.js\"",
     "test:calls": "node --test \"tests/unit/callGraph*.test.js\"",
+    "test:index": "node --test \"tests/unit/index*.test.js\"",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
