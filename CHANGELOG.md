@@ -8,6 +8,57 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.988] - 2026-11-24
+
+### Phase 9 — Incremental Indexing and Hybrid Execution
+
+Keeping the `.codeflow/` project index accurate and cheap to maintain across
+live edits, saves, file watchers, renames, deletions, and git branch switches
+with a hybrid `P0..P3` execution coordinator, provisional dirty-buffer overlays,
+and a 500-edit equivalence guarantee. See `docs/PHASE-09-REPORT.md` and
+`docs/INDEXING_SPECIFICATION.md` (§7).
+
+- **Incremental indexing & hybrid execution core**
+  (`src/core/indexing/incremental/`):
+  - `events.js`: `CHANGE_KINDS`, `normalizeChangeEvent`, and
+    `coalesceEventSequence` across editor typing, saves, reverts, file watchers,
+    creates, deletes, renames, IME composition gating, and global events.
+  - `debounce.js`: `createIncrementalDebouncer` with `350 ms` per-document
+    debounce (`100..2000 ms` clamped), `3,000 ms` trailing max-wait flush under
+    continuous typing, IME composition hold, and `> 25` file burst / git-checkout
+    coalescing into a single `bulk_burst` pass.
+  - `signatures.js` & `classify.js`: line-independent `computeSymbolSignature`,
+    $O(N)$ `diffFileRows`, and `classifyChange` covering every row of the Phase 9
+    §5.1 matrix (`local` for comment/whitespace and function-body-only edits,
+    `dependent` for symbol/signature/import/header changes, `global` for
+    compile DB, toolchain, and exclusion config changes).
+  - `cascade.js` & `guardrails.js`: `buildReverseDependencyGraph` (including
+    conservative `possible`/`unresolved` edges), cycle-safe
+    `planInvalidationCascade` with cost-modeled escalation (`direct_dependents`,
+    `module_subtree`, `full_project`), and `evaluateUncertaintyGuardrails`
+    (missing compile DB, excluded targets, stale-on-failure preservation, and
+    `analysis_nondeterministic` diagnostics).
+  - `provisional.js`: `createProvisionalOverlay` keeping dirty-buffer analysis in
+    memory (`maxFiles: 4`), capping cross-file edges at `possible`, and
+    reconciling on save or discarding on revert.
+  - `priorityQueue.js`, `backpressure.js`, & `telemetry.js`: `P0..P3` priority
+    queue with cooperative preemption, P3 aging, Phase 10 zoom-expansion P0
+    lane, `(fileId, contentHash, generation)` supersession, continuous-typing
+    pause/resume (`paused_while_typing`), `100 ms` event-loop lag guard
+    (`lag_throttled`), and local-only content-free p50/p95 telemetry.
+  - `coordinator.js` & `scenarios.js`: `createIncrementalCoordinator`,
+    config-change exclusion reconciliation, and
+    `generateDeterministicEditSequence` for the 500-edit equivalence test.
+
+- **Host watchers, settings, and protocol** (`src/extension/indexing/`,
+  `package.json`):
+  - `watchers.js`: `registerIncrementalWatchers` bridging editor, save, close,
+    file create/delete/rename, `.codeflow/config.json`, and
+    `compile_commands.json` events into the coordinator.
+  - Added `codeflow.index.debounceMs` setting and `npm run test:incremental`
+    (13 unit test suites, 18 tests including the 500-edit equivalence test and
+    1-hour simulated soak; 598 total unit + conformance tests passing).
+
 ## [0.1.902] - 2026-11-24
 
 ### Phase 8 — Optional Project Index
