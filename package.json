@@ -101,6 +101,11 @@
         "command": "codeflow.openIndexConfiguration",
         "title": "Configure Index Exclusions",
         "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.showWorkspaceOverview",
+        "title": "Show Workspace Overview (Semantic Zoom)",
+        "category": "CodeFlow"
       }
     ],
     "configuration": {
@@ -295,6 +300,7 @@
     "test:calls": "node --test \"tests/unit/callGraph*.test.js\"",
     "test:index": "node --test \"tests/unit/index*.test.js\"",
     "test:incremental": "node --test \"tests/unit/incremental*.test.js\"",
+    "test:zoom": "node --test \"tests/unit/zoom*.test.js\"",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
