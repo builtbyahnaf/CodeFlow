@@ -60,3 +60,19 @@ sudo dnf install clang clang-tools-extra
 ```bash
 sudo pacman -S clang
 ```
+
+## Configuring VS Code Settings
+
+If Clang is installed in a custom location, you can point CodeFlow directly to it:
+
+1. Open VS Code Settings (`Ctrl+,` / `Cmd+,`).
+2. Search for `codeflow.cpp.clangPath`.
+3. Enter the absolute path to your `clang++` executable (e.g. `D:/toolchains/llvm/bin/clang++.exe`).
+
+### Verifying Toolchain Detection
+
+Run the following command in your terminal to ensure Clang is reachable:
+```bash
+clang++ --version
+```
+CodeFlow requires Clang 15 or newer for optimal AST JSON generation.
