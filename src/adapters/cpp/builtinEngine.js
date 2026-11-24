@@ -436,6 +436,28 @@ else if (kw === 'switch') {
         }),
       );
     }
-    // calls check
+const callTarget = m[2];
+    if (callTarget && !CPP_KEYWORDS.has(callTarget)) {
+      const parenClose = findMatchingParen(body, m.index + m[0].length - 1);
+      const endOff = parenClose !== -1 ? baseOffset + parenClose + 1 : offset + m[0].length;
+      const cc = createControlConstruct({
+        constructId: nextId('call'),
+        kind: 'call',
+        symbolId: fnSymbolId,
+        sourceRange: rangeOf(offset, endOff),
+        extensions: { calleeName: callTarget },
+      });
+      constructs.push(cc);
+      relationships.push(
+        createRelationship({
+          relationshipId: `rel:call:${fnSymbolId}:${callTarget}:${counter}`,
+          type: 'calls',
+          from: fnSymbolId,
+          to: callTarget,
+          status: 'inferred',
+          site: rangeOf(offset, endOff),
+        }),
+      );
+    }
   }
 }
