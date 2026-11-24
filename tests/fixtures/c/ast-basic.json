@@ -1,0 +1,127 @@
+{
+  "id": "0x5000",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "typedef-byte",
+      "kind": "TypedefDecl",
+      "name": "byte",
+      "type": { "qualType": "unsigned char" },
+      "loc": { "file": "src/basic.c", "line": 1, "col": 23 },
+      "range": { "begin": { "line": 1, "col": 1 }, "end": { "line": 1, "col": 27 } }
+    },
+    {
+      "id": "enum-color",
+      "kind": "EnumDecl",
+      "name": "Color",
+      "loc": { "file": "src/basic.c", "line": 3, "col": 6 },
+      "range": { "begin": { "line": 3, "col": 1 }, "end": { "line": 7, "col": 2 } },
+      "inner": [
+        { "id": "enum-red", "kind": "EnumConstantDecl", "name": "RED", "loc": { "line": 4, "col": 3 } },
+        { "id": "enum-green", "kind": "EnumConstantDecl", "name": "GREEN", "loc": { "line": 5, "col": 3 } },
+        { "id": "enum-blue", "kind": "EnumConstantDecl", "name": "BLUE", "loc": { "line": 6, "col": 3 } }
+      ]
+    },
+    {
+      "id": "struct-point",
+      "kind": "RecordDecl",
+      "name": "Point",
+      "tagUsed": "struct",
+      "isCompleteDefinition": true,
+      "loc": { "file": "src/basic.c", "line": 9, "col": 8 },
+      "range": { "begin": { "line": 9, "col": 1 }, "end": { "line": 12, "col": 2 } },
+      "inner": [
+        { "id": "field-x", "kind": "FieldDecl", "name": "x", "loc": { "line": 10, "col": 7 } },
+        { "id": "field-y", "kind": "FieldDecl", "name": "y", "loc": { "line": 11, "col": 7 } }
+      ]
+    },
+    {
+      "id": "union-value",
+      "kind": "RecordDecl",
+      "name": "Value",
+      "tagUsed": "union",
+      "isCompleteDefinition": true,
+      "loc": { "file": "src/basic.c", "line": 14, "col": 7 },
+      "range": { "begin": { "line": 14, "col": 1 }, "end": { "line": 17, "col": 2 } },
+      "inner": [
+        { "id": "field-ival", "kind": "FieldDecl", "name": "i_val", "loc": { "line": 15, "col": 7 } },
+        { "id": "field-fval", "kind": "FieldDecl", "name": "f_val", "loc": { "line": 16, "col": 9 } }
+      ]
+    },
+    {
+      "id": "var-internal-count",
+      "kind": "VarDecl",
+      "name": "internal_count",
+      "storageClass": "static",
+      "type": { "qualType": "int" },
+      "loc": { "file": "src/basic.c", "line": 19, "col": 12 },
+      "range": { "begin": { "line": 19, "col": 1 }, "end": { "line": 19, "col": 31 } }
+    },
+    {
+      "id": "fn-helper",
+      "kind": "FunctionDecl",
+      "name": "helper",
+      "storageClass": "static",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "src/basic.c", "line": 21, "col": 12 },
+      "range": { "begin": { "line": 21, "col": 1 }, "end": { "line": 24, "col": 2 } },
+      "inner": [
+        { "id": "param-delta", "kind": "ParmVarDecl", "name": "delta", "loc": { "line": 21, "col": 23 } },
+        { "kind": "CompoundStmt", "range": { "begin": { "line": 21, "col": 30 }, "end": { "line": 24, "col": 2 } } }
+      ]
+    },
+    {
+      "id": "fn-calculate",
+      "kind": "FunctionDecl",
+      "name": "calculate",
+      "type": { "qualType": "int (struct Point)" },
+      "loc": { "file": "src/basic.c", "line": 26, "col": 5 },
+      "range": { "begin": { "line": 26, "col": 1 }, "end": { "line": 32, "col": 2 } },
+      "inner": [
+        { "id": "param-pt", "kind": "ParmVarDecl", "name": "pt", "loc": { "line": 26, "col": 28 } },
+        {
+          "kind": "CompoundStmt",
+          "range": { "begin": { "line": 26, "col": 32 }, "end": { "line": 32, "col": 2 } },
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "res",
+                  "inner": [
+                    {
+                      "kind": "CallExpr",
+                      "loc": { "line": 27, "col": 13 },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "name": "helper",
+                              "referencedDecl": { "kind": "FunctionDecl", "name": "helper" }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "IfStmt",
+              "range": { "begin": { "line": 28, "col": 3 }, "end": { "line": 30, "col": 4 } },
+              "inner": [
+                { "kind": "BinaryOperator", "opcode": ">", "range": { "begin": { "line": 28, "col": 7 }, "end": { "line": 28, "col": 15 } } },
+                { "kind": "CompoundStmt", "range": { "begin": { "line": 28, "col": 17 }, "end": { "line": 30, "col": 4 } }, "inner": [ { "kind": "ReturnStmt" } ] }
+              ]
+            },
+            { "kind": "ReturnStmt", "range": { "begin": { "line": 31, "col": 3 }, "end": { "line": 31, "col": 14 } } }
+          ]
+        }
+      ]
+    }
+  ]
+}
