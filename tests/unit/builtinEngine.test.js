@@ -124,3 +124,17 @@ void doPrint() { printf("hello\n"); }
   assert.equal(rel.status, 'unresolved');
   assert.equal(rel.reasonCode, 'out_of_scope');
 });
+
+test('parseCppSource ignores keywords inside comments and strings', () => {
+  const code = `
+// if (x) while (y) for (z)
+/* switch (a) case 1: break; */
+void run() {
+  const char* str = "if (true) return 0;";
+  int x = 1;
+}
+`;
+  const run = parseCppSource({ runId: 'run:10', path: 'src/comments.cpp', text: code });
+  const ccs = run.controlConstructs.filter((cc) => cc.kind === 'if' || cc.kind === 'while');
+  assert.equal(ccs.length, 0);
+});
