@@ -1,0 +1,166 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { performance } from 'node:perf_hooks';
+
+import {
+  buildWorkspaceOverview,
+  buildModuleView,
+  buildFileView,
+  buildFunctionView,
+  buildStatementView,
+} from '../../src/core/graph/zoom/aggregator.js';
+
+test('10,000-file workspace overview aggregates into <= 60 clusters in < 2s with exact counts and unresolved surfacing (P10-02, P10-04, P10-22, AC-10.2, AC-10.4)', () => {
+  // Generate a 10,000-file workspace across 80 top-level directories
+  const files = Array.from({ length: 10_000 }, (_, i) => ({
+    fileId: `file:dir_${i % 80}/mod_${i}.js`,
+    path: `dir_${i % 80}/sub_${i % 5}/mod_${i}.js`,
+    language: 'javascript',
+  }));
+  const symbols = Array.from({ length: 10_000 }, (_, i) => ({
+    symbolId: `sym:${i}`,
+    name: `fn_${i}`,
+    qualifiedName: `fn_${i}`,
+    kind: 'function',
+    fileId: `file:dir_${i % 80}/mod_${i}.js`,
+  }));
+  const relationships = [
+    {
+      relationshipId: 'rel:unresolved-1',
+      from: 'sym:0',
+      to: 'sym:ext',
+      type: 'calls',
+      status: 'unresolved',
+      reasonCode: 'dynamic_dispatch',
+    },
+    {
+      relationshipId: 'rel:resolved-1',
+      from: 'sym:0',
+      to: 'sym:1',
+      type: 'calls',
+      status: 'resolved',
+    },
+  ];
+
+  let filesUnderCalls = 0;
+  const fakeIndex = {
+    filesUnder: () => {
+      filesUnderCalls += 1;
+      return { items: files };
+    },
+    allSymbols: () => symbols,
+    allRelationships: () => relationships,
+  };
+
+  const t0 = performance.now();
+  const overview = buildWorkspaceOverview({ index: fakeIndex });
+  const elapsedMs = performance.now() - t0;
+
+  assert.ok(
+    elapsedMs < 2000,
+    `expected 10k-file L0 overview < 2000ms, got ${elapsedMs.toFixed(2)}ms`,
+  );
+  assert.equal(filesUnderCalls, 1, 'must never trigger a per-file query storm');
+  assert.ok(overview.nodes.length <= 60, `expected <= 60 clusters, got ${overview.nodes.length}`);
+  assert.equal(overview.totalFiles, 10_000);
+  assert.equal(overview.totalSymbols, 10_000);
+  assert.equal(overview.capped, true);
+
+  // Sum of fileCounts across all L0 clusters equals 10,000
+  const summedFiles = overview.nodes.reduce((sum, n) => sum + n.fileCount, 0);
+  assert.equal(summedFiles, 10_000);
+
+  // dir_0 contains 1 resolved and 1 unresolved call -> mixed status + "1 unresolved" badge
+  const dir0Cluster = overview.nodes.find((n) => n.scopeId === 'dir_0');
+  assert.equal(dir0Cluster.displayStatus, 'mixed');
+  assert.ok(dir0Cluster.badges.includes('1 unresolved'));
+
+  // 1,000-file L1 module view completes in < 1,000 ms
+  const moduleFiles = files.slice(0, 1000).map((f, i) => ({
+    ...f,
+    path: `src/pkg_${i % 10}/f_${i}.js`,
+  }));
+  const m0 = performance.now();
+  const moduleView = buildModuleView({
+    modulePrefix: 'src',
+    index: {
+      filesUnder: () => ({ items: moduleFiles }),
+      allSymbols: () => [],
+      allRelationships: () => [],
+    },
+  });
+  const moduleMs = performance.now() - m0;
+  assert.ok(
+    moduleMs < 1000,
+    `expected 1k-file L1 module view < 1000ms, got ${moduleMs.toFixed(2)}ms`,
+  );
+  assert.equal(moduleView.nodes.length, 10);
+});
+
+test('L2 dense file symbol clustering, L4 1,500-node CFG construct clustering, and L5 statement view with DFG overlay slot (P10-09, P10-10)', () => {
+  // L2 File with 160 symbols (> 120 cap) groups by kind
+  const denseSymbols = [
+    ...Array.from({ length: 100 }, (_, i) => ({
+      symbolId: `sym:fn_${i}`,
+      name: `fn_${i}`,
+      kind: 'function',
+      fileId: 'file:dense.js',
+    })),
+    ...Array.from({ length: 60 }, (_, i) => ({
+      symbolId: `sym:var_${i}`,
+      name: `var_${i}`,
+      kind: 'variable',
+      fileId: 'file:dense.js',
+    })),
+  ];
+  const fileView = buildFileView({
+    fileId: 'file:dense.js',
+    index: {
+      symbolsInFile: () => ({ items: denseSymbols }),
+      allRelationships: () => [],
+    },
+  });
+  assert.equal(fileView.groupedByKind, true);
+  assert.equal(fileView.nodes.length, 2);
+  assert.ok(fileView.nodes.some((n) => n.label === '100 functions'));
+
+  // L4 Function with 1,500 CFG nodes (> 150 cap) clusters constructs and preserves unmodeled markers
+  const cfgNodes = [
+    { id: 'cfg:entry', kind: 'entry', label: 'entry' },
+    ...Array.from({ length: 1498 }, (_, i) => ({
+      id: `cfg:n_${i}`,
+      kind: i === 50 ? 'unmodeled' : 'statement',
+      label: `stmt_${i}`,
+      constructId: `loop_${Math.floor(i / 50)}`,
+    })),
+    { id: 'cfg:exit', kind: 'exit', label: 'exit' },
+  ];
+  const cfgEdges = Array.from({ length: 1499 }, (_, i) => ({
+    id: `e:${i}`,
+    from: cfgNodes[i].id,
+    to: cfgNodes[i + 1].id,
+    kind: 'normal',
+  }));
+  const fnView = buildFunctionView({
+    cfg: { symbolId: 'sym:bigFn', nodes: cfgNodes, edges: cfgEdges },
+  });
+  assert.equal(fnView.clusteredConstructs, true);
+  assert.ok(
+    fnView.nodes.length <= 35,
+    `expected clustered L4 nodes <= 35, got ${fnView.nodes.length}`,
+  );
+  const loop1Cluster = fnView.nodes.find((n) => n.id.endsWith(':loop_1'));
+  assert.equal(loop1Cluster.hasUnmodeled, true);
+  assert.ok(loop1Cluster.badges.includes('1 unmodeled'));
+
+  // L5 Statement view inside loop_1 with Phase 11 DFG overlay slot
+  const stmtView = buildStatementView({
+    symbolId: 'sym:bigFn',
+    constructId: 'loop_1',
+    cfg: { nodes: cfgNodes, edges: cfgEdges },
+    activeOverlays: ['dfg'],
+    dfgEdges: [{ id: 'dfg:1', from: 'cfg:n_50', to: 'cfg:n_51', kind: 'def_use' }],
+  });
+  assert.equal(stmtView.nodes.length, 50);
+  assert.equal(stmtView.overlays.dfg.length, 1);
+});
