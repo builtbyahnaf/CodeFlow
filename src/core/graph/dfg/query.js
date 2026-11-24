@@ -175,3 +175,101 @@ export function traceBinding(dfg, bindingId, budgetMs = SLICE_BUDGET_MS) {
  * @param {number} [budgetMs]
  * @returns {SliceResult}
  */
+export function backwardSlice(dfg, useNodeId, budgetMs = SLICE_BUDGET_MS) {
+  const startMs = Date.now();
+  const bwd = buildAdjacency(dfg.edges, 'backward');
+  const visited = new Set([useNodeId]);
+  const visitedEdges = new Set();
+  const queue = [useNodeId];
+  let partial = false;
+
+  while (queue.length > 0) {
+    if (Date.now() - startMs > budgetMs) {
+      partial = true;
+      break;
+    }
+    const id = queue.shift();
+    const edges = bwd.get(id) ?? [];
+    for (const e of edges) {
+      const key = `${e.from}→${e.to}`;
+      if (!visitedEdges.has(key)) {
+        visitedEdges.add(key);
+        if (!visited.has(e.from)) {
+          visited.add(e.from);
+          queue.push(e.from);
+        }
+      }
+    }
+  }
+
+  const nodeMap = new Map(dfg.nodes.map((n) => [n.id, n]));
+  const nodes = [...visited].map((id) => nodeMap.get(id)).filter(Boolean);
+  const edges = dfg.edges.filter(
+    (e) => visitedEdges.has(`${e.from}→${e.to}`),
+  );
+
+  return {
+    nodes: /** @type {FlowNode[]} */ (nodes),
+    edges,
+    partial,
+    ...(partial ? { partialReason: 'too_large' } : {}),
+  };
+}
+
+/**
+ * Forward slice from a def node: find all uses that transitively receive
+ * this value.
+ *
+ * @param {Dfg} dfg
+ * @param {string} defNodeId
+ * @param {number} [budgetMs]
+ * @returns {SliceResult}
+ */
+export function forwardSlice(dfg, defNodeId, budgetMs = SLICE_BUDGET_MS) {
+  const startMs = Date.now();
+  const fwd = buildAdjacency(dfg.edges, 'forward');
+  const visited = new Set([defNodeId]);
+  const visitedEdges = new Set();
+  const queue = [defNodeId];
+  let partial = false;
+
+  while (queue.length > 0) {
+    if (Date.now() - startMs > budgetMs) {
+      partial = true;
+      break;
+    }
+    const id = queue.shift();
+    const edges = fwd.get(id) ?? [];
+    for (const e of edges) {
+      const key = `${e.from}→${e.to}`;
+      if (!visitedEdges.has(key)) {
+        visitedEdges.add(key);
+        if (!visited.has(e.to)) {
+          visited.add(e.to);
+          queue.push(e.to);
+        }
+      }
+    }
+  }
+
+  const nodeMap = new Map(dfg.nodes.map((n) => [n.id, n]));
+  const nodes = [...visited].map((id) => nodeMap.get(id)).filter(Boolean);
+  const edges = dfg.edges.filter(
+    (e) => visitedEdges.has(`${e.from}→${e.to}`),
+  );
+
+  return {
+    nodes: /** @type {FlowNode[]} */ (nodes),
+    edges,
+    partial,
+    ...(partial ? { partialReason: 'too_large' } : {}),
+  };
+}
+
+/**
+ * Summarise the flow of a binding as human-readable detail-panel entries.
+ *
+ * @param {Dfg} dfg
+ * @param {string} bindingId
+ * @returns {Array<{text: string, status: string, reasonCode?: string}>}
+ */
