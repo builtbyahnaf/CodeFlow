@@ -8,6 +8,60 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
+## [0.1.815] - 2026-11-24
+
+### Phase 7 — Call Graph and Cross-File Relationships
+
+Answering "who calls this, and what does it call?" with a deterministic
+multi-source merge policy, honest scope banners (`same_file_only`, `partial`,
+`complete`), cycle marking, unresolved buckets, and an interactive call-graph
+perspective. See `docs/PHASE-07-REPORT.md` and `docs/GRAPH_SPECIFICATION.md`
+(§12).
+
+- **Call-graph core and merge policy** (`src/core/graph/calls/`):
+  - `kinds.js`: frozen scopes, relationship types (`calls`, `instantiates`,
+    `overrides`, `references`), node kinds (including `unresolved_bucket` and
+    `candidate_bucket`), limits (`100` default / `200` max page, depth `3`
+    default / `6` max, `500` max nodes), `formatScopeBanner`, and non-color
+    `callEdgeDash` / `callEdgeGlyph` (`●`, `◐`, `○`, `✕`, `⋯`, `↻`).
+  - `merge.js`: `mergeStatusPair` and `mergeEvidenceSources` implementing the
+    Phase 7 §6 precedence truth table (`resolved > inferred > possible >
+unresolved`, plus `stale` provenance), candidate set unioning without false
+    `resolved` upgrades, cross-type isolation, site-keyed unresolved bucket
+    preservation, order-independent canonical sorting, and `source_disagreement`
+    diagnostics.
+  - `cycles.js`: linear $O(V + E)$ Tarjan strongly-connected-components and
+    self-loop detector (`detectCallCycles`).
+  - `sources.js`: `createAdapterEvidenceSource(query)` (`same_file_only`) and
+    `createIndexEvidenceSource(index)` (`callsByFrom`, `callsByTo`,
+    `symbolById`, `batchNeighbors`) ready for Phase 8 indexing.
+  - `query.js`: `createCallGraphQueryService` with cursor-paginated `outgoing`
+    and `incoming` queries, stale-cursor `runId` reset, cancellable `depth`
+    expansion returning both nodes and edges, and candidate bucket aggregation.
+  - `ego.js`: `createCallGraphSession` supporting `open`, 1-hop `expand`,
+    descendant-evicting `collapse`, status/kind/file `filter`, and neighborhood
+    `focus` dimming, producing validated `dtoKind: 'call_graph'` DTOs.
+
+- **Protocol, host, and webview perspective** (`src/core/protocol/`,
+  `src/extension/`, `src/webview/`, `src/visualization/renderer/`):
+  - Added `calls.load`, `calls.outgoing`, `calls.incoming`, `calls.expand`,
+    `calls.collapse`, `calls.filter`, `calls.focus` (webview → host) and
+    `calls.data`, `calls.neighbors` (host → webview).
+  - Registered `codeflow.showCallGraph` (`Show Call Graph for Function`) in
+    `package.json` and `commands.js`, wired through `panel.js` and
+    `panelWire.js`.
+  - Added perspective picker (`#cf-perspective`), cross-perspective `"Show in
+CFG"` / `"Show in Call Graph"` button (`#cf-switch-perspective`), scope
+    banner (`#cf-scope-banner`), expand/collapse/focus/filter toolbar,
+    paginated caller/callee side lists, and unresolved target bucket disclosure.
+
+- **Tests and documentation**:
+  - Added `npm run test:calls` (`callGraphMerge`, `callGraphCycles`,
+    `callGraphQuery`, `callGraphLanguages`, `callGraphEgo` — 19 tests) plus
+    protocol, panelWire, and panelTemplate tests.
+  - Updated `docs/GRAPH_SPECIFICATION.md` (§12), `docs/ARCHITECTURE.md`,
+    `README.md`, and added `docs/PHASE-07-REPORT.md`.
+
 ## [0.1.731] - 2026-11-24
 
 ### Phase 6 — Deterministic Explanation Engine
