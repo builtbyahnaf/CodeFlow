@@ -414,6 +414,27 @@ C constructs into the CSR:
    exits (`abort()`, `exit()`) are translated into language-neutral `ControlConstruct` records
    for CFG construction.
 
+## The Java adapter (Phase 14)
+
+The Java adapter (`src/adapters/java/index.js`, id `java-ast`) analyses Java compilation
+units (`.java`). It models object-oriented Java structures into the CSR:
+
+### Object-oriented semantics
+
+1. **Packages and imports**: The `package` declaration maps to a `namespace` symbol.
+   Import statements emit `imports` relationships; workspace targets resolve deterministically,
+   while JDK packages (`JAVA_JDK_PACKAGES`) target `external:` symbols with `external_package`.
+2. **Type hierarchy**: Single class inheritance (`extends`) emits `inherits` relationships;
+   interface implementations (`implements`) emit `implements` relationships. Interfaces,
+   records, enums, and classes map to corresponding CSR symbols.
+3. **Method overloading**: Methods and constructors compute canonical disambiguator tokens
+   based on parameter count and normalized types (`arityN.type1+type2`).
+4. **Polymorphic dispatch**: Virtual method invocations produce honest `possible` relationships
+   with reason code `dynamic_dispatch` and candidate sets. Static calls and private/final
+   methods resolve with certainty (`resolved`).
+5. **Exception flow and CFG**: `try-catch-finally` blocks, `throw`, loops, and branching
+   constructs map into language-neutral `ControlConstruct` records for CFG construction.
+
 ## Reference implementation: the mock adapter
 
 `src/adapters/mock/index.js` is the fixture that exercises the whole contract:
@@ -440,6 +461,7 @@ adds the constructs capability to real adapters.
 | 2     | C++ (`cpp-clang`)       | Shipped | Route A; host-driven Clang AST JSON; compile-DB and heuristic modes |
 | 3     | JavaScript (`js-acorn`) | Shipped | acorn + eslint-scope; conservative module and receiver resolution   |
 | 13    | C (`c-clang`)           | Shipped | Native C adapter; function pointers; #include dependency graph     |
+| 14    | Java (`java-ast`)       | Shipped | Native Java adapter; OO hierarchy, overloads, virtual dispatch     |
 | 7     | C++ cross-file evidence | Planned | May add `clangd` evidence without redefining resolution statuses    |
 
 Every adapter must satisfy the same CSR and the same conformance suite. No
