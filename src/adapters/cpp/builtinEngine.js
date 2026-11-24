@@ -1,3 +1,19 @@
+import {
+  createAnalysisRun,
+  createDiagnostic,
+  createFileRecord,
+  createRelationship,
+  createSymbol,
+  createControlConstruct,
+} from '../../core/csr/entities.js';
+import {
+  createFileId,
+  createIdentityAllocator,
+  createRelationshipAllocator,
+  normalizePath,
+} from '../../core/csr/identity.js';
+import { shortHash } from '../../core/csr/hash.js';
+
 /**
  * Built-in pure JavaScript C/C++ syntactic analyzer.
  *
