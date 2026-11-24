@@ -8,6 +8,10 @@
 
 import * as vscode from 'vscode';
 import { buildDiagnosticsReport, openDiagnosticsDocument } from './diagnostics.js';
+import {
+  getCategoryQuickPickItems,
+  getAllCategorizedSettingKeys,
+} from './settings/index.js';
 
 /**
  * @param {{
@@ -219,5 +223,49 @@ export function registerCommands({
     } else {
       panelManager.show();
     }
+  });
+
+  register('codeflow.configure', async () => {
+    const items = getCategoryQuickPickItems();
+    const picked = await vscode.window.showQuickPick(
+      items.map((item) => ({
+        label: item.label,
+        description: item.description,
+        categoryId: item.id,
+      })),
+      {
+        title: 'CodeFlow: Configure Settings',
+        placeHolder: 'Select a settings category to configure',
+      },
+    );
+    if (!picked) {
+      return;
+    }
+    logger.info('command.configure', { categoryId: picked.categoryId });
+    await vscode.commands.executeCommand('workbench.action.openSettings', 'codeflow');
+  });
+
+  register('codeflow.resetSettings', async () => {
+    const choice = await vscode.window.showWarningMessage(
+      'Are you sure you want to reset all CodeFlow settings to their default values?',
+      { modal: true },
+      'Reset All Settings',
+    );
+    if (choice !== 'Reset All Settings') {
+      return;
+    }
+    logger.info('command.resetSettings');
+    const config = vscode.workspace.getConfiguration('codeflow');
+    const allKeys = getAllCategorizedSettingKeys();
+    for (const key of allKeys) {
+      const subKey = key.replace(/^codeflow\./, '');
+      try {
+        await config.update(subKey, undefined, vscode.ConfigurationTarget.Global);
+        await config.update(subKey, undefined, vscode.ConfigurationTarget.Workspace);
+      } catch {
+        // Safe ignore
+      }
+    }
+    void vscode.window.showInformationMessage('CodeFlow settings have been reset to defaults.');
   });
 }
