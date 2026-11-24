@@ -304,3 +304,30 @@ export function parseCppSource(input) {
   }
   // functions loop done
 }
+
+/**
+ * Parse statements and control constructs inside a function body.
+ *
+ * @param {string} body
+ * @param {number} baseOffset
+ * @param {string} fnSymbolId
+ * @param {Function} rangeOf
+ * @param {Array<any>} constructs
+ * @param {Array<any>} relationships
+ */
+function parseBodyConstructs(
+  body,
+  baseOffset,
+  fnSymbolId,
+  rangeOf,
+  constructs,
+  relationships,
+) {
+  let counter = 0;
+  const nextId = (kind) => `${fnSymbolId}:cc:${kind}:${(counter += 1)}`;
+  const keywordRegex = /\b(if|for|while|do|switch|case|default|return|break|continue|goto)\b|([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g;
+  let m;
+  while ((m = keywordRegex.exec(body)) !== null) {
+    // keyword dispatch
+  }
+}
