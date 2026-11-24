@@ -208,5 +208,18 @@ export function parseCppSource(input) {
   for (let i = 0; i < lines.length - 1; i += 1) {
     lineStarts.push(lineStarts[i] + lines[i].length + 1);
   }
-  // line indexing ready
+  const rangeOf = (startOffset, endOffset) => {
+    const start = offsetToPos(lineStarts, Math.max(0, startOffset));
+    const end = offsetToPos(lineStarts, Math.max(0, endOffset));
+    return {
+      fileId,
+      startLine: start.line,
+      startColumn: start.column,
+      endLine: end.line,
+      endColumn: end.column,
+      startOffset,
+      endOffset,
+    };
+  };
+  // rangeOf ready
 }
