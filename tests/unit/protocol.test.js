@@ -263,3 +263,16 @@ test('Phase 7 call-graph kinds are directional and validated', () => {
     );
   }
 });
+
+test('Phase 8 index kinds are directional and validated', () => {
+  assert.equal(validateEnvelope(createEnvelope('index.status', {}), WEBVIEW_TO_HOST).ok, true);
+  assert.equal(
+    validateEnvelope(createEnvelope('index.status', {}), HOST_TO_WEBVIEW).reason,
+    'unknown_kind',
+  );
+  assert.equal(validateEnvelope(createEnvelope('index.data', {}), HOST_TO_WEBVIEW).ok, true);
+  assert.equal(
+    validateEnvelope(createEnvelope('index.data', {}), WEBVIEW_TO_HOST).reason,
+    'unknown_kind',
+  );
+});
