@@ -119,7 +119,7 @@ export async function activate(context) {
     /**
      * @param {{path?: string}} input
      */
-    analyze(input) {
+    async analyze(input) {
       const adapter = registry.resolve(input?.path ?? '');
       if (adapter?.id === JS_ADAPTER_ID) {
         return javascriptAnalysis.analyze(input);
@@ -136,13 +136,14 @@ export async function activate(context) {
         let text = input?.text;
         if (typeof text !== 'string' && input?.path) {
           try {
-            const fs = await import('node:fs/promises');
-            const pathMod = await import('node:path');
             const workspaceRoot = input.workspaceRoot || '';
-            const absPath = pathMod.isAbsolute(input.path)
+            const isAbs = input.path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(input.path);
+            const absPath = isAbs
               ? input.path
-              : pathMod.resolve(workspaceRoot, input.path);
-            text = await fs.readFile(absPath, 'utf8');
+              : `${workspaceRoot}/${input.path}`.replace(/\\/g, '/');
+            const fileUri = vscode.Uri.file(absPath);
+            const bytes = await vscode.workspace.fs.readFile(fileUri);
+            text = new TextDecoder('utf-8').decode(bytes);
           } catch {
             text = '';
           }
