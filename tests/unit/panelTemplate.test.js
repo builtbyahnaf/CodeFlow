@@ -91,6 +91,14 @@ test('declares the document structure the webview expects', () => {
     'cf-callers-list',
     'cf-callees-list',
     'cf-unresolved-bucket',
+    'cf-zoom-bar',
+    'cf-zoom-level-badge',
+    'cf-zoom-breadcrumbs',
+    'cf-zoom-search',
+    'cf-zoom-chips',
+    'cf-zoom-panel',
+    'cf-zoom-members-list',
+    'cf-zoom-minimap',
   ]) {
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   }
