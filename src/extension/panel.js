@@ -47,7 +47,7 @@ export function createPanelManager({
   let preferredPath = null;
   /** @type {string | null} */
   let preferredSymbolId = null;
-  /** @type {'cfg'|'call_graph'} */
+  /** @type {'cfg'|'call_graph'|'semantic_zoom'} */
   let preferredPerspective = 'cfg';
   const analyzer = analysis ?? registry;
 
@@ -317,6 +317,19 @@ export function createPanelManager({
       preferredPath = filePath;
       preferredSymbolId = symbolId;
       preferredPerspective = 'call_graph';
+      if (panel) {
+        applyHtml(panel);
+        panel.reveal(undefined, false);
+        return panel;
+      }
+      return show();
+    },
+    /**
+     * Show the panel in the L0–L5 progressive semantic zoom overview perspective.
+     */
+    showWorkspaceOverview() {
+      preferredSymbolId = null;
+      preferredPerspective = 'semantic_zoom';
       if (panel) {
         applyHtml(panel);
         panel.reveal(undefined, false);
