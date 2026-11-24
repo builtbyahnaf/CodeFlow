@@ -1,0 +1,90 @@
+{
+  "kind": "CompilationUnit",
+  "package": "com.example.shapes",
+  "types": [
+    {
+      "kind": "ClassDeclaration",
+      "name": "HierarchyDemo",
+      "visibility": "public",
+      "range": { "begin": { "line": 3, "col": 1 }, "end": { "line": 28, "col": 2 } },
+      "members": [
+        {
+          "kind": "InterfaceDeclaration",
+          "name": "Drawable",
+          "visibility": "public",
+          "range": { "begin": { "line": 4, "col": 5 }, "end": { "line": 6, "col": 6 } },
+          "members": [
+            {
+              "kind": "MethodDeclaration",
+              "name": "draw",
+              "returnType": "void",
+              "visibility": "public",
+              "isAbstract": true,
+              "range": { "begin": { "line": 5, "col": 9 }, "end": { "line": 5, "col": 21 } }
+            }
+          ]
+        },
+        {
+          "kind": "ClassDeclaration",
+          "name": "Shape",
+          "visibility": "public",
+          "isAbstract": true,
+          "isStatic": true,
+          "implements": ["Drawable"],
+          "range": { "begin": { "line": 8, "col": 5 }, "end": { "line": 10, "col": 6 } },
+          "members": [
+            {
+              "kind": "MethodDeclaration",
+              "name": "area",
+              "returnType": "double",
+              "visibility": "public",
+              "isAbstract": true,
+              "range": { "begin": { "line": 9, "col": 9 }, "end": { "line": 9, "col": 32 } }
+            }
+          ]
+        },
+        {
+          "kind": "ClassDeclaration",
+          "name": "Circle",
+          "visibility": "public",
+          "isStatic": true,
+          "extends": "Shape",
+          "range": { "begin": { "line": 12, "col": 5 }, "end": { "line": 27, "col": 6 } },
+          "members": [
+            {
+              "kind": "FieldDeclaration",
+              "name": "radius",
+              "type": "double",
+              "visibility": "private",
+              "range": { "begin": { "line": 13, "col": 9 }, "end": { "line": 13, "col": 31 } }
+            },
+            {
+              "kind": "ConstructorDeclaration",
+              "name": "Circle",
+              "visibility": "public",
+              "parameters": [{ "name": "radius", "type": "double" }],
+              "range": { "begin": { "line": 15, "col": 9 }, "end": { "line": 17, "col": 10 } },
+              "body": { "kind": "BlockStmt", "statements": [] }
+            },
+            {
+              "kind": "MethodDeclaration",
+              "name": "draw",
+              "returnType": "void",
+              "visibility": "public",
+              "range": { "begin": { "line": 20, "col": 9 }, "end": { "line": 22, "col": 10 } },
+              "body": { "kind": "BlockStmt", "statements": [] }
+            },
+            {
+              "kind": "MethodDeclaration",
+              "name": "area",
+              "returnType": "double",
+              "visibility": "public",
+              "range": { "begin": { "line": 25, "col": 9 }, "end": { "line": 27, "col": 10 } },
+              "body": { "kind": "BlockStmt", "statements": [] }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
