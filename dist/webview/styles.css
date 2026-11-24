@@ -696,3 +696,101 @@ body {
 .hljs-link {
   color: var(--vscode-symbolIcon-constantForeground, #4fc1ff);
 }
+
+/* Phase 6 — explanation summary, node details, evidence links, limitations */
+
+.cf-fn-summary {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--cf-border);
+  background: var(--cf-surface);
+  color: var(--cf-fg);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.cf-fn-summary[hidden] {
+  display: none;
+}
+
+.cf-preview-explain {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--cf-border);
+  color: var(--cf-fg);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.cf-preview-explain[hidden] {
+  display: none;
+}
+
+.cf-explain {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--cf-border);
+}
+
+.cf-explain-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cf-explain-head .cf-detail-title {
+  margin: 0;
+}
+
+.cf-explain-depth {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.cf-explain-items {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cf-explain-item {
+  margin: 0;
+}
+
+.cf-explain--qualified {
+  color: var(--cf-muted);
+}
+
+.cf-explain-disclosure {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--cf-muted);
+}
+
+.cf-explain-disclosure summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.cf-explain-evidence-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.cf-evidence-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--cf-accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.cf-explain-limits-text {
+  margin: 4px 0 0;
+  color: var(--cf-fg);
+}
