@@ -20,6 +20,9 @@ import { toCfgDto } from '../core/graph/cfg/dto.js';
 import { hashRun } from '../core/csr/serialize.js';
 import { normalizeRangeRef, containsPosition, rangesOverlap } from '../core/source/ranges.js';
 import { createExplanationEngine } from '../core/explanation/engine.js';
+import { createCallGraphQueryService } from '../core/graph/calls/query.js';
+import { createCallGraphSession } from '../core/graph/calls/ego.js';
+import { createIndexEvidenceSource } from '../core/graph/calls/sources.js';
 
 /** @typedef {ReturnType<typeof import('../core/csr/query.js').createQueryLayer>} QueryLayer */
 
@@ -56,6 +59,7 @@ export function createPanelWire({
   sourceAccess = null,
   navigate = null,
   getSettings = null,
+  indexProvider = null,
 }) {
   return function wire(target) {
     if (!target?.webview || typeof target.webview.onDidReceiveMessage !== 'function') {
@@ -102,6 +106,25 @@ export function createPanelWire({
     /** @type {Set<string>} */
     const staleFileIds = new Set();
     const explanationEngine = createExplanationEngine();
+    /** @type {ReturnType<typeof createCallGraphQueryService>|null} */
+    let callQueryService = null;
+    /** @type {ReturnType<typeof createCallGraphSession>|null} */
+    let callSession = null;
+
+    function rebuildCallService() {
+      if (!current) {
+        callQueryService = null;
+        callSession = null;
+        return;
+      }
+      callQueryService = createCallGraphQueryService({
+        query: current.query,
+        indexSource: indexProvider ? createIndexEvidenceSource(indexProvider) : null,
+        staleFiles: staleFileIds,
+        logger: loggerProxy,
+      });
+      callSession = createCallGraphSession({ queryService: callQueryService });
+    }
 
     /**
      * @param {string} value
@@ -157,6 +180,7 @@ export function createPanelWire({
       selectedNodeId = null;
       staleFileIds.clear();
       explanationEngine.invalidateRun(loaded.run.runId);
+      rebuildCallService();
       if (sourceAccess?.captureBaseline) {
         try {
           await sourceAccess.captureBaseline(loaded.run.files);
@@ -281,9 +305,7 @@ export function createPanelWire({
       const nodeId = typeof payload.nodeId === 'string' ? payload.nodeId : '';
       const node = lastCfg.nodes.find((entry) => entry.id === nodeId);
       const stale = Boolean(
-        node?.range?.fileId
-          ? staleFileIds.has(node.range.fileId)
-          : staleFileIds.size > 0,
+        node?.range?.fileId ? staleFileIds.has(node.range.fileId) : staleFileIds.size > 0,
       );
       const result = explanationEngine.explainNode({
         query: current.query,
@@ -314,9 +336,7 @@ export function createPanelWire({
         return;
       }
       const fnFileId = lastCfg.function?.range?.fileId;
-      const stale = Boolean(
-        fnFileId ? staleFileIds.has(fnFileId) : staleFileIds.size > 0,
-      );
+      const stale = Boolean(fnFileId ? staleFileIds.has(fnFileId) : staleFileIds.size > 0);
       const result = explanationEngine.explainFunction({
         query: current.query,
         cfg: lastCfg,
@@ -325,6 +345,151 @@ export function createPanelWire({
         settings: getSettings ? getSettings()?.explanation : undefined,
       });
       bridge.respond('explain.data', result, requestId);
+    });
+
+    bridge.on('calls.load', async (payload, { requestId }) => {
+      const loaded = await ensureRun();
+      if (!loaded.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(loaded.code, loaded.message, { issues: loaded.issues }),
+          requestId,
+        );
+        return;
+      }
+      if (!callSession) {
+        rebuildCallService();
+      }
+      const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
+      const built = callSession.open(symbolId, {
+        depth: typeof payload.depth === 'number' ? payload.depth : undefined,
+      });
+      if (!built.ok) {
+        bridge.respond('protocol.error', createErrorPayload(built.code, built.message), requestId);
+        return;
+      }
+      lastDto = built.dto;
+      bridge.respond('calls.data', { ok: true, dto: built.dto }, requestId);
+    });
+
+    bridge.on('calls.outgoing', async (payload, { requestId }) => {
+      if (!current || !callQueryService) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Load a graph before querying call relationships.'),
+          requestId,
+        );
+        return;
+      }
+      const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
+      const result = callQueryService.outgoing(symbolId, payload);
+      if (!result.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(result.code, result.message),
+          requestId,
+        );
+        return;
+      }
+      bridge.respond('calls.neighbors', result, requestId);
+    });
+
+    bridge.on('calls.incoming', async (payload, { requestId }) => {
+      if (!current || !callQueryService) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Load a graph before querying call relationships.'),
+          requestId,
+        );
+        return;
+      }
+      const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
+      const result = callQueryService.incoming(symbolId, payload);
+      if (!result.ok) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload(result.code, result.message),
+          requestId,
+        );
+        return;
+      }
+      bridge.respond('calls.neighbors', result, requestId);
+    });
+
+    bridge.on('calls.expand', async (payload, { requestId }) => {
+      if (!current || !callSession) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Open a call graph before expanding neighbors.'),
+          requestId,
+        );
+        return;
+      }
+      const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
+      const built = callSession.expand(symbolId);
+      if (!built.ok) {
+        bridge.respond('protocol.error', createErrorPayload(built.code, built.message), requestId);
+        return;
+      }
+      lastDto = built.dto;
+      bridge.respond('calls.data', { ok: true, dto: built.dto }, requestId);
+    });
+
+    bridge.on('calls.collapse', async (payload, { requestId }) => {
+      if (!current || !callSession) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Open a call graph before collapsing neighbors.'),
+          requestId,
+        );
+        return;
+      }
+      const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
+      const built = callSession.collapse(symbolId);
+      if (!built.ok) {
+        bridge.respond('protocol.error', createErrorPayload(built.code, built.message), requestId);
+        return;
+      }
+      lastDto = built.dto;
+      bridge.respond('calls.data', { ok: true, dto: built.dto }, requestId);
+    });
+
+    bridge.on('calls.filter', async (payload, { requestId }) => {
+      if (!current || !callSession) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Open a call graph before filtering.'),
+          requestId,
+        );
+        return;
+      }
+      const built = callSession.filter(payload);
+      if (!built.ok) {
+        bridge.respond('protocol.error', createErrorPayload(built.code, built.message), requestId);
+        return;
+      }
+      lastDto = built.dto;
+      bridge.respond('calls.data', { ok: true, dto: built.dto }, requestId);
+    });
+
+    bridge.on('calls.focus', async (payload, { requestId }) => {
+      if (!current || !callSession) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_NO_ANALYSIS', 'Open a call graph before focusing a node.'),
+          requestId,
+        );
+        return;
+      }
+      const built = callSession.focus(
+        typeof payload.symbolId === 'string' ? payload.symbolId : null,
+      );
+      if (!built.ok) {
+        bridge.respond('protocol.error', createErrorPayload(built.code, built.message), requestId);
+        return;
+      }
+      lastDto = built.dto;
+      bridge.respond('calls.data', { ok: true, dto: built.dto }, requestId);
     });
 
     bridge.on('source.slice', async (payload, { requestId }) => {
@@ -438,9 +603,7 @@ export function createPanelWire({
       });
       bridge.respond(
         'navigate.done',
-        result.ok
-          ? { ok: true }
-          : { ok: false, code: result.code, message: result.message },
+        result.ok ? { ok: true } : { ok: false, code: result.code, message: result.message },
         requestId,
       );
     });
@@ -548,14 +711,12 @@ export function createPanelWire({
         endLine: end.line,
         endColumn: end.column,
       };
-      const hasSelection =
-        start.line !== end.line || start.column !== end.column;
+      const hasSelection = start.line !== end.line || start.column !== end.column;
       const matches = lastDto.nodes
         .filter((node) => node.range && node.range.fileId === fileId)
         .filter((node) =>
           hasSelection
-            ? rangesOverlap(node.range, selectionRange) ||
-              containsPosition(node.range, start)
+            ? rangesOverlap(node.range, selectionRange) || containsPosition(node.range, start)
             : containsPosition(node.range, start),
         )
         .sort((left, right) => {
