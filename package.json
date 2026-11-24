@@ -207,6 +207,23 @@
           "type": "boolean",
           "default": false,
           "description": "Open source navigation targets in a preview tab. Disabled by default so trust-building navigation does not replace the current editor."
+        },
+        "codeflow.explanation.defaultDepth": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 4,
+          "description": "Default explanation depth level (1 Basic, 2 Intermediate, 3 Advanced, 4 Deep)."
+        },
+        "codeflow.explanation.showEvidence": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show source and semantic evidence links under explanations."
+        },
+        "codeflow.explanation.includeLimitations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Expand analysis limitation disclosures by default. Limitations remain accessible for honesty even when collapsed."
         }
       }
     }
@@ -227,6 +244,7 @@
     "test:cpp": "node --test \"tests/unit/cpp*.test.js\" \"tests/conformance/cpp.conformance.test.js\"",
     "test:js": "node --test \"tests/unit/javascript*.test.js\" \"tests/conformance/javascript.conformance.test.js\"",
     "test:cfg": "node --test \"tests/unit/cfg*.test.js\"",
+    "test:explanation": "node --test \"tests/unit/explanation*.test.js\"",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
