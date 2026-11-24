@@ -10,3 +10,13 @@ test('parseCppSource extracts functions from basic source text', () => {
   assert.equal(fn.kind, 'function');
   assert.equal(fn.qualifiedName, 'add');
 });
+
+test('parseCppSource handles multiple functions and preserves order', () => {
+  const code = `
+int square(int x) { return x * x; }
+int cube(int x) { return x * square(x); }
+`;
+  const run = parseCppSource({ runId: 'run:2', path: 'src/math.cpp', text: code });
+  const names = run.symbols.filter((s) => s.kind === 'function').map((s) => s.name);
+  assert.deepEqual(names, ['square', 'cube']);
+});
