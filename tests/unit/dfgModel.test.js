@@ -100,3 +100,94 @@ describe('validateDfg – structural', () => {
 // validateDfg – node validation
 // ---------------------------------------------------------------------------
 
+describe('validateDfg – node validation', () => {
+  it('rejects node with bad id', () => {
+    const r = validateDfg({ ...minDfg(), nodes: [makeNode({ id: 'bad-id' })], edges: [] });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_NODE_BAD_ID'));
+  });
+
+  it('rejects node with unknown kind', () => {
+    const r = validateDfg({ ...minDfg(), nodes: [makeNode({ kind: 'unknown' })], edges: [] });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_NODE_BAD_KIND'));
+  });
+
+  it('rejects unresolved node without reasonCode', () => {
+    const r = validateDfg({ ...minDfg(), nodes: [makeNode({ status: 'unresolved' })], edges: [] });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_NODE_MISSING_REASON'));
+  });
+
+  it('rejects possible node without reasonCode', () => {
+    const r = validateDfg({ ...minDfg(), nodes: [makeNode({ status: 'possible' })], edges: [] });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_NODE_MISSING_REASON'));
+  });
+
+  it('accepts unresolved node with valid reasonCode', () => {
+    const r = validateDfg({
+      ...minDfg(),
+      nodes: [makeNode({ status: 'unresolved', reasonCode: 'aliasing_unknown' })],
+      edges: [],
+    });
+    assert.equal(r.ok, true);
+  });
+
+  it('rejects duplicate node ids', () => {
+    const r = validateDfg({
+      ...minDfg(),
+      nodes: [makeNode(), makeNode()],
+      edges: [],
+    });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_NODE_DUPLICATE_ID'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateDfg – edge validation
+// ---------------------------------------------------------------------------
+
+describe('validateDfg – edge validation', () => {
+  it('rejects edge with unknown kind', () => {
+    const r = validateDfg({
+      ...minDfg(),
+      nodes: [
+        makeNode({ id: 'flow:x@n1#0', cfgNodeId: 'n1' }),
+        makeNode({ id: 'flow:x@n2#0', cfgNodeId: 'n2', kind: 'use' }),
+      ],
+      edges: [makeEdge({ kind: 'teleport' })],
+    });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_EDGE_BAD_KIND'));
+  });
+
+  it('rejects edge referencing unknown from node', () => {
+    const r = validateDfg({
+      ...minDfg(),
+      nodes: [makeNode({ id: 'flow:x@n2#0', cfgNodeId: 'n2', kind: 'use' })],
+      edges: [makeEdge()],
+    });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_EDGE_UNKNOWN_FROM'));
+  });
+
+  it('rejects unresolved edge without reasonCode', () => {
+    const r = validateDfg({
+      ...minDfg(),
+      nodes: [
+        makeNode({ id: 'flow:x@n1#0', cfgNodeId: 'n1' }),
+        makeNode({ id: 'flow:x@n2#0', cfgNodeId: 'n2', kind: 'use' }),
+      ],
+      edges: [makeEdge({ status: 'unresolved' })],
+    });
+    assert.equal(r.ok, false);
+    assert.ok(r.issues.some((i) => i.code === 'E_EDGE_MISSING_REASON'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createEmptyDfg
+// ---------------------------------------------------------------------------
+
