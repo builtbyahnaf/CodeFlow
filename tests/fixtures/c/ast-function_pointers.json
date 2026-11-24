@@ -1,0 +1,100 @@
+{
+  "id": "0x6000",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "typedef-math-op",
+      "kind": "TypedefDecl",
+      "name": "math_op",
+      "type": { "qualType": "int (*)(int, int)" },
+      "loc": { "file": "src/function_pointers.c", "line": 1, "col": 15 },
+      "range": { "begin": { "line": 1, "col": 1 }, "end": { "line": 1, "col": 34 } }
+    },
+    {
+      "id": "fn-add",
+      "kind": "FunctionDecl",
+      "name": "add",
+      "type": { "qualType": "int (int, int)" },
+      "loc": { "file": "src/function_pointers.c", "line": 3, "col": 5 },
+      "range": { "begin": { "line": 3, "col": 1 }, "end": { "line": 5, "col": 2 } },
+      "inner": [
+        { "id": "p-a", "kind": "ParmVarDecl", "name": "a", "loc": { "line": 3, "col": 13 } },
+        { "id": "p-b", "kind": "ParmVarDecl", "name": "b", "loc": { "line": 3, "col": 20 } },
+        { "kind": "CompoundStmt", "range": { "begin": { "line": 3, "col": 23 }, "end": { "line": 5, "col": 2 } } }
+      ]
+    },
+    {
+      "id": "fn-sub",
+      "kind": "FunctionDecl",
+      "name": "sub",
+      "type": { "qualType": "int (int, int)" },
+      "loc": { "file": "src/function_pointers.c", "line": 7, "col": 5 },
+      "range": { "begin": { "line": 7, "col": 1 }, "end": { "line": 9, "col": 2 } },
+      "inner": [
+        { "id": "p-sa", "kind": "ParmVarDecl", "name": "a", "loc": { "line": 7, "col": 13 } },
+        { "id": "p-sb", "kind": "ParmVarDecl", "name": "b", "loc": { "line": 7, "col": 20 } },
+        { "kind": "CompoundStmt", "range": { "begin": { "line": 7, "col": 23 }, "end": { "line": 9, "col": 2 } } }
+      ]
+    },
+    {
+      "id": "fn-run-op",
+      "kind": "FunctionDecl",
+      "name": "run_op",
+      "type": { "qualType": "int (int, int)" },
+      "loc": { "file": "src/function_pointers.c", "line": 11, "col": 5 },
+      "range": { "begin": { "line": 11, "col": 1 }, "end": { "line": 14, "col": 2 } },
+      "inner": [
+        { "id": "p-rx", "kind": "ParmVarDecl", "name": "x", "loc": { "line": 11, "col": 16 } },
+        { "id": "p-ry", "kind": "ParmVarDecl", "name": "y", "loc": { "line": 11, "col": 23 } },
+        {
+          "kind": "CompoundStmt",
+          "range": { "begin": { "line": 11, "col": 26 }, "end": { "line": 14, "col": 2 } },
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "handler",
+                  "type": { "qualType": "math_op" },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "name": "add",
+                          "referencedDecl": { "kind": "FunctionDecl", "name": "add" }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "CallExpr",
+                  "loc": { "line": 13, "col": 10 },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "name": "handler"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
