@@ -22,7 +22,7 @@ import { registerCommands } from './commands.js';
 import { createWorkspaceIndexService } from './indexing/service.js';
 import { PROTOCOL_VERSION } from '../core/protocol/envelope.js';
 
-const EXTENSION_VERSION = '1.0.0';
+const EXTENSION_VERSION = '1.1.0';
 
 /**
  * Read the C++ settings. Called per analysis so a settings change takes effect
