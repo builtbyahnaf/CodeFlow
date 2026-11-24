@@ -192,3 +192,93 @@ export function makeFlowNodeId(bindingId, cfgNodeId, ordinal) {
  * @param {unknown} raw
  * @returns {ValidationResult}
  */
+export function validateDfg(raw) {
+  const issues = [];
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, issues: [issue('E_DFG_NOT_OBJECT', 'DFG must be a plain object')] };
+  }
+
+  const d = /** @type {Record<string, unknown>} */ (raw);
+
+  if (typeof d.functionId !== 'string' || !d.functionId) {
+    issues.push(issue('E_DFG_BAD_FUNCTION', 'DFG.functionId must be a non-empty string', 'functionId'));
+  }
+  if (typeof d.fileId !== 'string' || !d.fileId) {
+    issues.push(issue('E_DFG_BAD_FILE', 'DFG.fileId must be a non-empty string', 'fileId'));
+  }
+  if (!Array.isArray(d.nodes)) {
+    issues.push(issue('E_DFG_BAD_NODES', 'DFG.nodes must be an array', 'nodes'));
+  }
+  if (!Array.isArray(d.edges)) {
+    issues.push(issue('E_DFG_BAD_EDGES', 'DFG.edges must be an array', 'edges'));
+  }
+
+  if (issues.length > 0) return { ok: false, issues };
+
+  const nodes = /** @type {unknown[]} */ (d.nodes);
+  const edges = /** @type {unknown[]} */ (d.edges);
+
+  // Validate individual nodes
+  const nodeIds = new Set();
+  for (let i = 0; i < nodes.length; i++) {
+    const nodeIssues = validateFlowNode(nodes[i], i);
+    issues.push(...nodeIssues);
+    if (nodeIssues.length === 0) {
+      const id = /** @type {any} */ (nodes[i]).id;
+      if (nodeIds.has(id)) {
+        issues.push(issue('E_NODE_DUPLICATE_ID', `Duplicate FlowNode id "${id}"`, `nodes[${i}].id`));
+      }
+      nodeIds.add(id);
+    }
+  }
+
+  // Validate individual edges
+  for (let i = 0; i < edges.length; i++) {
+    const edgeIssues = validateFlowEdge(edges[i], i);
+    issues.push(...edgeIssues);
+    if (edgeIssues.length === 0) {
+      const e = /** @type {any} */ (edges[i]);
+      if (!nodeIds.has(e.from)) {
+        issues.push(issue('E_EDGE_UNKNOWN_FROM', `Edge from="${e.from}" references unknown node`, `edges[${i}].from`));
+      }
+      if (!nodeIds.has(e.to)) {
+        issues.push(issue('E_EDGE_UNKNOWN_TO', `Edge to="${e.to}" references unknown node`, `edges[${i}].to`));
+      }
+    }
+  }
+
+  if (issues.length > 0) return { ok: false, issues };
+
+  // Build byBinding index
+  /** @type {Record<string, FlowNode[]>} */
+  const byBinding = {};
+  for (const n of /** @type {FlowNode[]} */ (nodes)) {
+    if (!byBinding[n.bindingId]) byBinding[n.bindingId] = [];
+    byBinding[n.bindingId].push(n);
+  }
+
+  const dfg = /** @type {Dfg} */ ({
+    version: DFG_DTO_VERSION,
+    functionId: d.functionId,
+    fileId: d.fileId,
+    nodes: /** @type {FlowNode[]} */ (nodes),
+    edges: /** @type {FlowEdge[]} */ (edges),
+    partial: Boolean(d.partial),
+    partialReasons: Array.isArray(d.partialReasons) ? /** @type {string[]} */ (d.partialReasons) : [],
+    limitations: Array.isArray(d.limitations) ? /** @type {string[]} */ (d.limitations) : [],
+    byBinding,
+  });
+
+  return { ok: true, dfg };
+}
+
+/**
+ * Create a valid, empty DFG for a function that could not be analyzed.
+ *
+ * @param {string} functionId
+ * @param {string} fileId
+ * @param {string} reasonCode
+ * @param {string} limitationMessage
+ * @returns {Dfg}
+ */
