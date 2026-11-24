@@ -273,3 +273,40 @@ export function forwardSlice(dfg, defNodeId, budgetMs = SLICE_BUDGET_MS) {
  * @param {string} bindingId
  * @returns {Array<{text: string, status: string, reasonCode?: string}>}
  */
+export function bindingDetailEntries(dfg, bindingId) {
+  const nodes = dfg.byBinding[bindingId] ?? [];
+
+  return nodes.map((n) => {
+    const loc = n.range
+      ? `line ${(/** @type {any} */ (n.range)).startLine + 1}`
+      : 'unknown location';
+    const kindLabel =
+      n.kind === 'def'   ? 'defined at' :
+      n.kind === 'use'   ? 'used at' :
+      n.kind === 'defuse'? 'read-then-written at' :
+      n.kind === 'param' ? 'parameter at' :
+      n.kind === 'return'? 'returned at' :
+      n.kind === 'kill'  ? 'possibly modified at' :
+      n.kind;
+    const statusLabel =
+      n.status === 'resolved'   ? 'resolved' :
+      n.status === 'inferred'   ? 'inferred' :
+      n.status === 'possible'   ? 'possibly' :
+      n.status === 'unresolved' ? 'unresolved' : n.status;
+
+    const text = `${kindLabel} ${loc} (${statusLabel})`;
+    return { text, status: n.status, ...(n.reasonCode ? { reasonCode: n.reasonCode } : {}) };
+  });
+}
+
+/**
+ * Check whether the DFG has any interprocedural edges.
+ *
+ * @param {Dfg} dfg
+ * @returns {boolean}
+ */
+export function hasInterproceduralFlows(dfg) {
+  return dfg.edges.some(
+    (e) => e.kind === 'param_to_arg' || e.kind === 'return_to_use',
+  );
+}
