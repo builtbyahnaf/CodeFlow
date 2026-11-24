@@ -64,3 +64,69 @@ export const FLOW_REASON_CODES = Object.freeze([
  * Schema version for DFG DTOs. Increment when a field is added or removed.
  * Consumers must check this before trusting the shape.
  */
+export const DFG_DTO_VERSION = 1;
+
+/**
+ * Maximum reaching-definition iterations before we produce a partial result.
+ * @type {number}
+ */
+export const REACHING_DEF_BUDGET_ITERATIONS = 20_000;
+
+/**
+ * Maximum milliseconds for reaching-definition fixpoint per function.
+ * @type {number}
+ */
+export const REACHING_DEF_BUDGET_MS = 250;
+
+/**
+ * Maximum milliseconds for a backward liveness pass.
+ * @type {number}
+ */
+export const LIVENESS_BUDGET_MS = 250;
+
+/**
+ * Maximum milliseconds for a backward slice query.
+ * @type {number}
+ */
+export const SLICE_BUDGET_MS = 150;
+
+/**
+ * Default LRU capacity for the DFG cache (number of function DFGs retained).
+ * @type {number}
+ */
+export const DFG_CACHE_CAPACITY = 20;
+
+/**
+ * Return a human-readable label for a flow edge kind.
+ *
+ * @param {string} kind
+ * @returns {string}
+ */
+export function flowEdgeLabel(kind) {
+  switch (kind) {
+    case 'reaching':      return '→';
+    case 'assign':        return ':=';
+    case 'param_to_arg':  return 'arg→param';
+    case 'return_to_use': return 'ret→use';
+    case 'loop_carried':  return '↻';
+    case 'capture':       return '⊃';
+    default:              return kind;
+  }
+}
+
+/**
+ * Return a glyph that encodes status WITHOUT relying on colour alone.
+ *
+ * @param {string} status
+ * @returns {string}
+ */
+export function glyphForFlowStatus(status) {
+  switch (status) {
+    case 'resolved':   return '✓';
+    case 'inferred':   return '~';
+    case 'possible':   return '?';
+    case 'unresolved': return '✗';
+    case 'partial':    return '…';
+    default:           return '?';
+  }
+}
