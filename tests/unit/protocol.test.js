@@ -220,3 +220,19 @@ test('Phase 5 source and navigation kinds are directional and validated', () => 
     );
   }
 });
+
+test('Phase 6 explanation kinds are directional and validated', () => {
+  for (const kind of ['explain.node', 'explain.function']) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+  assert.equal(validateEnvelope(createEnvelope('explain.data', {}), HOST_TO_WEBVIEW).ok, true);
+  assert.equal(
+    validateEnvelope(createEnvelope('explain.data', {}), WEBVIEW_TO_HOST).reason,
+    'unknown_kind',
+  );
+});
