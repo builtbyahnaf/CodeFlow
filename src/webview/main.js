@@ -11,6 +11,10 @@ import { validateDto } from '../core/graph/dto.js';
 import { createSvgRenderer } from '../visualization/renderer/svgRenderer.js';
 import { buildPreviewModel } from '../core/source/presentation.js';
 import { resolvePreviewSettings } from '../core/source/settings.js';
+import {
+  clampExplanationDepth,
+  resolveExplanationSettings,
+} from '../core/explanation/settings.js';
 import { createPreviewController } from './previewController.js';
 import { highlightLines } from './highlight.js';
 
@@ -30,11 +34,32 @@ const functionPicker = /** @type {HTMLSelectElement|null} */ (
 const preview = /** @type {HTMLElement} */ (document.getElementById('cf-preview'));
 const previewTitle = /** @type {HTMLElement} */ (document.getElementById('cf-preview-title'));
 const previewMeta = /** @type {HTMLElement} */ (document.getElementById('cf-preview-meta'));
+const previewExplain = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-preview-explain')
+);
 const previewBody = /** @type {HTMLElement} */ (document.getElementById('cf-preview-body'));
 const previewNote = /** @type {HTMLElement} */ (document.getElementById('cf-preview-note'));
 const previewPin = /** @type {HTMLButtonElement} */ (document.getElementById('cf-preview-pin'));
 const previewClose = /** @type {HTMLButtonElement} */ (document.getElementById('cf-preview-close'));
 const previewOpen = /** @type {HTMLButtonElement} */ (document.getElementById('cf-preview-open'));
+const fnSummary = /** @type {HTMLElement|null} */ (document.getElementById('cf-fn-summary'));
+const explainSection = /** @type {HTMLElement|null} */ (document.getElementById('cf-explain'));
+const explainDepthSelect = /** @type {HTMLSelectElement|null} */ (
+  document.getElementById('cf-explain-depth')
+);
+const explainItems = /** @type {HTMLElement|null} */ (document.getElementById('cf-explain-items'));
+const explainEvidence = /** @type {HTMLDetailsElement|null} */ (
+  document.getElementById('cf-explain-evidence')
+);
+const explainEvidenceList = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-explain-evidence-list')
+);
+const explainLimits = /** @type {HTMLDetailsElement|null} */ (
+  document.getElementById('cf-explain-limits')
+);
+const explainLimitsText = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-explain-limits-text')
+);
 
 /** @type {import('../core/graph/dto.js').GraphDto | null} */
 let currentDto = null;
@@ -45,6 +70,16 @@ let selectedSymbolId = preferredSymbolId;
 
 /** @type {Record<string, any>} */
 let settings = resolvePreviewSettings({});
+/** @type {{defaultDepth: 1|2|3|4, showEvidence: boolean, includeLimitations: boolean}} */
+let explanationSettings = resolveExplanationSettings({});
+/** @type {1|2|3|4} */
+let activeExplainDepth = explanationSettings.defaultDepth;
+/** @type {string|null} */
+let activeNodeId = null;
+/** @type {number} */
+let explainNodeRequest = 0;
+/** @type {number} */
+let explainFunctionRequest = 0;
 /** @type {Map<string, Record<string, any>>} */
 const previewCache = new Map();
 /** @type {Map<string, string>} */
@@ -133,11 +168,195 @@ function setStatus(text) {
 }
 
 function clearDetail() {
+  activeNodeId = null;
   detailBody.replaceChildren();
   const paragraph = document.createElement('p');
   paragraph.className = 'cf-muted';
   paragraph.textContent = 'Select a node to inspect it.';
   detailBody.appendChild(paragraph);
+  clearExplanation();
+}
+
+function clearExplanation() {
+  explainNodeRequest += 1;
+  if (explainSection) {
+    explainSection.hidden = true;
+  }
+  explainItems?.replaceChildren();
+  if (explainEvidence) {
+    explainEvidence.hidden = true;
+  }
+  explainEvidenceList?.replaceChildren();
+  if (explainLimits) {
+    explainLimits.hidden = true;
+  }
+  if (explainLimitsText) {
+    explainLimitsText.textContent = '';
+  }
+}
+
+/**
+ * @param {Record<string, any>} payload
+ */
+function renderNodeExplanation(payload) {
+  if (!explainSection || !explainItems) {
+    return;
+  }
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  const limits = Array.isArray(payload?.limitations) ? payload.limitations : [];
+  explainItems.replaceChildren();
+  if (items.length === 0 && limits.length === 0) {
+    explainSection.hidden = true;
+    return;
+  }
+  explainSection.hidden = false;
+
+  const evidenceRefs = [];
+  for (const item of items) {
+    if (item.ruleId === 'fn.limitations') {
+      continue;
+    }
+    const row = document.createElement('p');
+    row.className = `cf-explain-item cf-explain--${item.claim ?? 'grounded'}`;
+    row.textContent = item.text;
+    explainItems.appendChild(row);
+    for (const ref of item.evidence ?? []) {
+      evidenceRefs.push(ref);
+    }
+  }
+
+  if (explainEvidence && explainEvidenceList) {
+    explainEvidenceList.replaceChildren();
+    const seen = new Set();
+    const uniqueRefs = evidenceRefs.filter((ref) => {
+      const key = `${ref.kind}:${ref.id}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    if (explanationSettings.showEvidence && uniqueRefs.length > 0) {
+      explainEvidence.hidden = false;
+      for (const ref of uniqueRefs.slice(0, 8)) {
+        const li = document.createElement('li');
+        if (ref.range) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'cf-evidence-link';
+          btn.textContent = ref.label || `${ref.kind}: line ${ref.range.startLine + 1}`;
+          btn.addEventListener('click', () => {
+            void navigateToRange(ref.range);
+          });
+          li.appendChild(btn);
+        } else {
+          li.textContent = `${ref.kind}: ${ref.label || ref.id}`;
+        }
+        explainEvidenceList.appendChild(li);
+      }
+    } else {
+      explainEvidence.hidden = true;
+    }
+  }
+
+  if (explainLimits && explainLimitsText) {
+    if (limits.length > 0) {
+      explainLimits.hidden = false;
+      explainLimits.open = explanationSettings.includeLimitations;
+      explainLimitsText.textContent = limits.join(' ');
+    } else {
+      explainLimits.hidden = true;
+      explainLimitsText.textContent = '';
+    }
+  }
+}
+
+/**
+ * @param {Record<string, any>} range
+ */
+async function navigateToRange(range) {
+  try {
+    const response = await bridge.request('navigate.to', {
+      fileId: range.fileId,
+      range,
+    });
+    if (response.payload.ok !== true) {
+      setBanner(
+        `${response.payload.code ?? 'E_NAVIGATION'}: ${response.payload.message ?? 'Could not open source.'}`,
+        true,
+      );
+    }
+  } catch (error) {
+    setBanner(`Could not open source: ${error?.message ?? String(error)}`, true);
+  }
+}
+
+/**
+ * @param {string} nodeId
+ */
+async function loadNodeExplanation(nodeId) {
+  if (!currentDto || currentDto.dtoKind !== 'cfg' || !explainSection) {
+    return;
+  }
+  const request = ++explainNodeRequest;
+  const skeletonTimer = setTimeout(() => {
+    if (request === explainNodeRequest && explainSection && explainItems) {
+      explainSection.hidden = false;
+      explainItems.textContent = 'Generating explanation…';
+    }
+  }, 100);
+  try {
+    const response = await bridge.request('explain.node', {
+      nodeId,
+      depth: activeExplainDepth,
+    });
+    clearTimeout(skeletonTimer);
+    if (request !== explainNodeRequest || activeNodeId !== nodeId) {
+      return;
+    }
+    renderNodeExplanation(response.payload);
+  } catch {
+    clearTimeout(skeletonTimer);
+    if (request === explainNodeRequest) {
+      clearExplanation();
+    }
+  }
+}
+
+/**
+ * @param {import('../core/graph/dto.js').GraphDto} dto
+ */
+async function loadFunctionSummary(dto) {
+  if (!fnSummary) {
+    return;
+  }
+  if (dto.dtoKind !== 'cfg') {
+    fnSummary.hidden = true;
+    fnSummary.textContent = '';
+    return;
+  }
+  const request = ++explainFunctionRequest;
+  try {
+    const response = await bridge.request('explain.function', {
+      depth: activeExplainDepth,
+    });
+    if (request !== explainFunctionRequest || currentDto !== dto) {
+      return;
+    }
+    const text = [response.payload?.summary, ...(response.payload?.limitations ?? [])]
+      .filter(Boolean)
+      .join(' ');
+    if (text) {
+      fnSummary.textContent = text;
+      fnSummary.hidden = false;
+    } else {
+      fnSummary.hidden = true;
+    }
+  } catch {
+    if (request === explainFunctionRequest) {
+      fnSummary.hidden = true;
+    }
+  }
 }
 
 /**
@@ -162,6 +381,7 @@ function showNodeDetails(nodeId, node) {
     clearDetail();
     return;
   }
+  activeNodeId = nodeId;
   const list = document.createElement('dl');
   list.append(...detailPair('label', node.label));
   list.append(...detailPair('kind', node.kind));
@@ -217,6 +437,8 @@ function showNodeDetails(nodeId, node) {
     }
     detailBody.appendChild(edgeList);
   }
+
+  void loadNodeExplanation(nodeId);
 }
 
 /**
@@ -225,6 +447,19 @@ function showNodeDetails(nodeId, node) {
 function applySettings(next) {
   const previousMaxLines = settings.maxLines;
   settings = resolvePreviewSettings({ ...settings, ...next });
+  if (next?.explanation && typeof next.explanation === 'object') {
+    explanationSettings = resolveExplanationSettings(next.explanation);
+    activeExplainDepth = explanationSettings.defaultDepth;
+    if (explainDepthSelect) {
+      explainDepthSelect.value = String(activeExplainDepth);
+    }
+    if (activeNodeId) {
+      void loadNodeExplanation(activeNodeId);
+    }
+    if (currentDto?.dtoKind === 'cfg') {
+      void loadFunctionSummary(currentDto);
+    }
+  }
   previewController.configure({
     delayMs: settings.delayMs,
     enabled: settings.enabled,
@@ -358,6 +593,10 @@ function hidePreview() {
   previewNodeId = null;
   previewAnchor = null;
   preview.hidden = true;
+  if (previewExplain) {
+    previewExplain.hidden = true;
+    previewExplain.textContent = '';
+  }
   previewBody.replaceChildren();
   previewNote.textContent = '';
   syncPinButton(false);
@@ -383,6 +622,18 @@ async function openPreview(nodeId, anchor = null, pin = false) {
   if (node.isSynthetic || !node.range) {
     renderPreviewCard(node, null);
     return;
+  }
+  if (previewExplain && currentDto?.dtoKind === 'cfg') {
+    const requestForExplain = previewRequest + 1;
+    void bridge
+      .request('explain.node', { nodeId, depth: 1 })
+      .then((res) => {
+        if (previewNodeId === nodeId && previewRequest <= requestForExplain && res.payload?.summary) {
+          previewExplain.textContent = res.payload.summary;
+          previewExplain.hidden = false;
+        }
+      })
+      .catch(() => {});
   }
   const key = `${nodeId}|${settings.maxLines}`;
   const cached = previewCache.get(key);
@@ -592,6 +843,7 @@ function handleGraph(payload) {
   renderLegend(dto);
   clearDetail();
   void validateGraph(dto);
+  void loadFunctionSummary(dto);
   const subject =
     dto.dtoKind === 'cfg' && dto.function ? `${dto.function.qualifiedName} · CFG` : 'call graph';
   setStatus(
@@ -745,6 +997,16 @@ functionPicker?.addEventListener('change', () => {
   const symbolId = functionPicker.value;
   if (symbolId) {
     void loadCfg(symbolId);
+  }
+});
+
+explainDepthSelect?.addEventListener('change', () => {
+  activeExplainDepth = clampExplanationDepth(explainDepthSelect.value);
+  if (activeNodeId) {
+    void loadNodeExplanation(activeNodeId);
+  }
+  if (currentDto?.dtoKind === 'cfg') {
+    void loadFunctionSummary(currentDto);
   }
 });
 
