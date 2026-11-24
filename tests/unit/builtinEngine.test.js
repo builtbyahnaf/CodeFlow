@@ -35,3 +35,17 @@ int clamp(int v, int lo, int hi) {
   assert.ok(ifConstruct);
   assert.ok(ifConstruct.condition);
 });
+
+test('parseCppSource extracts while loop constructs with condition ranges', () => {
+  const code = `
+void countdown(int n) {
+  while (n > 0) {
+    n = n - 1;
+  }
+}
+`;
+  const run = parseCppSource({ runId: 'run:4', path: 'src/loop.cpp', text: code });
+  const whileCc = run.controlConstructs.find((cc) => cc.kind === 'while');
+  assert.ok(whileCc);
+  assert.ok(whileCc.condition);
+});
