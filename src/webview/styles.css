@@ -179,6 +179,11 @@ body {
   pointer-events: none;
 }
 
+.cf-empty[hidden],
+[hidden].cf-empty {
+  display: none !important;
+}
+
 .cf-detail {
   border-left: 1px solid var(--cf-border);
   background: var(--cf-surface);

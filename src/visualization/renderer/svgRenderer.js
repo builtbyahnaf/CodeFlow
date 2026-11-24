@@ -134,8 +134,23 @@ export function createSvgRenderer(options) {
     }
     const bounds = svg.getBoundingClientRect();
     const padding = 48;
-    const width = Math.max(1, dto.extent.width);
-    const height = Math.max(1, dto.extent.height);
+    let width = 1;
+    let height = 1;
+    if (dto.extent && Number.isFinite(dto.extent.width) && Number.isFinite(dto.extent.height)) {
+      width = Math.max(1, dto.extent.width);
+      height = Math.max(1, dto.extent.height);
+    } else if (Array.isArray(dto.nodes) && dto.nodes.length > 0) {
+      let maxX = 0;
+      let maxY = 0;
+      for (const node of dto.nodes) {
+        const nx = (node.position?.x ?? 0) + (node.position?.width ?? 160);
+        const ny = (node.position?.y ?? 0) + (node.position?.height ?? 50);
+        if (nx > maxX) maxX = nx;
+        if (ny > maxY) maxY = ny;
+      }
+      width = Math.max(1, maxX + 64);
+      height = Math.max(1, maxY + 64);
+    }
     const availableWidth = Math.max(120, bounds.width - padding * 2);
     const availableHeight = Math.max(120, bounds.height - padding * 2);
     scale = Math.min(1.4, availableWidth / width, availableHeight / height);
@@ -225,16 +240,32 @@ export function createSvgRenderer(options) {
         }),
       );
 
-      const lines =
+      const rawLines =
         Array.isArray(node.labelLines) && node.labelLines.length > 0
-          ? node.labelLines.slice(0, 3)
-          : [truncate(node.label, 26)];
+          ? node.labelLines.filter((l) => typeof l === 'string' && l.trim().length > 0)
+          : [];
+      const fallbackLabel =
+        (node.label && String(node.label).trim()) ||
+        (node.kind && String(node.kind).trim()) ||
+        node.id;
+      const lines =
+        rawLines.length > 0 ? rawLines.slice(0, 2) : [truncate(fallbackLabel, 26)];
       const lineHeight = 13;
       const blockHeight = lines.length * lineHeight;
+      const showKind =
+        node.position.height >= 56 &&
+        lines.length === 1 &&
+        node.kind &&
+        String(fallbackLabel).toLowerCase() !== String(node.kind).toLowerCase();
+
+      const startY = showKind
+        ? Math.max(14, (node.position.height - 18) / 2 - blockHeight / 2 + lineHeight)
+        : Math.max(14, node.position.height / 2 - blockHeight / 2 + lineHeight - 3);
+
       const label = svgEl('text', {
         class: 'cf-node-label',
         x: 10,
-        y: node.position.height / 2 - blockHeight / 2 + lineHeight - 3,
+        y: startY,
       });
       for (const [index, text] of lines.entries()) {
         const span = svgEl('tspan', {
@@ -246,13 +277,15 @@ export function createSvgRenderer(options) {
       }
       group.appendChild(label);
 
-      const kind = svgEl('text', {
-        class: 'cf-node-kind',
-        x: 10,
-        y: node.position.height - 8,
-      });
-      kind.textContent = node.external ? `${node.kind} · external` : node.kind;
-      group.appendChild(kind);
+      if (showKind) {
+        const kind = svgEl('text', {
+          class: 'cf-node-kind',
+          x: 10,
+          y: node.position.height - 8,
+        });
+        kind.textContent = node.external ? `${node.kind} · external` : node.kind;
+        group.appendChild(kind);
+      }
 
       const badgeText =
         Array.isArray(node.badges) && node.badges.length > 0

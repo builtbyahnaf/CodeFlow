@@ -146,7 +146,20 @@ export function createPanelManager({
     registry,
     extensionVersion,
     loadRun: (path) => analyzeRun(path),
-    defaultPath: () => preferredPath ?? 'sample.mock',
+    defaultPath: () => {
+      if (preferredPath) {
+        return preferredPath;
+      }
+      const activeEditor = vscode.window.activeTextEditor;
+      if (activeEditor && activeEditor.document.uri.scheme === 'file') {
+        const filePath = activeEditor.document.uri.fsPath;
+        const adapter = registry.resolve(filePath);
+        if (adapter && adapter.id !== 'mock') {
+          return filePath;
+        }
+      }
+      return 'sample.mock';
+    },
     sourceAccess,
     navigate: navigateToRange,
     getSettings: previewSettings,
@@ -244,6 +257,16 @@ export function createPanelManager({
   }
 
   function show() {
+    if (!preferredPath) {
+      const activeEditor = vscode.window.activeTextEditor;
+      if (activeEditor && activeEditor.document.uri.scheme === 'file') {
+        const filePath = activeEditor.document.uri.fsPath;
+        const adapter = registry.resolve(filePath);
+        if (adapter && adapter.id !== 'mock') {
+          preferredPath = filePath;
+        }
+      }
+    }
     if (panel) {
       panel.reveal(undefined, false);
       return panel;

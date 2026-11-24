@@ -63,6 +63,19 @@ const perspectiveSelect = /** @type {HTMLSelectElement|null} */ (
 const switchPerspectiveBtn = /** @type {HTMLButtonElement|null} */ (
   document.getElementById('cf-switch-perspective')
 );
+const zoomBar = /** @type {HTMLElement|null} */ (document.getElementById('cf-zoom-bar'));
+const zoomLevelBadge = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-zoom-level-badge')
+);
+const zoomBreadcrumbs = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-zoom-breadcrumbs')
+);
+const zoomSearch = /** @type {HTMLInputElement|null} */ (
+  document.getElementById('cf-zoom-search')
+);
+const zoomChips = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-zoom-chips')
+);
 const scopeBanner = /** @type {HTMLElement|null} */ (document.getElementById('cf-scope-banner'));
 const callsPanel = /** @type {HTMLElement|null} */ (document.getElementById('cf-calls-panel'));
 const callsFilterStatus = /** @type {HTMLSelectElement|null} */ (
@@ -104,12 +117,13 @@ const unresolvedList = /** @type {HTMLElement|null} */ (
 /** @type {import('../core/graph/dto.js').GraphDto | null} */
 let currentDto = null;
 const preferredSymbolId = document.body.dataset.preferredSymbol || null;
+const rawPref = document.body.dataset.preferredPerspective;
 const preferredPerspective =
-  document.body.dataset.preferredPerspective === 'call_graph' ? 'call_graph' : 'cfg';
+  rawPref === 'call_graph' ? 'call_graph' : rawPref === 'semantic_zoom' ? 'semantic_zoom' : 'cfg';
 
 /** @type {string | null} */
 let selectedSymbolId = preferredSymbolId;
-/** @type {'cfg'|'call_graph'} */
+/** @type {'cfg'|'call_graph'|'semantic_zoom'} */
 let activePerspective = preferredPerspective;
 /** @type {string|undefined} */
 let callersNextCursor;
@@ -149,6 +163,10 @@ const renderer = createSvgRenderer({
     bridge.respond('node.select', { nodeId });
   },
   onNavigate: (nodeId, node, trigger) => {
+    if (currentDto?.dtoKind === 'semantic_zoom') {
+      void descendSemanticZoom(nodeId, node);
+      return;
+    }
     if (trigger === 'pointer' && !settings.clickToNavigate) {
       return;
     }
@@ -953,7 +971,8 @@ function markStaleFiles(fileIds) {
  */
 function renderLegend(dto) {
   legend.replaceChildren();
-  for (const statusName of dto.legend.statuses) {
+  const statuses = Array.isArray(dto?.legend?.statuses) ? dto.legend.statuses : [];
+  for (const statusName of statuses) {
     const item = document.createElement('li');
     const swatch = document.createElement('span');
     swatch.className = `cf-swatch cf-edge--${statusName}`;
@@ -965,7 +984,8 @@ function renderLegend(dto) {
     item.append(swatch, label);
     legend.appendChild(item);
   }
-  for (const edgeKind of dto.legend.edgeKinds ?? []) {
+  const edgeKinds = Array.isArray(dto?.legend?.edgeKinds) ? dto.legend.edgeKinds : [];
+  for (const edgeKind of edgeKinds) {
     const item = document.createElement('li');
     const swatch = document.createElement('span');
     swatch.className = `cf-swatch cf-edge--kind-${edgeKind}`;
@@ -1009,6 +1029,7 @@ function showCapabilities(payload) {
  * @param {unknown} payload
  */
 function handleGraph(payload) {
+  empty.hidden = true;
   const dtoCandidate = /** @type {{dto?: unknown}} */ (payload).dto;
   const validation = validateDto(dtoCandidate);
   if (!validation.ok) {
@@ -1028,8 +1049,9 @@ function handleGraph(payload) {
   void validateGraph(dto);
   void loadFunctionSummary(dto);
   void updateCallGraphSidePanel(dto);
+  updateZoomBar(dto);
   if (switchPerspectiveBtn) {
-    switchPerspectiveBtn.hidden = !selectedSymbolId;
+    switchPerspectiveBtn.hidden = !selectedSymbolId || dto.dtoKind === 'semantic_zoom';
     switchPerspectiveBtn.textContent =
       dto.dtoKind === 'call_graph' ? 'Show in CFG' : 'Show in Call Graph';
   }
@@ -1038,11 +1060,13 @@ function handleGraph(payload) {
       ? `${dto.function.qualifiedName} · CFG`
       : dto.dtoKind === 'call_graph'
         ? `${dto.centerSymbolId} · Call Graph`
-        : 'call graph';
+        : dto.dtoKind === 'semantic_zoom'
+          ? `${dto.level ?? 'Overview'} · Semantic Zoom`
+          : 'graph';
   setStatus(
-    `${subject} · ${dto.language} · ${dto.nodes.length} nodes · ${dto.edges.length} edges · ${dto.completeness}`,
+    `${subject} · ${dto.language ?? 'workspace'} · ${dto.nodes.length} nodes · ${dto.edges.length} edges · ${dto.completeness ?? 'complete'}`,
   );
-  meta.textContent = `${dto.adapterId} · ${subject} · dto v${dto.dtoVersion}`;
+  meta.textContent = `${dto.adapterId ?? 'codeflow'} · ${subject} · dto v${dto.dtoVersion}`;
   const degradations = dto.degradations ?? [];
   const messages = degradations.map((entry) =>
     typeof entry === 'string'
@@ -1132,6 +1156,82 @@ window.addEventListener('keydown', (event) => {
 });
 
 /**
+ * @param {Record<string, any>} dto
+ */
+function updateZoomBar(dto) {
+  if (!zoomBar) {
+    return;
+  }
+  if (dto.dtoKind !== 'semantic_zoom') {
+    zoomBar.hidden = true;
+    return;
+  }
+  zoomBar.hidden = false;
+  if (zoomLevelBadge) {
+    zoomLevelBadge.textContent = dto.level ? `${dto.level}` : 'Semantic Zoom';
+  }
+  if (zoomBreadcrumbs && Array.isArray(dto.breadcrumbs)) {
+    zoomBreadcrumbs.replaceChildren();
+    for (const [index, crumb] of dto.breadcrumbs.entries()) {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cf-button';
+      btn.style.padding = '2px 8px';
+      btn.style.fontSize = '11px';
+      btn.textContent = crumb.label || crumb.scopeId || `Level ${index}`;
+      btn.addEventListener('click', async () => {
+        try {
+          const res = await bridge.request('zoom.breadcrumb', { index });
+          handleGraph(res.payload);
+        } catch (e) {
+          setBanner(`Could not navigate breadcrumb: ${e?.message ?? e}`, true);
+        }
+      });
+      li.appendChild(btn);
+      zoomBreadcrumbs.appendChild(li);
+    }
+  }
+  if (zoomChips && Array.isArray(dto.filterChips)) {
+    zoomChips.replaceChildren();
+    for (const chip of dto.filterChips) {
+      const span = document.createElement('span');
+      span.className = 'cf-badge';
+      span.textContent = `${chip.label || chip.kind} (${chip.count ?? 0})`;
+      zoomChips.appendChild(span);
+    }
+  }
+}
+
+/**
+ * @param {string} nodeId
+ * @param {Record<string, any>} [node]
+ */
+async function descendSemanticZoom(nodeId, node = nodeById(nodeId)) {
+  if (!node) {
+    return;
+  }
+  const currentLevel = currentDto?.level;
+  let nextLevel = 'L1_MODULE';
+  if (currentLevel === 'L0_WORKSPACE') nextLevel = 'L1_MODULE';
+  else if (currentLevel === 'L1_MODULE') nextLevel = 'L2_FILE';
+  else if (currentLevel === 'L2_FILE') nextLevel = 'L3_SYMBOL';
+  else if (currentLevel === 'L3_SYMBOL') nextLevel = 'L4_FUNCTION';
+  else if (currentLevel === 'L4_FUNCTION') nextLevel = 'L5_STATEMENT';
+
+  try {
+    const res = await bridge.request('zoom.descend', {
+      level: nextLevel,
+      scopeId: node.scopeId || node.id,
+      label: node.label,
+    });
+    handleGraph(res.payload);
+  } catch (error) {
+    setBanner(`Could not descend: ${error?.message ?? String(error)}`, true);
+  }
+}
+
+/**
  * @param {string} symbolId
  */
 async function loadCfg(symbolId) {
@@ -1147,6 +1247,24 @@ async function loadCfg(symbolId) {
   } catch (error) {
     setBanner(`Could not build CFG: ${error?.message ?? String(error)}`, true);
     setStatus('CFG unavailable');
+    return false;
+  }
+}
+
+async function loadSemanticZoom() {
+  setStatus('Loading semantic zoom…');
+  setBanner('');
+  try {
+    const response = await bridge.request('zoom.open', {});
+    activePerspective = 'semantic_zoom';
+    if (perspectiveSelect) {
+      perspectiveSelect.value = 'semantic_zoom';
+    }
+    handleGraph(response.payload);
+    return true;
+  } catch (error) {
+    setBanner(`Could not open semantic zoom: ${error?.message ?? String(error)}`, true);
+    setStatus('Semantic zoom unavailable');
     return false;
   }
 }
@@ -1176,6 +1294,12 @@ async function loadCallGraph(symbolId) {
 async function loadGraph() {
   setStatus('Loading graph…');
   setBanner('');
+  if (activePerspective === 'semantic_zoom') {
+    const loaded = await loadSemanticZoom();
+    if (loaded) {
+      return;
+    }
+  }
   try {
     const response = await bridge.request('cfg.functions', {});
     const list = Array.isArray(response.payload.functions) ? response.payload.functions : [];
@@ -1223,21 +1347,54 @@ functionPicker?.addEventListener('change', () => {
 });
 
 perspectiveSelect?.addEventListener('change', () => {
-  activePerspective = perspectiveSelect.value === 'call_graph' ? 'call_graph' : 'cfg';
-  if (selectedSymbolId) {
-    if (activePerspective === 'call_graph') {
-      void loadCallGraph(selectedSymbolId);
-    } else {
-      void loadCfg(selectedSymbolId);
-    }
+  const val = perspectiveSelect.value;
+  activePerspective =
+    val === 'call_graph' ? 'call_graph' : val === 'semantic_zoom' ? 'semantic_zoom' : 'cfg';
+  if (activePerspective === 'semantic_zoom') {
+    void loadSemanticZoom();
+    return;
   }
+  const symbolToUse = selectedSymbolId || (functionPicker?.options[0]?.value ?? null);
+  if (symbolToUse) {
+    if (activePerspective === 'call_graph') {
+      void loadCallGraph(symbolToUse);
+    } else {
+      void loadCfg(symbolToUse);
+    }
+  } else {
+    void loadGraph();
+  }
+});
+
+let searchDebounce = null;
+zoomSearch?.addEventListener('input', () => {
+  if (searchDebounce) {
+    clearTimeout(searchDebounce);
+  }
+  searchDebounce = setTimeout(async () => {
+    searchDebounce = null;
+    const queryText = zoomSearch.value.trim();
+    if (!queryText) {
+      return;
+    }
+    try {
+      const res = await bridge.request('zoom.search', { queryText });
+      const items = res.payload?.items ?? res.payload?.results?.items ?? [];
+      if (items.length > 0) {
+        const jump = await bridge.request('zoom.search', { jumpItem: items[0] });
+        handleGraph(jump.payload);
+      }
+    } catch {
+      // Non-fatal
+    }
+  }, 300);
 });
 
 switchPerspectiveBtn?.addEventListener('click', () => {
   const targetSymbol =
     activeNodeId && currentDto?.dtoKind === 'call_graph' && !activeNodeId.startsWith('bucket:')
       ? activeNodeId
-      : selectedSymbolId;
+      : selectedSymbolId || (functionPicker?.options[0]?.value ?? null);
   if (!targetSymbol) {
     return;
   }

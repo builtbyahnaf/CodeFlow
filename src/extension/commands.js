@@ -63,6 +63,14 @@ export function registerCommands({
 
   register('codeflow.openExplorer', () => {
     logger.info('command.openExplorer');
+    const editor = vscode.window.activeTextEditor;
+    if (editor && editor.document.uri.scheme === 'file') {
+      const adapter = registry.resolve(editor.document.uri.fsPath);
+      if (adapter && adapter.id !== 'mock') {
+        panelManager.showFile(editor.document.uri.fsPath);
+        return;
+      }
+    }
     panelManager.show();
   });
 

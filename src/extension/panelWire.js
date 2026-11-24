@@ -762,8 +762,33 @@ export function createPanelWire({
     }
 
     function stampZoomDto(dto) {
+      const run = current?.run;
+      const nodes = Array.isArray(dto?.nodes) ? dto.nodes : [];
+      const edges = Array.isArray(dto?.edges) ? dto.edges : [];
+      let maxX = 0;
+      let maxY = 0;
+      for (const node of nodes) {
+        const nx = (node.position?.x ?? 0) + (node.position?.width ?? 160);
+        const ny = (node.position?.y ?? 0) + (node.position?.height ?? 50);
+        if (nx > maxX) maxX = nx;
+        if (ny > maxY) maxY = ny;
+      }
       return {
         dtoVersion: GRAPH_DTO_VERSION,
+        graphId: `zoom:${dto?.level ?? 'L0'}`,
+        runId: dto?.runId ?? run?.runId ?? 'run:zoom',
+        language: run?.files?.[0]?.language ?? 'workspace',
+        adapterId: run?.adapterId ?? 'semantic_zoom',
+        completeness: run?.completeness ?? 'complete',
+        extent: {
+          width: Math.max(800, maxX + 64),
+          height: Math.max(600, maxY + 64),
+        },
+        legend: {
+          statuses: ['resolved', 'unresolved'],
+          kinds: [...new Set(nodes.map((n) => n.kind))].sort(),
+          edgeKinds: [...new Set(edges.map((e) => e.type || e.kind || 'dependency'))].sort(),
+        },
         ...dto,
       };
     }
