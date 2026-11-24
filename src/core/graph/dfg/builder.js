@@ -320,4 +320,44 @@ export function buildDfg({
     });
   }
 
-  
+  // --- Step 7: limitation detection ---
+  if (hasPointerOrReference(bindings)) limitations.push(LIMITATIONS.POINTER_ALIAS);
+  if (hasEvalScope(cfgNodes, dataFactsMap)) {
+    limitations.push(LIMITATIONS.EVAL_SCOPE);
+    // degrade all resolved edges
+    const degraded = degradeEvalEdges(flowEdges);
+    flowEdges.length = 0;
+    flowEdges.push(...degraded);
+  }
+
+  // Deduplicate limitations
+  const uniqLimitations = [...new Set(limitations)];
+
+  return {
+    version: DFG_DTO_VERSION,
+    functionId,
+    fileId,
+    nodes: flowNodes,
+    edges: flowEdges,
+    partial: rdResult.partial || partialReasons.length > 0,
+    partialReasons,
+    limitations: uniqLimitations,
+    byBinding: buildByBinding(flowNodes),
+  };
+}
+
+/**
+ * Build the byBinding index from a node list.
+ *
+ * @param {FlowNode[]} nodes
+ * @returns {Record<string, FlowNode[]>}
+ */
+function buildByBinding(nodes) {
+  /** @type {Record<string, FlowNode[]>} */
+  const idx = {};
+  for (const n of nodes) {
+    if (!idx[n.bindingId]) idx[n.bindingId] = [];
+    idx[n.bindingId].push(n);
+  }
+  return idx;
+}
