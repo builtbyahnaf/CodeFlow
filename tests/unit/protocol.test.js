@@ -306,3 +306,25 @@ test('Phase 10 semantic-zoom kinds are directional and validated', () => {
     );
   }
 });
+
+test('Phase 11 data-flow kinds are directional and validated', () => {
+  const webviewKinds = ['dfg.load', 'dfg.trace', 'dfg.slice'];
+  const hostKinds = ['dfg.data', 'dfg.overlay', 'dfg.error'];
+
+  for (const kind of webviewKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+  for (const kind of hostKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+});
