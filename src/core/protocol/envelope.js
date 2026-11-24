@@ -54,6 +54,9 @@ export const WEBVIEW_TO_HOST = Object.freeze([
   'zoom.search',
   'zoom.filter',
   'zoom.focus',
+  'dfg.load',
+  'dfg.trace',
+  'dfg.slice',
 ]);
 
 /** Kinds the host may send to the webview. */
@@ -82,6 +85,9 @@ export const HOST_TO_WEBVIEW = Object.freeze([
   'zoom.data',
   'zoom.members',
   'zoom.results',
+  'dfg.data',
+  'dfg.overlay',
+  'dfg.error',
 ]);
 
 export const DIRECTIONS = Object.freeze({
