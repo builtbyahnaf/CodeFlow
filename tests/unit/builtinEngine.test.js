@@ -66,3 +66,20 @@ int sum(int n) {
   assert.equal(forCc.extensions?.hasInit, true);
   assert.equal(forCc.extensions?.hasCondition, true);
 });
+
+test('parseCppSource extracts switch, case, and default branches', () => {
+  const code = `
+int eval(int op) {
+  switch (op) {
+    case 1: return 10;
+    case 2: return 20;
+    default: return -1;
+  }
+}
+`;
+  const run = parseCppSource({ runId: 'run:6', path: 'src/switch.cpp', text: code });
+  const kinds = run.controlConstructs.map((cc) => cc.kind);
+  assert.ok(kinds.includes('switch'));
+  assert.ok(kinds.includes('case'));
+  assert.ok(kinds.includes('default'));
+});
