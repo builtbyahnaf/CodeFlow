@@ -116,6 +116,11 @@
         "command": "codeflow.resetSettings",
         "title": "Reset Settings to Defaults",
         "category": "CodeFlow"
+      },
+      {
+        "command": "codeflow.showToolchainGuide",
+        "title": "Show Toolchain Setup Guide",
+        "category": "CodeFlow"
       }
     ],
     "configuration": {

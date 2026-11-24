@@ -253,6 +253,16 @@ export function registerCommands({
     await vscode.commands.executeCommand('workbench.action.openSettings', 'codeflow');
   });
 
+  register('codeflow.showToolchainGuide', async () => {
+    logger.info('command.showToolchainGuide');
+    const guideUri = vscode.Uri.joinPath(context.extensionUri, 'docs', 'TOOLCHAIN_SETUP.md');
+    try {
+      await vscode.commands.executeCommand('markdown.showPreview', guideUri);
+    } catch {
+      await vscode.window.showTextDocument(guideUri);
+    }
+  });
+
   register('codeflow.resetSettings', async () => {
     const choice = await vscode.window.showWarningMessage(
       'Are you sure you want to reset all CodeFlow settings to their default values?',
