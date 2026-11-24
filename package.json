@@ -48,6 +48,11 @@
         "category": "CodeFlow"
       },
       {
+        "command": "codeflow.showCallGraph",
+        "title": "Show Call Graph for Function",
+        "category": "CodeFlow"
+      },
+      {
         "command": "codeflow.backToGraph",
         "title": "Back to Graph",
         "category": "CodeFlow"
@@ -245,6 +250,7 @@
     "test:js": "node --test \"tests/unit/javascript*.test.js\" \"tests/conformance/javascript.conformance.test.js\"",
     "test:cfg": "node --test \"tests/unit/cfg*.test.js\"",
     "test:explanation": "node --test \"tests/unit/explanation*.test.js\"",
+    "test:calls": "node --test \"tests/unit/callGraph*.test.js\"",
     "test:integration": "node tests/integration/runTest.js",
     "check:licenses": "node scripts/checkLicenses.js",
     "check:no-typescript": "node scripts/checkNoTypeScript.js",
