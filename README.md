@@ -171,13 +171,15 @@ CodeFlow is currently a project under development. The product direction and int
 
 At this stage:
 
-- **Phases 0–6 are implemented in source** (extension foundation, CSR 1.1
+- **Phases 0–7 are implemented in source** (extension foundation, CSR 1.1
   model, C++ Clang-AST adapter, JavaScript acorn/eslint-scope adapter, CFG
   generation and custom SVG visualization, live source synchronization with
   hover previews, click-to-navigate, bidirectional highlighting, and
-  stale-source detection, plus a deterministic explanation engine with
+  stale-source detection, a deterministic explanation engine with
   evidence-linked statements, conditions, loops, calls, variables, summaries,
-  and proof-gated pattern/complexity claims).
+  and proof-gated pattern/complexity claims, plus an interactive call-graph
+  perspective with a multi-source merge policy, cycle marking, unresolved
+  buckets, and honest scope banners).
 - **Explanation settings** (`codeflow.explanation.*`) select depth, evidence
   visibility, and limitation disclosure. Explanations run with no model, no
   network call, and no randomness.
