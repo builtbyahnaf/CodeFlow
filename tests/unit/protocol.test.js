@@ -184,10 +184,7 @@ test('Phase 1 CSR and query kinds are sendable in their own direction only', () 
 
   // The function list is request and response, so it travels both ways.
   for (const direction of [WEBVIEW_TO_HOST, HOST_TO_WEBVIEW]) {
-    assert.equal(
-      validateEnvelope(createEnvelope('cfg.functions', {}), direction).ok,
-      true,
-    );
+    assert.equal(validateEnvelope(createEnvelope('cfg.functions', {}), direction).ok, true);
   }
 });
 
@@ -235,4 +232,34 @@ test('Phase 6 explanation kinds are directional and validated', () => {
     validateEnvelope(createEnvelope('explain.data', {}), WEBVIEW_TO_HOST).reason,
     'unknown_kind',
   );
+});
+
+test('Phase 7 call-graph kinds are directional and validated', () => {
+  const webviewKinds = [
+    'calls.load',
+    'calls.outgoing',
+    'calls.incoming',
+    'calls.expand',
+    'calls.collapse',
+    'calls.filter',
+    'calls.focus',
+  ];
+  const hostKinds = ['calls.data', 'calls.neighbors'];
+
+  for (const kind of webviewKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
+  for (const kind of hostKinds) {
+    assert.equal(validateEnvelope(createEnvelope(kind, {}), HOST_TO_WEBVIEW).ok, true, kind);
+    assert.equal(
+      validateEnvelope(createEnvelope(kind, {}), WEBVIEW_TO_HOST).reason,
+      'unknown_kind',
+      kind,
+    );
+  }
 });
