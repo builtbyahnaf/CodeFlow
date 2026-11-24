@@ -541,3 +541,76 @@ Every neighbor page and call-graph DTO carries a mandatory `scope` and
 4. **Paginated member reveal (`expansion.js`, AC-10.3):** Every cluster and edge bundle expands via `createClusterExpansionService` (`defaultPageSize: 50`, `maxPageSize: 100`) returning `nextCursor`, `remainingCount`, and `moreLabel` (`"N more"`), cached per `(graphId, clusterId, runId)`.
 5. **Bounded zoom gestures (`evaluateZoomGesture`, AC-10.6):** Wheel/pinch zoom scales visually by default and never transitions semantic levels more than once per gesture or while mid-pan.
 6. **Anchored incremental layout (`layout.js`, AC-10.7):** `computeAnchoredIncrementalLayout` anchors expansion at the expanded cluster's coordinates and reuses existing node positions by ID, honoring `prefers-reduced-motion` (`transitionMs: 0`).
+
+---
+
+## 14. Data-Flow Analysis (Phase 11)
+
+### 14.1 Scope Boundary and Claims
+
+CodeFlow V1 provides **foundational intraprocedural data-flow analysis** over scalar locals and parameters across the Control-Flow Graph. It is explicitly narrow, provable, and well-labeled.
+
+#### V1 Supported Claims
+- Intraprocedural definition-use chains over scalar locals and parameters using reaching definitions over CFG.
+- Assignments, increments, compound assignments, destructuring (JS), declaration-with-initializer, and mutation sites.
+- Loop-carried dependencies detected via DFS back-edges in CFG.
+- Parameter → argument and return → call-site-use mapping **only** for `resolved` call targets.
+- Closures (JS): captured variables marked `inferred` with the capturing function identified.
+- Aggregated field/property access where receiver identity is known; otherwise `unresolved`.
+
+#### Explicitly Not Claimed in V1 (Non-Negotiable)
+| Not Claimed | Reason |
+|---|---|
+| Pointer / reference alias analysis (C++) | Undecidable in general; approximations would be presented as facts |
+| Heap shape tracking, object graph modeling | Out of scope for V1 |
+| Taint tracking, security flow ("user input reaches SQL") | Requires whole-program precision and sound sink modeling |
+| Path-sensitive value computation ("x is 5 here") | Requires constraint solving |
+| Interprocedural flows across `possible` / `unresolved` calls | No confirmed target, no flow |
+| Whole-program reaching definitions | Cost and precision both untenable in V1 |
+| Constant propagation / dead-store elimination | Compiler territory |
+| Concurrency / async interleaving (promises, threads) | Not modeled |
+
+### 14.2 Vocabulary and Kinds (`src/core/graph/dfg/kinds.js`)
+
+#### Node Kinds (`FLOW_NODE_KINDS`)
+- `'def'`: Variable receives a new value.
+- `'use'`: Variable value is consumed.
+- `'defuse'`: Read-modify-write (e.g. `x++`).
+- `'param'`: Function parameter entry point.
+- `'return'`: Return value production site.
+- `'kill'`: Binding is explicitly or conservatively killed.
+
+#### Edge Kinds (`FLOW_EDGE_KINDS`)
+- `'reaching'`: Definition reaches a use along CFG paths.
+- `'assign'`: Direct assignment site.
+- `'param_to_arg'`: Actual argument at call site → callee parameter (`resolved` targets only).
+- `'return_to_use'`: Callee return value → call site use (`resolved` targets only).
+- `'loop_carried'`: Definition in an earlier loop iteration reaches use in a later one (`↻` glyph).
+- `'capture'`: Closure captures an outer binding (`⊃` glyph).
+
+#### Reason Codes (`FLOW_REASON_CODES`)
+`'aliasing_unknown'`, `'pointer_aliasing'`, `'reference_parameter'`, `'property_of_unknown_object'`, `'deferred_invocation'`, `'eval_scope'`, `'template_dependent'`, `'capture_mutation'`, `'unmodeled_region'`, `'unresolved_call'`, `'flow_budget_exceeded'`, `'too_large'`, `'missing_cfg'`, `'loop_carried'`.
+
+### 14.3 Conservative Kill Rules
+
+1. **Unresolved / Possible Calls:** Passing a mutable reference or pointer to an `unresolved` or `possible` call site emits a conservative kill with `reasonCode: 'unresolved_call'`. Subsequent uses degrade to `possible` / `unresolved`.
+2. **Unmodeled CFG Regions:** When an `unmodeled` CFG node is encountered, all in-scope mutable bindings receive conservative kills with `reasonCode: 'unmodeled_region'`.
+3. **Closure Captures:** Captured bindings are marked with `reasonCode: 'capture_mutation'`.
+4. **`eval()` Scope:** Presence of `eval()` marks all variable flows in that function as `unresolved` with `reasonCode: 'eval_scope'`.
+5. **Reference Parameters:** C++ `T&` parameters are marked `possible` with `reasonCode: 'reference_parameter'`.
+
+### 14.4 Budgets and Performance Contracts
+
+| Measure | Contract | Fallback |
+|---|---|---|
+| Reaching definitions iteration budget | 20,000 iterations | Return `partial: true` with `flow_budget_exceeded` |
+| Reaching definitions time budget | 250 ms | Return `partial: true` with `flow_budget_exceeded` |
+| Backward slice query budget | 150 ms | Return `partial: true` with `too_large` |
+| LRU DFG Cache | 20 functions | LRU eviction |
+
+### 14.5 Semantic Zoom Overlay Integration (`OVERLAY_SLOTS.DFG`)
+
+The DFG integrates into Phase 10 Semantic Zoom L4 (`function`) and L5 (`statement`) views via `buildDfgOverlay`:
+- Produces a variable trace overlay for the currently selected binding.
+- Renders glyphs (`✓`, `~`, `?`, `✗`, `…`, `↻`, `⊃`) without relying on color alone.
+- Surfaces honest limitation disclosures and budget warnings above-the-fold.
