@@ -137,3 +137,37 @@ export function findMatchingBrace(text, openBraceIndex) {
   }
   return -1;
 }
+
+export const CPP_KEYWORDS = new Set([
+  'if',
+  'else',
+  'for',
+  'while',
+  'do',
+  'switch',
+  'case',
+  'default',
+  'return',
+  'break',
+  'continue',
+  'goto',
+  'try',
+  'catch',
+  'throw',
+  'sizeof',
+  'typeof',
+  'alignof',
+  'decltype',
+  'template',
+  'class',
+  'struct',
+  'union',
+  'enum',
+  'namespace',
+  'public',
+  'protected',
+  'private',
+  'typedef',
+  'using',
+  'static_assert',
+]);
