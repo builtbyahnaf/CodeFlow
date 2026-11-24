@@ -9,7 +9,7 @@
  */
 
 /**
- * @param {{nonce: string, cspSource: string, scriptUri: string, styleUri: string, title?: string, preferredSymbolId?: string|null}} input
+ * @param {{nonce: string, cspSource: string, scriptUri: string, styleUri: string, title?: string, preferredSymbolId?: string|null, preferredPerspective?: string|null}} input
  * @returns {string}
  */
 export function renderPanelHtml({
@@ -19,6 +19,7 @@ export function renderPanelHtml({
   styleUri,
   title = 'CodeFlow',
   preferredSymbolId = null,
+  preferredPerspective = null,
 }) {
   const csp = [
     "default-src 'none'",
@@ -40,7 +41,7 @@ export function renderPanelHtml({
     <link rel="stylesheet" href="${styleUri}" />
     <title>${escapeHtml(title)}</title>
   </head>
-  <body${preferredSymbolId ? ` data-preferred-symbol="${escapeHtml(preferredSymbolId)}"` : ''}>
+  <body${preferredSymbolId ? ` data-preferred-symbol="${escapeHtml(preferredSymbolId)}"` : ''}${preferredPerspective ? ` data-preferred-perspective="${escapeHtml(preferredPerspective)}"` : ''}>
     <header class="cf-header">
       <div class="cf-title">
         <span class="cf-mark" aria-hidden="true"></span>
@@ -49,9 +50,19 @@ export function renderPanelHtml({
       <div id="cf-meta" class="cf-meta" role="status" aria-live="polite">Loading…</div>
       <div class="cf-actions">
         <label class="cf-picker">
+          <span class="cf-picker-label">View</span>
+          <select id="cf-perspective" class="cf-select" aria-label="Graph perspective">
+            <option value="cfg">Control Flow (CFG)</option>
+            <option value="call_graph">Call Graph</option>
+          </select>
+        </label>
+        <label class="cf-picker">
           <span class="cf-picker-label">Function</span>
           <select id="cf-function" class="cf-select" aria-label="Function to display" hidden></select>
         </label>
+        <button id="cf-switch-perspective" type="button" class="cf-button" title="Switch perspective for the selected function" hidden>
+          Show in Call Graph
+        </button>
         <button id="cf-refresh" type="button" class="cf-button" title="Reload the graph">
           Reload
         </button>
@@ -59,6 +70,7 @@ export function renderPanelHtml({
     </header>
 
     <div id="cf-banner" class="cf-banner" role="alert" hidden></div>
+    <div id="cf-scope-banner" class="cf-scope-banner" role="status" hidden></div>
     <div id="cf-fn-summary" class="cf-fn-summary" role="region" aria-label="Function summary" hidden></div>
 
     <main class="cf-main">
@@ -125,6 +137,36 @@ export function renderPanelHtml({
           <details id="cf-explain-limits" class="cf-explain-disclosure" open hidden>
             <summary>Limitations</summary>
             <p id="cf-explain-limits-text" class="cf-explain-limits-text"></p>
+          </details>
+        </section>
+        <section id="cf-calls-panel" class="cf-calls-panel" aria-label="Call relationships" hidden>
+          <div class="cf-calls-toolbar">
+            <h2 class="cf-detail-title">Call Graph</h2>
+            <select id="cf-calls-filter-status" class="cf-select" aria-label="Filter calls by status">
+              <option value="all">All statuses</option>
+              <option value="resolved">Resolved only</option>
+              <option value="inferred,possible">Inferred &amp; possible</option>
+              <option value="unresolved">Unresolved only</option>
+            </select>
+          </div>
+          <div class="cf-calls-node-actions">
+            <button id="cf-calls-expand" type="button" class="cf-button" disabled>Expand</button>
+            <button id="cf-calls-collapse" type="button" class="cf-button" disabled>Collapse</button>
+            <button id="cf-calls-focus" type="button" class="cf-button" aria-pressed="false">Focus</button>
+          </div>
+          <div class="cf-calls-group">
+            <h3 id="cf-callers-heading" class="cf-detail-title">Callers</h3>
+            <ul id="cf-callers-list" class="cf-calls-list"></ul>
+            <button id="cf-callers-more" type="button" class="cf-button" hidden>More callers</button>
+          </div>
+          <div class="cf-calls-group">
+            <h3 id="cf-callees-heading" class="cf-detail-title">Callees</h3>
+            <ul id="cf-callees-list" class="cf-calls-list"></ul>
+            <button id="cf-callees-more" type="button" class="cf-button" hidden>More callees</button>
+          </div>
+          <details id="cf-unresolved-bucket" class="cf-explain-disclosure" hidden>
+            <summary id="cf-unresolved-summary">Unresolved targets</summary>
+            <ul id="cf-unresolved-list" class="cf-calls-list"></ul>
           </details>
         </section>
         <h2 class="cf-detail-title">Legend</h2>
