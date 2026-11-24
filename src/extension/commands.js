@@ -17,6 +17,7 @@ import { buildDiagnosticsReport, openDiagnosticsDocument } from './diagnostics.j
  *     show: () => unknown,
  *     showFile: (path: string) => unknown,
  *     showCfg: (path: string, symbolId: string) => unknown,
+ *     showCallGraph?: (path: string, symbolId: string) => unknown,
  *     listCfgFunctions: (path: string) => Promise<{ok: boolean, [key: string]: unknown}>,
  *     focusGraph: () => unknown,
  *     isOpen: () => boolean,
@@ -77,9 +78,10 @@ export function registerCommands({ context, logger, panelManager, registry, exte
       return;
     }
     const filePath = editor.document.uri.fsPath;
-    const listed = /** @type {{ok: true, functions: Array<{symbolId: string, name: string, qualifiedName: string, kind: string}>} | {ok: false, code: string, message: string}} */ (
-      await panelManager.listCfgFunctions(filePath)
-    );
+    const listed =
+      /** @type {{ok: true, functions: Array<{symbolId: string, name: string, qualifiedName: string, kind: string}>} | {ok: false, code: string, message: string}} */ (
+        await panelManager.listCfgFunctions(filePath)
+      );
     if (!listed.ok) {
       void vscode.window.showWarningMessage(`CodeFlow: ${listed.message}`);
       return;
@@ -106,12 +108,56 @@ export function registerCommands({ context, logger, panelManager, registry, exte
     panelManager.showCfg(filePath, picked.symbolId);
   });
 
+  register('codeflow.showCallGraph', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.uri.scheme !== 'file') {
+      void vscode.window.showWarningMessage(
+        'CodeFlow: open a supported file before showing its call graph.',
+      );
+      return;
+    }
+    const filePath = editor.document.uri.fsPath;
+    const listed =
+      /** @type {{ok: true, functions: Array<{symbolId: string, name: string, qualifiedName: string, kind: string}>} | {ok: false, code: string, message: string}} */ (
+        await panelManager.listCfgFunctions(filePath)
+      );
+    if (!listed.ok) {
+      void vscode.window.showWarningMessage(`CodeFlow: ${listed.message}`);
+      return;
+    }
+    if (listed.functions.length === 0) {
+      void vscode.window.showInformationMessage(
+        'CodeFlow: this file has no function with a call graph to show.',
+      );
+      panelManager.showFile(filePath);
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(
+      listed.functions.map((entry) => ({
+        label: entry.qualifiedName,
+        description: entry.kind,
+        symbolId: entry.symbolId,
+      })),
+      { title: 'CodeFlow: show call graph', placeHolder: 'Select a function' },
+    );
+    if (!picked) {
+      return;
+    }
+    logger.info('command.showCallGraph', { file: filePath });
+    if (typeof panelManager.showCallGraph === 'function') {
+      panelManager.showCallGraph(filePath, picked.symbolId);
+    } else {
+      panelManager.showCfg(filePath, picked.symbolId);
+    }
+  });
+
   register('codeflow.backToGraph', () => {
     logger.info('command.backToGraph');
     panelManager.focusGraph();
   });
 
-  register('codeflow.showDiagnostics', async () => {    const report = buildDiagnosticsReport({
+  register('codeflow.showDiagnostics', async () => {
+    const report = buildDiagnosticsReport({
       registry,
       panelManager,
       logger,
