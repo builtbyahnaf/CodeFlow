@@ -335,7 +335,35 @@ export function parseCppSource(input) {
     functionSymbolsByName.set('main', fallbackFn);
     parseBodyConstructs(masked, 0, mainSymId, rangeOf, controlConstructs, relationships);
   }
-  // fallback top-level symbol ready
+  const fileRecord = createFileRecord({
+    fileId,
+    path: filePath,
+    language,
+    contentHash: shortHash(text),
+    sizeBytes: Buffer.byteLength(text, 'utf8'),
+    lineCount: lines.length,
+    generated: false,
+  });
+
+  const diagnostic = createDiagnostic({
+    severity: 'info',
+    code: 'builtin_engine',
+    message: 'Analysed with CodeFlow built-in engine. Install Clang for full AST compiler semantics.',
+  });
+
+  return createAnalysisRun({
+    runId,
+    adapterId: language === 'c' ? 'c-clang' : 'cpp-clang',
+    adapterVersion: '1.2.0',
+    language,
+    completeness: 'partial',
+    scope: { kind: 'file', path: filePath },
+    files: [fileRecord],
+    symbols,
+    controlConstructs,
+    relationships,
+    diagnostics: [diagnostic],
+  });
 }
 
 /**
