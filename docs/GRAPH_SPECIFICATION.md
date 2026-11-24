@@ -1,6 +1,6 @@
 # Graph Specification
 
-**Author:** Muhammad Tahmid Ahnaf (<this.is.ahnaf101@gmail.com>)
+**Author:** Muhammad Tahmid Ahnaf
 
 This document is normative for the graph layer. It defines the vocabulary, the
 invariants, the lowering rules and the degradation catalog that every adapter

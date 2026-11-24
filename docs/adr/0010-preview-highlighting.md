@@ -3,7 +3,7 @@
 **Status:** Accepted  
 **Date:** 2026-11-23  
 **Phase:** 5  
-**Author:** Muhammad Tahmid Ahnaf (<this.is.ahnaf101@gmail.com>)
+**Author:** Muhammad Tahmid Ahnaf
 
 ## Context
 
