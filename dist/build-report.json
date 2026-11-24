@@ -1,6 +1,6 @@
 {
-  "extensionBytes": 4589663,
-  "webviewBytes": 685086,
+  "extensionBytes": 640175,
+  "webviewBytes": 84426,
   "stylesBytes": 17440,
-  "production": false
+  "production": true
 }
