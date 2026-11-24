@@ -25,6 +25,31 @@ import { PROTOCOL_VERSION } from '../core/protocol/envelope.js';
 
 const EXTENSION_VERSION = '1.2.0';
 
+let toolchainPromptedThisSession = false;
+
+/**
+ * Prompt user once per session when falling back to built-in engine.
+ *
+ * @param {import('./log.js').Logger} [logger]
+ */
+async function promptToolchainSetupOnce(logger) {
+  if (toolchainPromptedThisSession) {
+    return;
+  }
+  toolchainPromptedThisSession = true;
+  logger?.info?.('cpp.toolchain_prompt_displayed');
+  const choice = await vscode.window.showInformationMessage(
+    'CodeFlow: Using built-in engine for C/C++. For compiler-grade AST semantics, install Clang.',
+    'Toolchain Setup Guide',
+    'Settings',
+  );
+  if (choice === 'Toolchain Setup Guide') {
+    await vscode.commands.executeCommand('codeflow.showToolchainGuide');
+  } else if (choice === 'Settings') {
+    await vscode.commands.executeCommand('workbench.action.openSettings', 'codeflow.cpp');
+  }
+}
+
 /**
  * Read the C++ settings. Called per analysis so a settings change takes effect
  * without reloading the window.
