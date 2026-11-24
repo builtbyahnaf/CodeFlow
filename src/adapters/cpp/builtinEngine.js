@@ -221,5 +221,28 @@ export function parseCppSource(input) {
       endOffset,
     };
   };
-  // rangeOf ready
+  const allocator = createIdentityAllocator({ language });
+  const relAllocator = createRelationshipAllocator();
+
+  const fileSymbolId = allocator.symbol({
+    path: filePath,
+    kind: 'file',
+    qualifiedName: filePath,
+  }).symbolId;
+
+  const fileSymbol = createSymbol({
+    symbolId: fileSymbolId,
+    kind: 'file',
+    name: filePath.split('/').pop() || filePath,
+    qualifiedName: filePath,
+    language,
+    declaration: rangeOf(0, Math.min(10, text.length)),
+    visibility: 'public',
+  });
+
+  const symbols = [fileSymbol];
+  const controlConstructs = [];
+  const relationships = [];
+  const functionSymbolsByName = new Map();
+  // symbols ready
 }
