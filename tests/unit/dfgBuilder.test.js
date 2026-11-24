@@ -112,3 +112,142 @@ describe('buildDfg – straight-line reaching', () => {
 // Loop-carried edges
 // ---------------------------------------------------------------------------
 
+describe('buildDfg – loop-carried edges', () => {
+  it('emits loop_carried edge for back edge', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry',  'entry',       ['header']),
+        cfgNode('header', 'loop_header', ['body', 'exit']),
+        cfgNode('body',   'statement',   ['latch']),
+        cfgNode('latch',  'loop_latch',  ['header']),  // back edge to header
+        cfgNode('exit',   'exit',        []),
+      ],
+      dataFactsMap: new Map([
+        ['entry',  [{ bindingId: 'i', op: 'assign', status: 'resolved' }]],
+        ['body',   [{ bindingId: 'i', op: 'read',   status: 'resolved' }]],
+        ['latch',  [{ bindingId: 'i', op: 'assign', status: 'resolved' }]],
+      ]),
+      bindings: [{ ...BASE_BINDING, id: 'i', name: 'i' }],
+    });
+    const loopEdges = dfg.edges.filter((e) => e.kind === 'loop_carried');
+    assert.ok(loopEdges.length >= 1, 'expected at least one loop_carried edge');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Param synthesis
+// ---------------------------------------------------------------------------
+
+describe('buildDfg – param synthesis', () => {
+  it('synthesizes param site for each parameter', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      params: [
+        { ...BASE_BINDING, id: 'a', name: 'a', kind: 'param' },
+        { ...BASE_BINDING, id: 'b', name: 'b', kind: 'param' },
+      ],
+    });
+    const paramNodes = dfg.nodes.filter((n) => n.kind === 'param');
+    assert.equal(paramNodes.length, 2);
+  });
+
+  it('marks reference params as possible', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      params: [{ ...BASE_BINDING, id: 'ref', name: 'ref', kind: 'param', isReference: true }],
+    });
+    const pNode = dfg.nodes.find((n) => n.kind === 'param');
+    assert.equal(pNode.status, 'possible');
+    assert.equal(pNode.reasonCode, 'reference_parameter');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Limitation detection
+// ---------------------------------------------------------------------------
+
+describe('buildDfg – limitations', () => {
+  it('adds pointer/alias limitation when reference binding present', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      bindings: [{ ...BASE_BINDING, isReference: true }],
+    });
+    assert.ok(dfg.limitations.some((l) => l.includes('pointer')));
+  });
+
+  it('adds eval limitation when eval_scope reason code in facts', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['n1']),
+        cfgNode('n1',    'unmodeled', ['exit']),
+        cfgNode('exit',  'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['n1', [{ bindingId: 'x', op: 'read', status: 'unresolved', reasonCode: 'eval_scope' }]],
+      ]),
+      bindings: [BASE_BINDING],
+    });
+    assert.ok(dfg.limitations.some((l) => l.toLowerCase().includes('eval')));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Conservative kill for unresolved calls
+// ---------------------------------------------------------------------------
+
+describe('buildDfg – conservative kill at unresolved call', () => {
+  it('no resolved edge produced across unresolved call for reference binding', () => {
+    const dfg = buildDfg({
+      ...minBuild(),
+      cfgNodes: [
+        cfgNode('entry', 'entry', ['n1']),
+        cfgNode('n1',    'statement', ['callSite']),  // def x
+        cfgNode('callSite', 'call',  ['n3']),         // unresolved call
+        cfgNode('n3',    'statement', ['exit']),       // use x
+        cfgNode('exit',  'exit', []),
+      ],
+      dataFactsMap: new Map([
+        ['n1',       [{ bindingId: 'x', op: 'assign', status: 'resolved' }]],
+        ['n3',       [{ bindingId: 'x', op: 'read',   status: 'resolved' }]],
+      ]),
+      bindings: [{ ...BASE_BINDING, isReference: true }],
+      calls: [{ callNodeId: 'callSite', status: 'unresolved' }],
+    });
+    // The use at n3 should not have a `resolved` edge from n1's def
+    const useNode = dfg.nodes.find((n) => n.cfgNodeId === 'n3' && n.kind === 'use');
+    if (useNode) {
+      const incoming = dfg.edges.filter((e) => e.to === useNode.id);
+      for (const e of incoming) {
+        assert.notEqual(e.status, 'resolved', 'No resolved edge should cross an unresolved call for reference binding');
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Determinism
+// ---------------------------------------------------------------------------
+
+describe('buildDfg – determinism', () => {
+  it('produces identical nodes/edges across two runs', () => {
+    const opts = minBuild({
+      dataFactsMap: new Map([
+        ['entry', [{ bindingId: 'x', op: 'assign', status: 'resolved' }]],
+        ['exit',  [{ bindingId: 'x', op: 'read',   status: 'resolved' }]],
+      ]),
+      bindings: [BASE_BINDING],
+    });
+    const a = buildDfg(opts);
+    const b = buildDfg(opts);
+    assert.deepEqual(
+      a.nodes.map((n) => n.id).sort(),
+      b.nodes.map((n) => n.id).sort(),
+    );
+    assert.deepEqual(
+      a.edges.map((e) => `${e.from}→${e.to}`).sort(),
+      b.edges.map((e) => `${e.from}→${e.to}`).sort(),
+    );
+  });
+});
