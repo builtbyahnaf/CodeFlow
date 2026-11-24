@@ -2,7 +2,7 @@
   "name": "codeflow",
   "displayName": "CodeFlow",
   "description": "Understand unfamiliar C++ and JavaScript code through progressive, source-linked visualization.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "builtbyahnaf",
   "license": "GPL-3.0-only",
   "private": true,
