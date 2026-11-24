@@ -307,6 +307,13 @@ export function parseCppSource(input) {
     if (functionSymbolsByName.has(rel.to)) {
       rel.to = functionSymbolsByName.get(rel.to).symbolId;
       rel.status = 'resolved';
+    } else {
+      rel.to = `external:${rel.to}`;
+      rel.status = 'unresolved';
+      rel.reasonCode = 'out_of_scope';
+    }
+      rel.to = functionSymbolsByName.get(rel.to).symbolId;
+      rel.status = 'resolved';
     }
   }
   // internal calls resolved
