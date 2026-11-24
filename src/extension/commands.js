@@ -211,4 +211,13 @@ export function registerCommands({
     logger.info('command.openIndexConfiguration');
     return indexService?.openIndexConfiguration?.();
   });
+
+  register('codeflow.showWorkspaceOverview', () => {
+    logger.info('command.showWorkspaceOverview');
+    if (typeof panelManager.showWorkspaceOverview === 'function') {
+      panelManager.showWorkspaceOverview();
+    } else {
+      panelManager.show();
+    }
+  });
 }
