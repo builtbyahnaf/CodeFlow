@@ -269,3 +269,50 @@ export function reachingDefinitions(
  * @param {string} entryId
  * @returns {Array<{from: string, to: string}>}
  */
+export function findBackEdges(nodes, entryId) {
+  const color = new Map(nodes.map((n) => [n.id, 0]));
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  /** @type {Array<{from: string, to: string}>} */
+  const backEdges = [];
+
+  /**
+   * @param {string} id
+   */
+  function dfs(id) {
+    color.set(id, 1);
+    const node = nodeMap.get(id);
+    if (!node) return;
+    for (const succ of node.successors) {
+      const c = color.get(succ) ?? 0;
+      if (c === 1) {
+        backEdges.push({ from: id, to: succ });
+      } else if (c === 0) {
+        dfs(succ);
+      }
+    }
+    color.set(id, 2);
+  }
+
+  if (color.has(entryId)) dfs(entryId);
+  // Handle disconnected nodes (unreachable)
+  for (const n of nodes) {
+    if ((color.get(n.id) ?? 0) === 0) dfs(n.id);
+  }
+
+  return backEdges;
+}
+
+// ---------------------------------------------------------------------------
+// Liveness (backward) — optional, used for "used before assigned" detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Backward liveness: a binding is live at a point if there is a path from that
+ * point to a use that is not intercepted by a kill/def.
+ *
+ * @param {CfgNodeShim[]} nodes
+ * @param {Map<string, Set<string>>} usePerNode   - cfgNodeId → Set<bindingId>
+ * @param {Map<string, Set<string>>} defPerNode   - cfgNodeId → Set<bindingId> (kills liveness)
+ * @param {number} [budgetMs]
+ * @returns {{ partial: boolean, liveIn: Map<string, Set<string>>, liveOut: Map<string, Set<string>> }}
+ */
