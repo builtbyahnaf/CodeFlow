@@ -48,3 +48,5 @@ export {
   decideFirstOpenAction,
   formatIndexStatusBar,
 } from './workflow.js';
+
+export * from './incremental/index.js';
