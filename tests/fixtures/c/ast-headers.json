@@ -1,0 +1,62 @@
+{
+  "id": "0x7000",
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "id": "fn-compute-header-val",
+      "kind": "FunctionDecl",
+      "name": "compute_header_value",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "src/headers.c", "line": 3, "col": 5 },
+      "range": { "begin": { "line": 3, "col": 1 }, "end": { "line": 5, "col": 2 } },
+      "inner": [
+        { "id": "p-hb", "kind": "ParmVarDecl", "name": "base", "loc": { "line": 3, "col": 30 } },
+        { "kind": "CompoundStmt", "range": { "begin": { "line": 3, "col": 36 }, "end": { "line": 5, "col": 2 } } }
+      ]
+    },
+    {
+      "id": "fn-use-header",
+      "kind": "FunctionDecl",
+      "name": "use_header",
+      "type": { "qualType": "int (int)" },
+      "loc": { "file": "src/headers.c", "line": 7, "col": 5 },
+      "range": { "begin": { "line": 7, "col": 1 }, "end": { "line": 9, "col": 2 } },
+      "inner": [
+        { "id": "p-hv", "kind": "ParmVarDecl", "name": "val", "loc": { "line": 7, "col": 20 } },
+        {
+          "kind": "CompoundStmt",
+          "range": { "begin": { "line": 7, "col": 25 }, "end": { "line": 9, "col": 2 } },
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "+",
+                  "inner": [
+                    {
+                      "kind": "CallExpr",
+                      "loc": { "line": 8, "col": 10 },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "name": "compute_header_value",
+                              "referencedDecl": { "kind": "FunctionDecl", "name": "compute_header_value" }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
