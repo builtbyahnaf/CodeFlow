@@ -37,6 +37,8 @@ export const WEBVIEW_TO_HOST = Object.freeze([
   'source.slice',
   'source.validation',
   'navigate.to',
+  'explain.node',
+  'explain.function',
 ]);
 
 /** Kinds the host may send to the webview. */
@@ -58,6 +60,7 @@ export const HOST_TO_WEBVIEW = Object.freeze([
   'selection.changed',
   'graph.focus',
   'settings.data',
+  'explain.data',
 ]);
 
 export const DIRECTIONS = Object.freeze({
