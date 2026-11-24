@@ -1,6 +1,6 @@
 # Changelog
 
-**Author:** Muhammad Tahmid Ahnaf (<this.is.ahnaf101@gmail.com>)
+**Author:** Muhammad Tahmid Ahnaf
 
 All notable changes to CodeFlow are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
@@ -8,7 +8,77 @@ All notable changes to CodeFlow are recorded here. The format follows
 
 CodeFlow has not been published. Every entry below is unreleased.
 
-## [0.1.005] - 2026-11-23
+## [0.1.731] - 2026-11-24
+
+### Phase 6 — Deterministic Explanation Engine
+
+The "understand" half of the product: every statement, condition, branch, loop,
+call, return, variable, mutation, function summary, dependency, pattern, and
+complexity claim is produced from CSR/CFG evidence by deterministic rules, with
+no model, no network, and no randomness. See `docs/PHASE-06-REPORT.md`,
+`docs/EXPLANATION_ENGINE.md`, and
+`docs/adr/0011-deterministic-explanations.md`.
+
+- **Core explanation modules** (`src/core/explanation/`):
+  - `model.js`: ruleset `1.0.0`, `EvidenceRef`/`ExplanationItem`, fragment
+    assembly that drops evidence-less or HTML fragments, stable ids
+    (`exp:<subject>:<rule>:d<depth>:v<ruleset>`), and a validator.
+  - `facts.js`: language-neutral fact extraction from the CFG and the CSR query
+    layer only — statements, conditions, branches, loops, calls, returns,
+    variables, dependencies, and pattern proof flags.
+  - `phrasing.js`: status-mandated qualification for `resolved`, `inferred`,
+    `possible`, `unresolved`, and `stale`, limitation formatting, a
+    prohibited-language linter (advice, certainty overclaims, name-based
+    speculation, unproven algorithm names), and central stale qualification.
+  - `settings.js`: defaults and clamping for depth, evidence, and limitations.
+  - `cache.js`: bounded cache keyed by run, ruleset, depth, staleness, subject.
+  - `engine.js`: rule selection, throw isolation, assembly, validation, linting,
+    and caching; facts cached per run and graph.
+  - `rules/`: statement, condition/branch, loop, call/return, variable/dependency,
+    function-summary, and pattern/complexity groups with explicit proof
+    obligations in `catalog.js`.
+
+- **Protocol and host** (`src/core/protocol/`, `src/extension/`):
+  - Added `explain.node` and `explain.function` (webview → host) and
+    `explain.data` (host → webview) to the directional allowlists.
+  - `panelWire.js` handlers require a loaded CFG, never call `ensureRun`, return
+    `E_NO_ANALYSIS` before analysis and `E_NOT_FOUND` for unknown nodes, and
+    derive the stale flag from tracked files.
+  - `panel.js` passes nested explanation settings beside preview settings and
+    pushes live changes.
+
+- **Webview** (`src/webview/`, `src/extension/panelTemplate.js`):
+  - Function summary above the graph, node explanation card below details with a
+    1–4 depth selector, grounded/qualified styling, evidence links that reuse
+    `navigate.to`, and a collapsible limitations disclosure that remains
+    accessible when collapsed.
+  - One-line depth-1 explanation in the hover preview card; skeleton only after
+    100 ms so fast responses never flicker.
+
+- **Settings (`package.json`)**:
+  - Added `codeflow.explanation.defaultDepth` (1–4, default 2),
+    `codeflow.explanation.showEvidence` (default true), and
+    `codeflow.explanation.includeLimitations` (default true), with 1:1 manifest
+    parity tests.
+
+- **Tests and documentation**:
+  - Added suites for the explanation model, facts, phrasing, settings, rules,
+    patterns, and engine, plus protocol, panel-wire, template, and architecture
+    assertions (explanation layer isolation and no raw `run.*` access).
+  - Added `docs/EXPLANATION_ENGINE.md`, ADR 0011, and
+    `docs/PHASE-06-REPORT.md`; updated `docs/ARCHITECTURE.md` and `README.md`.
+  - Depth-4 function explanation on a 724-node CFG: 11.9 ms cold, 0.03 ms warm;
+    node median 0.057 ms, P95 0.128 ms.
+
+- **Known gaps (recorded, not hidden)**:
+  - Real C++/JavaScript adapters do not yet emit every pattern-proof extension
+    flag, so pattern naming is fixture-verified while recursion and bounds
+    narrowing fire from real CFG/relationship evidence.
+  - Blind-reader review (3 readers) was not performed; only the author is
+    available in this environment.
+  - No live VS Code host integration run or webview frame trace executed here.
+
+## [0.1.589] - 2026-11-23
 
 ### Phase 5 — Source Synchronization and Hover Preview
 
@@ -77,7 +147,7 @@ affected nodes stale. See `docs/PHASE-05-REPORT.md`,
   - No local Clang/clangd, live VS Code host integration run, or webview frame
     trace executed in this environment; `npm run check:vsix` previously hung.
 
-## [0.1.004] - 2026-11-23
+## [0.1.445] - 2026-11-23
 
 ### Phase 4 — CFG and first visualization
 
@@ -150,7 +220,7 @@ accurate, inspectable control-flow graph. See `docs/PHASE-04-REPORT.md`,
   - The CFG spec review was author-only.
   - VSIX install and Linux/macOS CI remain unrun here.
 
-## [0.1.003] - 2026-11-21
+## [0.1.346] - 2026-11-21
 
 ### Phase 3 — JavaScript Analysis Foundation
 
@@ -197,7 +267,7 @@ host/pure-adapter split as C++ and typed uncertainty. See
   - No real-world OSS files were added to the corpus; performance is synthetic and single-machine.
   - VSIX install and Linux/macOS CI remain unrun in this environment.
 
-## [0.1.002] - 2026-11-19
+## [0.1.213] - 2026-11-19
 
 ### Phase 2 — C++ Analysis Foundation
 
