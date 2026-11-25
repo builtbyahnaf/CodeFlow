@@ -988,7 +988,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       synthetic: true,
     });
     const latch = addNode('loop_latch', {
-      label: 'do test',
+      label: extensionString(construct, 'sourceLabel') ?? 'do test',
       range: construct.condition ?? construct.sourceRange,
       constructId: construct.constructId,
     });
@@ -1040,14 +1040,16 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
     let pending = incoming;
     if (extensionBoolean(construct, 'hasInit')) {
       const init = addNode('statement', {
-        label: 'for init',
+        label: extensionString(construct, 'initLabel') ?? 'for init',
         range: asRange(construct.extensions?.initRange) ?? construct.sourceRange,
         constructId: construct.constructId,
       });
       pending = attach(pending, init);
     }
     const header = addNode('loop_header', {
-      label: iteration ? `for-${iteration} test` : 'for test',
+      label:
+        extensionString(construct, 'sourceLabel') ??
+        (iteration ? `for-${iteration} test` : 'for test'),
       range: construct.condition ?? construct.sourceRange,
       constructId: construct.constructId,
       ...(iteration === 'of' || iteration === 'in' ? { badge: 'iteration' } : {}),
@@ -1083,7 +1085,9 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       synthetic: true,
     });
     const latch = addNode('loop_latch', {
-      label: extensionBoolean(construct, 'hasUpdate') ? 'for update' : 'loop back',
+      label:
+        extensionString(construct, 'updateLabel') ??
+        (extensionBoolean(construct, 'hasUpdate') ? 'for update' : 'loop back'),
       range: asRange(construct.extensions?.updateRange) ?? construct.sourceRange,
       constructId: construct.constructId,
     });
@@ -1129,13 +1133,15 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
   function lowerSwitch(construct, incoming) {
     const label = extensionString(construct, 'label');
     const multiway = addNode('multiway', {
-      label: 'switch',
+      label: extensionString(construct, 'sourceLabel') ?? 'switch',
       range: construct.condition ?? construct.sourceRange,
       constructId: construct.constructId,
       ...(label ? { badge: label } : {}),
     });
     attach(incoming, multiway);
-    const cases = childrenOf(construct).filter((child) => child.kind === 'case');
+    const cases = childrenOf(construct).filter(
+      (child) => child.kind === 'case' || child.kind === 'default',
+    );
     const after = addNode('merge', {
       label: 'after switch',
       range: construct.sourceRange,
@@ -1147,8 +1153,11 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
     const abrupt = [];
     let hasDefault = false;
     for (const caseConstruct of cases) {
-      const test = extensionString(caseConstruct, 'test') ?? 'default';
-      const isDefault = test === 'default';
+      const test =
+        caseConstruct.kind === 'default'
+          ? 'default'
+          : (extensionString(caseConstruct, 'test') ?? 'default');
+      const isDefault = test === 'default' || caseConstruct.kind === 'default';
       hasDefault = hasDefault || isDefault;
       const entryKind = isDefault ? 'default' : 'case';
       /** @type {Pending[]} */
@@ -1218,7 +1227,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
     let catchExits = [];
     if (catchConstruct) {
       const catchEntry = addNode('catch_entry', {
-        label: 'catch',
+        label: extensionString(catchConstruct, 'label') ?? 'catch',
         range: catchConstruct.sourceRange,
         constructId: catchConstruct.constructId,
       });
@@ -1257,7 +1266,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
     }
     if (finallyConstruct) {
       const finallyEntry = addNode('finally_entry', {
-        label: 'finally',
+        label: extensionString(finallyConstruct, 'label') ?? 'finally',
         range: finallyConstruct.sourceRange,
         constructId: finallyConstruct.constructId,
       });
@@ -1423,6 +1432,18 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
     }
   }
 
+  const dataFlows = nodes
+    .filter((node) => node.details?.assignmentTarget)
+    .map((node) => ({
+      target: node.details.assignmentTarget,
+      sourceCall: node.details.calleeName ?? null,
+      expression: node.details.expression ?? node.label,
+      nodeId: node.id,
+    }));
+  const returns = nodes
+    .filter((node) => node.kind === 'return')
+    .map((node) => node.details?.returnExpression ?? node.label);
+
   /** @type {Cfg} */
   const cfg = {
     graphId: `cfg:${info.runId}:${symbolId}`,
@@ -1437,6 +1458,13 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       qualifiedName: symbol.qualifiedName,
       kind: symbol.kind,
       range: symbol.declaration,
+      ...(symbol.signature ? { signature: symbol.signature } : {}),
+      ...(symbol.extensions?.returnType ? { returnType: symbol.extensions.returnType } : {}),
+      ...(Array.isArray(symbol.extensions?.parameters)
+        ? { parameters: symbol.extensions.parameters }
+        : {}),
+      dataFlows,
+      returns,
     },
     nodes,
     edges,
