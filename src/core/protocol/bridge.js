@@ -16,6 +16,7 @@
 import {
   DIRECTIONS,
   HOST_TO_WEBVIEW,
+  MAX_PAYLOAD_BYTES,
   WEBVIEW_TO_HOST,
   createEnvelope,
   createErrorPayload,
@@ -99,8 +100,13 @@ export function createBridge(options) {
       throw new ProtocolError('E_PROTOCOL', `Kind "${kind}" is not sendable in this direction.`);
     }
     const envelope = createEnvelope(kind, payload, requestId);
-    if (messageSize(envelope) > 1_000_000) {
-      throw new ProtocolError('E_LIMIT', 'Refusing to send an oversized message.');
+    const bytes = messageSize(envelope);
+    if (bytes > MAX_PAYLOAD_BYTES) {
+      throw new ProtocolError('E_LIMIT', 'Refusing to send an oversized message.', {
+        kind,
+        bytes,
+        maxBytes: MAX_PAYLOAD_BYTES,
+      });
     }
     post(envelope);
     logger.debug('protocol.send', {
