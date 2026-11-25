@@ -5,6 +5,8 @@ import { buildCfg } from '../../src/core/graph/cfg/builder.js';
 import { toCfgDto, CFG_RENDER_NODE_LIMIT } from '../../src/core/graph/cfg/dto.js';
 import { layoutCfg } from '../../src/core/graph/cfg/layout.js';
 import { validateDto, serializeDto, parseDto } from '../../src/core/graph/dto.js';
+import { createQueryLayer } from '../../src/core/csr/query.js';
+import { javascriptAdapter } from '../../src/adapters/javascript/index.js';
 import { buildProgram } from '../fixtures/cfg/harness.js';
 
 const entry = (children) => ({ kind: 'entry', children });
@@ -58,9 +60,69 @@ test('every DTO node carries a finite position and label lines', () => {
     assert.ok(node.position.width > 0);
     assert.ok(node.position.height > 0);
     assert.ok(Number.isInteger(node.position.layer));
-    assert.ok(node.labelLines.length >= 1 && node.labelLines.length <= 3);
+    assert.ok(node.labelLines.length >= 1);
     assert.equal(Array.isArray(node.badges), true);
   }
+});
+
+test('CFG labels keep the whole statement and wrap instead of truncating', () => {
+  const statement =
+    'const result = await remoteService.loadEverythingFromTheRemoteEndpoint(configuration, options)';
+  const { query, symbolId } = buildProgram({
+    id: 'long-label',
+    root: entry([{ kind: 'statement', extensions: { label: statement } }]),
+  });
+  const built = buildCfg(query, symbolId);
+  assert.equal(built.ok, true);
+  const dto = toCfgDto(built.cfg);
+  const node = dto.nodes.find((entry) => entry.label === statement);
+  assert.ok(node, 'the full statement should survive into the DTO');
+  assert.ok(node.labelLines.length > 1, 'a long statement should wrap across lines');
+  assert.equal(node.labelLines.join(' '), statement);
+  assert.ok(!node.label.includes('…'));
+});
+
+test('JavaScript CFG nodes show real source, named functions and parameter metadata', () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:js-cfg-labels',
+    path: 'src/app.js',
+    text: [
+      'function app_() {',
+      '  function helper(x) { return x * 2; }',
+      '  return helper(3);',
+      '}',
+      'function compute(value) {',
+      '  const doubled = value * 2;',
+      '  if (doubled > 10) {',
+      '    return math.add(doubled, helper(value));',
+      '  }',
+      '  return doubled;',
+      '}',
+    ].join('\n'),
+  });
+  const query = createQueryLayer(run, { capabilities: javascriptAdapter.capabilities });
+  const appSymbol = run.symbols.find((symbol) => symbol.name === 'app_');
+  const computeSymbol = run.symbols.find((symbol) => symbol.name === 'compute');
+  assert.ok(appSymbol && computeSymbol);
+
+  const appBuilt = buildCfg(query, appSymbol.symbolId);
+  assert.equal(appBuilt.ok, true);
+  const appDto = toCfgDto(appBuilt.cfg);
+  assert.ok(
+    appDto.nodes.some((node) => node.label.includes('function helper(x)')),
+    'nested function declarations should carry their names, not a generic "function"',
+  );
+
+  const computeBuilt = buildCfg(query, computeSymbol.symbolId);
+  assert.equal(computeBuilt.ok, true);
+  const computeDto = toCfgDto(computeBuilt.cfg);
+  assert.equal(computeDto.function.signature, 'compute(value)');
+  assert.ok(
+    computeDto.function.parameters.some((parameter) => parameter.name === 'value'),
+    'the function signature should expose parameter metadata',
+  );
+  assert.ok(computeDto.nodes.some((node) => node.label.includes('doubled = value * 2')));
+  assert.ok(computeDto.nodes.some((node) => node.label.includes('math.add')));
 });
 
 test('synthetic, unreachable and call facts survive the DTO', () => {
