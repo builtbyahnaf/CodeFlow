@@ -39,6 +39,7 @@ import { buildCfg } from '../cfg/builder.js';
  *   runId?: string,
  *   index?: Record<string, any>|null,
  *   query?: Record<string, any>|null,
+ *   files?: Array<Record<string, any>>,
  *   callSession?: {open: (symbolId: string) => {ok: boolean, dto?: Record<string, any>}}|null,
  *   reducedMotion?: boolean,
  * }} [options]
@@ -63,12 +64,18 @@ export function createSemanticZoomSession(options = {}) {
 
   function buildRawViewForState(state) {
     if (state.level === ZOOM_LEVELS.L0_WORKSPACE) {
-      return buildWorkspaceOverview({ index: options.index, query: options.query });
+      return buildWorkspaceOverview({
+        index: options.index,
+        query: options.query,
+        files: options.files,
+      });
     }
     if (state.level === ZOOM_LEVELS.L1_MODULE) {
       return buildModuleView({
         modulePrefix: state.scopeId,
         index: options.index,
+        query: options.query,
+        files: options.files,
       });
     }
     if (state.level === ZOOM_LEVELS.L2_FILE) {
@@ -120,7 +127,11 @@ export function createSemanticZoomSession(options = {}) {
         activeOverlays: state.overlays,
       });
     }
-    return buildWorkspaceOverview({ index: options.index, query: options.query });
+    return buildWorkspaceOverview({
+      index: options.index,
+      query: options.query,
+      files: options.files,
+    });
   }
 
   function renderCurrentView({ anchorNodeId = null } = {}) {
