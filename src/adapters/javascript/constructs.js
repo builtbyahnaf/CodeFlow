@@ -7,6 +7,7 @@
  */
 
 import { createControlConstruct } from '../../core/csr/entities.js';
+import { sliceRange } from '../../core/csr/provenance.js';
 
 /**
  * @typedef {import('../../core/csr/entities.js').ControlConstruct} ControlConstruct
@@ -32,6 +33,129 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
    */
   function rangeOf(node) {
     return locator.range(node ?? functionNode);
+  }
+
+  /**
+   * Literal source text for a node, with runs of whitespace collapsed so a
+   * multi-line statement can be shown as one graph label without losing code.
+   *
+   * @param {unknown} node
+   * @param {string} [fallback]
+   * @returns {string}
+   */
+  function sourceOf(node, fallback = '') {
+    if (!node) {
+      return fallback;
+    }
+    try {
+      const text = sliceRange(locator.lineIndex, rangeOf(node)).replace(/\s+/g, ' ').trim();
+      return text.length > 0 ? text : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  /**
+   * @param {Record<string, any>} node
+   * @returns {boolean}
+   */
+  function isFunctionLike(node) {
+    return (
+      node?.type === 'FunctionDeclaration' ||
+      node?.type === 'FunctionExpression' ||
+      node?.type === 'ArrowFunctionExpression'
+    );
+  }
+
+  /**
+   * @param {Record<string, any>} node
+   * @returns {boolean}
+   */
+  function isClassLike(node) {
+    return node?.type === 'ClassDeclaration' || node?.type === 'ClassExpression';
+  }
+
+  /**
+   * Human-readable function header. Nested declarations and callbacks are
+   * common in JavaScript, so a generic "function" label hides the very name a
+   * reader needs to correlate the graph with source.
+   *
+   * @param {Record<string, any>} node
+   * @param {string} name
+   * @returns {string}
+   */
+  function functionHeader(node, name) {
+    const params = (node?.params ?? []).map((param) => sourceOf(param, '?')).join(', ');
+    const prefix = node?.async === true ? 'async ' : '';
+    const generator = node?.generator === true ? '*' : '';
+    return `${prefix}function${generator} ${name}(${params})`;
+  }
+
+  /**
+   * @param {Record<string, any>} node
+   * @param {string} name
+   * @returns {string}
+   */
+  function classHeader(node, name) {
+    const base = node?.superClass ? ` extends ${sourceOf(node.superClass, '?')}` : '';
+    return `class ${name}${base}`;
+  }
+
+  /**
+   * @param {Record<string, any>} declaration
+   * @param {string} declarationKind
+   * @returns {string}
+   */
+  function declarationLabel(declaration, declarationKind) {
+    const name =
+      declaration.id?.type === 'Identifier'
+        ? declaration.id.name
+        : declaration.id?.type === 'PrivateIdentifier'
+          ? `#${declaration.id.name}`
+          : 'anonymous';
+    if (declaration.type === 'ArrowFunctionExpression') {
+      const params = (declaration.params ?? []).map((param) => sourceOf(param, '?')).join(', ');
+      return `${declarationKind} ${name} = (${params}) =>`;
+    }
+    if (isFunctionLike(declaration)) {
+      return functionHeader(declaration, name);
+    }
+    if (isClassLike(declaration)) {
+      return classHeader(declaration, name);
+    }
+    return sourceOf(declaration, name);
+  }
+
+  /**
+   * @param {Record<string, any>} statement
+   * @returns {string}
+   */
+  function statementHeader(statement) {
+    switch (statement.type) {
+      case 'IfStatement':
+        return `if (${sourceOf(statement.test, '?')})`;
+      case 'WhileStatement':
+        return `while (${sourceOf(statement.test, '?')})`;
+      case 'DoWhileStatement':
+        return `do ... while (${sourceOf(statement.test, '?')})`;
+      case 'ForStatement': {
+        const init = statement.init ? sourceOf(statement.init) : '';
+        const test = statement.test ? sourceOf(statement.test) : '';
+        const update = statement.update ? sourceOf(statement.update) : '';
+        return `for (${init}; ${test}; ${update})`;
+      }
+      case 'ForOfStatement':
+      case 'ForInStatement': {
+        const operator = statement.type === 'ForOfStatement' ? 'of' : 'in';
+        return `for (${sourceOf(statement.left, '?')} ${operator} ${sourceOf(statement.right, '?')})`;
+      }
+      case 'SwitchStatement':
+        return `switch (${sourceOf(statement.discriminant, '?')})`;
+      case 'CatchClause':
+        return `catch (${sourceOf(statement.param, '?')})`;
+      default:
+        return sourceOf(statement, statement.type ?? 'statement');
+    }
   }
 
   /**
@@ -110,14 +234,16 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
       return {
         type: 'leaf',
         range: rangeOf(expression),
-        label: 'call',
+        label: sourceOf(expression, 'call'),
         callSite: rangeOf(expression.callee ?? expression),
       };
     }
-    const label =
+    const label = sourceOf(
+      expression,
       expression.type === 'BinaryExpression' || expression.type === 'LogicalExpression'
         ? 'comparison'
-        : 'condition';
+        : 'condition',
+    );
     const call = findCall(expression);
     return {
       type: 'leaf',
@@ -212,17 +338,24 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
         extensions: {
           calleeName: calleeName(expression.callee),
           callSite: rangeOf(expression.callee ?? expression),
+          label: sourceOf(expression, 'call'),
           ...(expression.type === 'NewExpression' ? { constructor: true } : {}),
         },
       });
     }
     if (expression.type === 'AwaitExpression') {
       const child = expressionConstruct(expression.argument);
-      return make('await', expression, { children: child ? [child] : [] });
+      return make('await', expression, {
+        children: child ? [child] : [],
+        extensions: { label: sourceOf(expression, 'await') },
+      });
     }
     if (expression.type === 'YieldExpression') {
       const child = expression.argument ? expressionConstruct(expression.argument) : null;
-      return make('yield', expression, { children: child ? [child] : [] });
+      return make('yield', expression, {
+        children: child ? [child] : [],
+        extensions: { label: sourceOf(expression, 'yield') },
+      });
     }
     if (expression.type === 'ConditionalExpression') {
       const consequent =
@@ -260,11 +393,35 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
     }
     if (expression.type === 'AssignmentExpression') {
       const child = expressionConstruct(expression.right);
+      const label = sourceOf(expression, 'assignment');
+      const assignmentTarget = sourceOf(expression.left);
       if (child) {
+        child.extensions = {
+          ...(child.extensions ?? {}),
+          label,
+          ...(assignmentTarget ? { assignmentTarget } : {}),
+        };
         return child;
       }
+      return make('statement', expression, { extensions: { label } });
     }
-    return make('statement', expression);
+    if (isFunctionLike(expression)) {
+      return make('statement', expression, {
+        extensions: {
+          label: functionHeader(expression, expression.id?.name ?? 'anonymous'),
+        },
+      });
+    }
+    if (isClassLike(expression)) {
+      return make('statement', expression, {
+        extensions: {
+          label: classHeader(expression, expression.id?.name ?? 'anonymous'),
+        },
+      });
+    }
+    return make('statement', expression, {
+      extensions: { label: sourceOf(expression, 'statement') },
+    });
   }
 
   /**
@@ -309,15 +466,33 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
       case 'VariableDeclaration': {
         /** @type {ControlConstruct[]} */
         const children = [];
+        let fallbackLabel = sourceOf(statement, '');
         for (const declaration of statement.declarations ?? []) {
-          const child = declaration.init ? expressionConstruct(declaration.init) : null;
+          const init = declaration.init;
+          if (!init) {
+            continue;
+          }
+          if (isFunctionLike(init) || isClassLike(init)) {
+            fallbackLabel = declarationLabel(init, statement.kind ?? 'const');
+            continue;
+          }
+          const child = expressionConstruct(init);
           if (child && child.kind !== 'statement') {
+            const declarationText = sourceOf(declaration, fallbackLabel);
+            const assignmentTarget = sourceOf(declaration.id);
+            child.extensions = {
+              ...(child.extensions ?? {}),
+              label: declarationText,
+              ...(assignmentTarget ? { assignmentTarget } : {}),
+            };
             children.push(child);
           }
         }
         return children.length > 0
           ? make('block', statement, { children })
-          : make('statement', statement);
+          : make('statement', statement, {
+              extensions: { label: fallbackLabel || 'variable declaration' },
+            });
       }
 
       case 'ReturnStatement': {
@@ -325,7 +500,13 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
         const child = branchyExpression(statement.argument);
         return make('return', statement, {
           ...(child ? { children: [child] } : {}),
-          ...(value ? { extensions: { valueRange: value } } : {}),
+          extensions: {
+            label: sourceOf(statement, 'return'),
+            ...(value ? { valueRange: value } : {}),
+            ...(statement.argument
+              ? { returnExpression: sourceOf(statement.argument) }
+              : {}),
+          },
         });
       }
 
@@ -334,26 +515,39 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
         const child = branchyExpression(statement.argument);
         return make('throw', statement, {
           ...(child ? { children: [child] } : {}),
-          ...(value ? { extensions: { valueRange: value } } : {}),
+          extensions: {
+            label: sourceOf(statement, 'throw'),
+            ...(value ? { valueRange: value } : {}),
+          },
         });
       }
 
       case 'IfStatement': {
         const thenConstruct =
           statementConstruct(statement.consequent) ??
-          make('statement', statement.consequent, { extensions: { branch: 'then' } });
+          make('statement', statement.consequent, {
+            extensions: {
+              branch: 'then',
+              label: sourceOf(statement.consequent, 'then'),
+            },
+          });
         const elseConstruct = statement.alternate
           ? make('else', statement.alternate, {
               children: [
                 statementConstruct(statement.alternate) ??
-                  make('statement', statement.alternate),
+                  make('statement', statement.alternate, {
+                    extensions: { label: sourceOf(statement.alternate, 'else') },
+                  }),
               ],
             })
           : null;
         return make('if', statement, {
           condition: rangeOf(statement.test),
           children: elseConstruct ? [thenConstruct, elseConstruct] : [thenConstruct],
-          extensions: { expression: expressionTree(statement.test) },
+          extensions: {
+            expression: expressionTree(statement.test),
+            sourceLabel: statementHeader(statement),
+          },
         });
       }
 
@@ -365,6 +559,7 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
           ],
           extensions: {
             expression: expressionTree(statement.test),
+            sourceLabel: statementHeader(statement),
             ...(options.label ? { label: options.label } : {}),
           },
         });
