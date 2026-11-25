@@ -572,6 +572,7 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
           ],
           extensions: {
             expression: expressionTree(statement.test),
+            sourceLabel: statementHeader(statement),
             ...(options.label ? { label: options.label } : {}),
           },
         });
@@ -585,6 +586,10 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
           ...(statement.test ? { updateRange: rangeOf(statement.test) } : {}),
           ...(statement.update ? { updateRange: rangeOf(statement.update) } : {}),
           expression: expressionTree(statement.test),
+          sourceLabel: statementHeader(statement),
+          ...(statement.init ? { initLabel: sourceOf(statement.init) } : {}),
+          ...(statement.test ? { testLabel: sourceOf(statement.test) } : {}),
+          ...(statement.update ? { updateLabel: sourceOf(statement.update) } : {}),
           ...(options.label ? { label: options.label } : {}),
         };
         return make('for', statement, {
@@ -604,6 +609,7 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
           hasCondition: true,
           hasUpdate: false,
           expression: expressionTree(statement.right),
+          sourceLabel: statementHeader(statement),
           ...(options.label ? { label: options.label } : {}),
         };
         return make('for', statement, {
@@ -620,7 +626,10 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
         return make('switch', statement, {
           condition: rangeOf(statement.discriminant),
           children,
-          extensions: { expression: expressionTree(statement.discriminant) },
+          extensions: {
+            expression: expressionTree(statement.discriminant),
+            sourceLabel: statementHeader(statement),
+          },
         });
       }
 
@@ -638,6 +647,7 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
                   make('block', statement.handler.body, { children: [] }),
               ],
               extensions: {
+                label: statementHeader(statement.handler),
                 ...(statement.handler.param
                   ? { paramRange: rangeOf(statement.handler.param) }
                   : {}),
@@ -652,6 +662,7 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
                 statementConstruct(statement.finalizer) ??
                   make('block', statement.finalizer, { children: [] }),
               ],
+              extensions: { label: 'finally' },
             }),
           );
         }
@@ -660,12 +671,18 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
 
       case 'BreakStatement':
         return make('break', statement, {
-          ...(statement.label ? { extensions: { label: statement.label.name } } : {}),
+          extensions: {
+            sourceLabel: sourceOf(statement, 'break'),
+            ...(statement.label ? { label: statement.label.name } : {}),
+          },
         });
 
       case 'ContinueStatement':
         return make('continue', statement, {
-          ...(statement.label ? { extensions: { label: statement.label.name } } : {}),
+          extensions: {
+            sourceLabel: sourceOf(statement, 'continue'),
+            ...(statement.label ? { label: statement.label.name } : {}),
+          },
         });
 
       case 'LabeledStatement':
@@ -681,16 +698,18 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
       }
 
       case 'DebuggerStatement':
-        return make('statement', statement, { extensions: { label: 'debugger' } });
+        return make('statement', statement, { extensions: { label: sourceOf(statement, 'debugger') } });
 
       case 'FunctionDeclaration':
       case 'ClassDeclaration':
         return make('statement', statement, {
-          extensions: { label: statement.type === 'ClassDeclaration' ? 'class' : 'function' },
+          extensions: { label: declarationLabel(statement, statement.type === 'ClassDeclaration' ? 'class' : 'function') },
         });
 
       default:
-        return make('statement', statement);
+        return make('statement', statement, {
+          extensions: { label: sourceOf(statement, statement.type ?? 'statement') },
+        });
     }
   }
 
@@ -752,7 +771,13 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
     bodyConstructs = [
       expression?.kind === 'call'
         ? make('sequence', body, { children: [expression, make('return', body)] })
-        : make('return', body, { extensions: { valueRange: rangeOf(body) } }),
+        : make('return', body, {
+            extensions: {
+              valueRange: rangeOf(body),
+              label: `return ${sourceOf(body)}`,
+              returnExpression: sourceOf(body),
+            },
+          }),
     ];
   }
 
