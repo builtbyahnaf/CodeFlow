@@ -87,6 +87,7 @@ function childWithinModule(modulePrefix, filePath) {
  *     allSymbols?: () => {ok: boolean, value: Array<Record<string, any>>},
  *     allRelationships?: () => {ok: boolean, value: Array<Record<string, any>>},
  *   }|null,
+ *   files?: Array<Record<string, any>>,
  *   cap?: number,
  * }} [input]
  */
@@ -94,22 +95,33 @@ export function buildWorkspaceOverview(input = {}) {
   const cap = Math.max(4, Math.trunc(Number(input.cap) || LEVEL_CAPS[ZOOM_LEVELS.L0_WORKSPACE]));
 
   const filesFromIndex = input.index?.filesUnder?.('')?.items;
-  const filesFromQuery = input.query?.allFiles?.()?.ok ? input.query.allFiles().value : [];
+  const filesFromQuery = input.query?.allFiles?.();
+  const filesFromInput = Array.isArray(input.files) ? input.files : [];
   const files =
-    Array.isArray(filesFromIndex) && filesFromIndex.length > 0 ? filesFromIndex : filesFromQuery;
+    Array.isArray(filesFromIndex) && filesFromIndex.length > 0
+      ? filesFromIndex
+      : filesFromQuery?.ok && filesFromQuery.value.length > 0
+        ? filesFromQuery.value
+        : filesFromInput;
 
+  const indexSymbols =
+    typeof input.index?.allSymbols === 'function' ? input.index.allSymbols() : [];
+  const querySymbols = input.query?.allSymbols?.();
   const symbols =
-    typeof input.index?.allSymbols === 'function'
-      ? input.index.allSymbols()
-      : input.query?.allSymbols?.()?.ok
-        ? input.query.allSymbols().value
+    Array.isArray(indexSymbols) && indexSymbols.length > 0
+      ? indexSymbols
+      : querySymbols?.ok
+        ? querySymbols.value
         : [];
 
+  const indexRelationships =
+    typeof input.index?.allRelationships === 'function' ? input.index.allRelationships() : [];
+  const queryRelationships = input.query?.allRelationships?.();
   const relationships =
-    typeof input.index?.allRelationships === 'function'
-      ? input.index.allRelationships()
-      : input.query?.allRelationships?.()?.ok
-        ? input.query.allRelationships().value
+    Array.isArray(indexRelationships) && indexRelationships.length > 0
+      ? indexRelationships
+      : queryRelationships?.ok
+        ? queryRelationships.value
         : [];
 
   /** @type {Map<string, string>} */
@@ -179,7 +191,7 @@ export function buildWorkspaceOverview(input = {}) {
       id: f.fileId ?? f.file_id,
       label: f.path,
       kind: 'file',
-      scopeId: f.path,
+      scopeId: f.fileId ?? f.file_id,
       statusMix: { counts: { resolved: 1 }, total: 1, displayStatus: 'resolved' },
       badges: [],
     }));
@@ -278,6 +290,11 @@ export function buildWorkspaceOverview(input = {}) {
  *     allSymbols?: () => Array<Record<string, any>>,
  *     allRelationships?: () => Array<Record<string, any>>,
  *   }|null,
+ *   query?: {
+ *     allSymbols?: () => {ok: boolean, value: Array<Record<string, any>>},
+ *     allRelationships?: () => {ok: boolean, value: Array<Record<string, any>>},
+ *   }|null,
+ *   files?: Array<Record<string, any>>,
  *   cap?: number,
  * }} input
  */
@@ -286,9 +303,29 @@ export function buildModuleView(input) {
     .replace(/\\/g, '/')
     .replace(/^\/+|\/+$/g, '');
   const cap = Math.max(4, Math.trunc(Number(input?.cap) || LEVEL_CAPS[ZOOM_LEVELS.L1_MODULE]));
-  const files = input?.index?.filesUnder?.(prefix === '.' ? '' : prefix)?.items ?? [];
-  const symbols = input?.index?.allSymbols?.() ?? [];
-  const relationships = input?.index?.allRelationships?.() ?? [];
+  const indexedFiles = input?.index?.filesUnder?.(prefix === '.' ? '' : prefix)?.items ?? [];
+  const allFiles = Array.isArray(input?.files) ? input.files : [];
+  const files =
+    indexedFiles.length > 0
+      ? indexedFiles
+      : allFiles.filter((file) => {
+          const normalized = String(file.path ?? '').replace(/\\/g, '/').replace(/^\/+/, '');
+          return prefix === '.' || prefix === '' || normalized.startsWith(`${prefix}/`);
+        });
+
+  const indexSymbols = input?.index?.allSymbols?.() ?? [];
+  const querySymbols = input?.query?.allSymbols?.();
+  const symbols =
+    indexSymbols.length > 0 ? indexSymbols : querySymbols?.ok ? querySymbols.value : [];
+
+  const indexRelationships = input?.index?.allRelationships?.() ?? [];
+  const queryRelationships = input?.query?.allRelationships?.();
+  const relationships =
+    indexRelationships.length > 0
+      ? indexRelationships
+      : queryRelationships?.ok
+        ? queryRelationships.value
+        : [];
 
   /** @type {Map<string, {id: string, scopeId: string, label: string, isDirectory: boolean, files: Array<Record<string, any>>, rels: Array<Record<string, any>>}>} */
   const groups = new Map();
@@ -301,7 +338,7 @@ export function buildModuleView(input) {
     fileToGroup.set(fId, child.id);
     let grp = groups.get(child.id);
     if (!grp) {
-      grp = { ...child, files: [], rels: [] };
+      grp = { ...child, scopeId: child.isDirectory ? child.scopeId : fId, files: [], rels: [] };
       groups.set(child.id, grp);
     }
     grp.files.push(file);
@@ -340,7 +377,7 @@ export function buildModuleView(input) {
           id: f.fileId ?? f.file_id,
           label: f.path,
           kind: 'file',
-          scopeId: f.path,
+          scopeId: f.fileId ?? f.file_id,
           statusMix: { counts: { resolved: 1 }, total: 1, displayStatus: 'resolved' },
           badges: [],
         })),
@@ -357,7 +394,7 @@ export function buildModuleView(input) {
       displayStatus: statusMix.displayStatus,
       completeness: statusMix.completeness,
       badges: statusMix.badges,
-      expandable: grp.isDirectory,
+      expandable: true,
     };
   });
 
