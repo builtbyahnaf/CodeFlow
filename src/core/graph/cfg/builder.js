@@ -241,6 +241,9 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
     if (input.calls && input.calls.length > 0) {
       node.calls = input.calls;
     }
+    if (isPlainObject(input.details)) {
+      node.details = input.details;
+    }
     nodes.push(node);
     return node;
   }
@@ -562,13 +565,24 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
           isPlainObject(construct.extensions) && typeof construct.extensions.calleeName === 'string'
             ? construct.extensions.calleeName
             : '';
+        const assignmentTarget = extensionString(construct, 'assignmentTarget');
+        const expression = extensionString(construct, 'expression');
         const node = addNode('call', {
-          label: name ? `call ${name}` : 'call',
+          label: extensionString(construct, 'label') ?? (name ? `call ${name}` : 'call'),
           range: construct.sourceRange,
           status: summary.status,
-          badge: summary.badge,
+          badge: assignmentTarget ? `-> ${assignmentTarget}` : summary.badge,
           constructId: construct.constructId,
           calls: summary.calls,
+          ...((name || assignmentTarget || expression)
+            ? {
+                details: {
+                  ...(name ? { calleeName: name } : {}),
+                  ...(assignmentTarget ? { assignmentTarget } : {}),
+                  ...(expression ? { expression } : {}),
+                },
+              }
+            : {}),
         });
         return attach(incoming, node);
       }
@@ -576,7 +590,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       case 'await':
       case 'yield': {
         const node = addNode(kind, {
-          label: kind,
+          label: extensionString(construct, 'label') ?? kind,
           range: construct.sourceRange,
           constructId: construct.constructId,
         });
@@ -589,11 +603,13 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
         const children = childrenOf(construct);
         const before = children.length > 0 ? lowerList(children, incoming) : incoming;
         const range = returnValueRange(construct);
+        const returnExpression = extensionString(construct, 'returnExpression');
         const node = addNode('return', {
-          label: 'return',
+          label: extensionString(construct, 'label') ?? 'return',
           range: construct.sourceRange,
           constructId: construct.constructId,
           ...(range ? { badge: 'value' } : {}),
+          ...(returnExpression ? { details: { returnExpression } } : {}),
         });
         attach(before, node);
         return [{ from: node.id, kind: 'return' }];
@@ -603,7 +619,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
         const children = childrenOf(construct);
         const before = children.length > 0 ? lowerList(children, incoming) : incoming;
         const node = addNode('throw', {
-          label: 'throw',
+          label: extensionString(construct, 'label') ?? 'throw',
           range: construct.sourceRange,
           constructId: construct.constructId,
         });
@@ -615,7 +631,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       case 'continue': {
         const label = extensionString(construct, 'label');
         const node = addNode(kind, {
-          label: label ? `${kind} ${label}` : kind,
+          label: extensionString(construct, 'sourceLabel') ?? (label ? `${kind} ${label}` : kind),
           range: construct.sourceRange,
           constructId: construct.constructId,
         });
@@ -646,6 +662,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
         return lowerSwitch(construct, incoming);
 
       case 'case':
+      case 'default':
         return lowerList(childrenOf(construct), incoming);
 
       case 'try':
@@ -893,7 +910,7 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
   function lowerPreTestLoop(construct, incoming, kind) {
     const label = extensionString(construct, 'label');
     const header = addNode('loop_header', {
-      label: `${kind} test`,
+      label: extensionString(construct, 'sourceLabel') ?? `${kind} test`,
       range: construct.condition ?? construct.sourceRange,
       constructId: construct.constructId,
       ...(label ? { badge: label } : {}),
