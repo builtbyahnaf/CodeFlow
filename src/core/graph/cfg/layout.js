@@ -41,6 +41,40 @@ const NODE_SIZES = Object.freeze({
   statement: { width: 190, height: 52 },
 });
 
+const LABEL_CHAR_WIDTH = 7;
+const LABEL_LINE_HEIGHT = 15;
+const MAX_NODE_WIDTH = 560;
+const MAX_NODE_HEIGHT = 240;
+
+const SHAPE_METRICS = Object.freeze({
+  entry: { textScale: 1.18, horizontalPadding: 34, verticalPadding: 18 },
+  exit: { textScale: 1.18, horizontalPadding: 34, verticalPadding: 18 },
+  condition: { textScale: 1.72, horizontalPadding: 54, verticalPadding: 30 },
+  multiway: { textScale: 1.32, horizontalPadding: 44, verticalPadding: 24 },
+  loop_header: { textScale: 1.28, horizontalPadding: 42, verticalPadding: 24 },
+  loop_latch: { textScale: 1.18, horizontalPadding: 36, verticalPadding: 20 },
+  loop_body_entry: { textScale: 1.08, horizontalPadding: 28, verticalPadding: 20 },
+  return: { textScale: 1.34, horizontalPadding: 46, verticalPadding: 22 },
+  throw: { textScale: 1.34, horizontalPadding: 46, verticalPadding: 22 },
+  call: { textScale: 1.12, horizontalPadding: 38, verticalPadding: 22 },
+  await: { textScale: 1.12, horizontalPadding: 38, verticalPadding: 22 },
+  merge: { textScale: 1.12, horizontalPadding: 30, verticalPadding: 18 },
+  unmodeled: { textScale: 1.05, horizontalPadding: 28, verticalPadding: 22 },
+  unreachable: { textScale: 1.05, horizontalPadding: 28, verticalPadding: 22 },
+});
+
+/**
+ * @param {string|undefined} kind
+ * @returns {{textScale: number, horizontalPadding: number, verticalPadding: number}}
+ */
+function metricsFor(kind) {
+  return SHAPE_METRICS[kind ?? 'statement'] ?? {
+    textScale: 1,
+    horizontalPadding: 24,
+    verticalPadding: 20,
+  };
+}
+
 /**
  * @param {{nodes: Array<{id: string, kind: string, unreachable?: boolean}>, edges: Array<{from: string, to: string, kind: string}>}} cfg
  * @param {Partial<typeof CFG_LAYOUT_DEFAULTS>} [options]
@@ -111,13 +145,40 @@ export function layoutCfg(cfg, options = {}) {
     maxRank = Math.max(maxRank, rank);
   }
 
+  /** @type {Map<string, number>} */
+  const branchPriority = new Map();
+  const priorityOfEdge = (kind) => {
+    if (kind === 'true') return 0;
+    if (kind === 'case') return 1;
+    if (kind === 'seq' || kind === 'loop_back') return 2;
+    if (kind === 'false' || kind === 'default') return 3;
+    return 2;
+  };
+  for (const edge of edges) {
+    if (!byId.has(edge.from) || !byId.has(edge.to)) {
+      continue;
+    }
+    const p = priorityOfEdge(edge.kind);
+    const existing = branchPriority.get(edge.to);
+    if (existing === undefined || p < existing) {
+      branchPriority.set(edge.to, p);
+    }
+  }
+
   /** @type {string[][]} */
   const layers = Array.from({ length: maxRank + 1 }, () => []);
   for (const node of nodes) {
     layers[ranks.get(node.id) ?? 0].push(node.id);
   }
   for (const layer of layers) {
-    layer.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    layer.sort((a, b) => {
+      const pa = branchPriority.get(a) ?? 2;
+      const pb = branchPriority.get(b) ?? 2;
+      if (pa !== pb) {
+        return pa - pb;
+      }
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
   }
 
   /** @type {Record<string, {x: number, y: number, width: number, height: number, layer: number}>} */
@@ -128,7 +189,7 @@ export function layoutCfg(cfg, options = {}) {
     let width = 0;
     for (const id of layer) {
       const node = byId.get(id);
-      width += sizeFor(node?.kind).width + config.horizontalGap;
+      width += sizeFor(node).width + config.horizontalGap;
     }
     layerWidths.push(Math.max(0, width - config.horizontalGap));
   }
@@ -140,11 +201,11 @@ export function layoutCfg(cfg, options = {}) {
     const rowHeight =
       layer.length === 0
         ? 0
-        : Math.max(...layer.map((id) => sizeFor(byId.get(id)?.kind).height));
+        : Math.max(...layer.map((id) => sizeFor(byId.get(id)).height));
     let x = config.padding + Math.max(0, (widest - layerWidths[layerIndex]) / 2);
     for (const id of layer) {
       const node = byId.get(id);
-      const size = sizeFor(node?.kind);
+      const size = sizeFor(node);
       positions[id] = {
         x,
         y,
@@ -163,9 +224,37 @@ export function layoutCfg(cfg, options = {}) {
 }
 
 /**
- * @param {string|undefined} kind
+ * Size a node from its shape and its wrapped label. Labels are never
+ * truncated, so a long declaration simply gets a wider and taller node.
+ *
+ * @param {{kind?: string, labelLines?: string[]}|null|undefined} node
  * @returns {{width: number, height: number}}
  */
-function sizeFor(kind) {
-  return NODE_SIZES[kind ?? 'statement'] ?? NODE_SIZES.statement;
+function sizeFor(node) {
+  const kind = node?.kind ?? 'statement';
+  const base = NODE_SIZES[kind] ?? NODE_SIZES.statement;
+  const lines =
+    Array.isArray(node?.labelLines) && node.labelLines.length > 0
+      ? node.labelLines
+      : [];
+  if (lines.length === 0) {
+    return base;
+  }
+  const metrics = metricsFor(kind);
+  const longest = Math.max(...lines.map((line) => String(line).length));
+  const width = Math.min(
+    MAX_NODE_WIDTH,
+    Math.max(
+      base.width,
+      Math.ceil(longest * LABEL_CHAR_WIDTH * metrics.textScale + metrics.horizontalPadding),
+    ),
+  );
+  const height = Math.min(
+    MAX_NODE_HEIGHT,
+    Math.max(
+      base.height,
+      Math.ceil(lines.length * LABEL_LINE_HEIGHT + metrics.verticalPadding),
+    ),
+  );
+  return { width, height };
 }
