@@ -45,6 +45,7 @@ export function toCfgDto(cfg, options = {}) {
       id: node.id,
       kind: node.kind,
       unreachable: node.unreachable,
+      labelLines: node.labelLines,
     })),
     edges,
   });
@@ -119,7 +120,7 @@ function toNode(node) {
   return {
     id: node.id,
     label: node.label,
-    labelLines: labelLines(node.label),
+    labelLines: labelLines(node.label, node.kind),
     kind: node.kind,
     status: node.status,
     badge: node.badge ?? '',
@@ -132,6 +133,7 @@ function toNode(node) {
     ...(node.reasonCode ? { reasonCode: node.reasonCode } : {}),
     ...(node.constructId ? { constructId: node.constructId } : {}),
     ...(node.calls && node.calls.length > 0 ? { calls: node.calls.map((call) => ({ ...call })) } : {}),
+    ...(node.details ? { details: { ...node.details } } : {}),
   };
 }
 
@@ -156,23 +158,48 @@ function toEdge(edge) {
 }
 
 /**
+ * Wrap a label without dropping any of it. Shapes that are not rectangles
+ * (diamonds, hexagons, parallelograms) get a narrower wrap width so the text
+ * stays inside the outline.
+ *
  * @param {string} label
+ * @param {string} [kind]
  * @returns {string[]}
  */
-function labelLines(label) {
-  const text = String(label ?? '');
-  if (text.length <= 24) {
+function labelLines(label, kind = 'statement') {
+  const text = String(label ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length === 0) {
+    return [''];
+  }
+  const maxChars =
+    kind === 'condition'
+      ? 30
+      : kind === 'multiway' || kind === 'loop_header'
+        ? 36
+        : kind === 'entry' || kind === 'exit' || kind === 'return' || kind === 'throw'
+          ? 42
+          : 48;
+  if (text.length <= maxChars) {
     return [text];
   }
+
+  /** @type {string[]} */
   const lines = [];
   let rest = text;
-  while (rest.length > 0 && lines.length < 3) {
-    if (lines.length === 2 && rest.length > 24) {
-      lines.push(`${rest.slice(0, 23)}…`);
-      break;
+  while (rest.length > maxChars) {
+    let split = rest.lastIndexOf(' ', maxChars);
+    if (split <= 0) {
+      // No break opportunity inside the limit. Prefer the next space so a
+      // long identifier stays whole; fall back to a hard split only when the
+      // token itself is longer than the widest allowed line.
+      const next = rest.indexOf(' ', maxChars);
+      split = next > 0 && next <= Math.floor(maxChars * 1.6) ? next : maxChars;
     }
-    lines.push(rest.slice(0, 24));
-    rest = rest.slice(24);
+    lines.push(rest.slice(0, split).trimEnd());
+    rest = rest.slice(split).trimStart();
+  }
+  if (rest.length > 0) {
+    lines.push(rest);
   }
   return lines;
 }
