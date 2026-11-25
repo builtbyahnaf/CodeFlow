@@ -184,6 +184,64 @@ body {
   display: none !important;
 }
 
+/* Compact shape footnote over the canvas. It mirrors the renderer outlines so
+   a reader can decode every node without leaving the graph. */
+
+.cf-shape-legend {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 8;
+  max-width: calc(100% - 20px);
+  padding: 6px 8px;
+  border: 1px solid var(--cf-border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--cf-surface) 92%, transparent);
+  color: var(--cf-muted);
+  font-size: 10px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.cf-shape-legend[hidden] {
+  display: none;
+}
+
+.cf-shape-legend-title {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cf-shape-legend-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cf-shape-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.cf-shape-glyph {
+  width: 34px;
+  height: 18px;
+  overflow: visible;
+}
+
+.cf-shape-glyph .cf-node-box {
+  fill: var(--cf-bg);
+  stroke-width: 1.4;
+}
+
 .cf-detail {
   border-left: 1px solid var(--cf-border);
   background: var(--cf-surface);
@@ -700,6 +758,111 @@ body {
 .hljs-bullet,
 .hljs-link {
   color: var(--vscode-symbolIcon-constantForeground, #4fc1ff);
+}
+
+.hljs-title.class_,
+.hljs-built_in {
+  color: var(--vscode-symbolIcon-classForeground, #4ec9b0);
+}
+
+.hljs-operator,
+.hljs-punctuation {
+  color: var(--cf-fg);
+}
+
+.hljs-property {
+  color: var(--vscode-symbolIcon-propertyForeground, #9cdcfe);
+}
+
+/* Full window graph view */
+
+body.cf-full-window .cf-detail,
+body.cf-full-window .cf-fn-summary,
+body.cf-full-window .cf-scope-banner,
+body.cf-full-window .cf-footer {
+  display: none;
+}
+
+body.cf-full-window .cf-main {
+  grid-template-columns: 1fr;
+}
+
+body.cf-full-window {
+  grid-template-rows: auto auto 1fr;
+}
+
+/* Code review & function overview panel */
+
+.cf-review-section {
+  margin-bottom: 12px;
+}
+
+.cf-signature-box {
+  font-family: var(--cf-mono);
+  font-size: 11px;
+  background: var(--cf-bg);
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+  color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+  margin-bottom: 8px;
+}
+
+.cf-review-list {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.cf-review-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 6px;
+  background: var(--cf-bg);
+  border-radius: 3px;
+  font-family: var(--cf-mono);
+  font-size: 11px;
+}
+
+.cf-review-type {
+  color: var(--vscode-symbolIcon-keywordForeground, #569cd6);
+}
+
+.cf-review-name {
+  color: var(--cf-fg);
+  font-weight: 600;
+}
+
+.cf-review-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.cf-stat-card {
+  background: var(--cf-bg);
+  border: 1px solid var(--cf-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+}
+
+.cf-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cf-fg);
+}
+
+.cf-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cf-muted);
 }
 
 /* Phase 6 — explanation summary, node details, evidence links, limitations */
