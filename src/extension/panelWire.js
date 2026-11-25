@@ -12,7 +12,14 @@
  */
 
 import { createBridge } from '../core/protocol/bridge.js';
-import { DIRECTIONS, PROTOCOL_VERSION, createErrorPayload } from '../core/protocol/envelope.js';
+import {
+  DIRECTIONS,
+  MAX_PAYLOAD_BYTES,
+  PROTOCOL_VERSION,
+  createEnvelope,
+  createErrorPayload,
+  messageSize,
+} from '../core/protocol/envelope.js';
 import { buildGraph } from '../core/graph/model.js';
 import { toDto } from '../core/graph/dto.js';
 import { buildCfg } from '../core/graph/cfg/builder.js';
@@ -156,6 +163,7 @@ export function createPanelWire({
         runId: current.run.runId,
         index: indexProvider,
         query: current.query,
+        files: current.run.files,
         callSession,
       });
     }
@@ -249,6 +257,16 @@ export function createPanelWire({
       );
     });
 
+    /**
+     * @param {string} kind
+     * @param {Record<string, unknown>} payload
+     * @param {string} [requestId]
+     * @returns {boolean}
+     */
+    function fitsPayloadBudget(kind, payload, requestId) {
+      return messageSize(createEnvelope(kind, payload, requestId)) <= MAX_PAYLOAD_BYTES;
+    }
+
     bridge.on('graph.load', async (_payload, { requestId }) => {
       const loaded = await ensureRun();
       if (!loaded.ok) {
@@ -259,7 +277,15 @@ export function createPanelWire({
         );
         return;
       }
-      const dto = toDto(buildGraph(loaded.run));
+      const primaryFileId = loaded.run.scope?.path
+        ? fileIdForPath(loaded.run.scope.path)
+        : null;
+      const graph = buildGraph(loaded.run);
+      const caps = [400, 200, 100, 40, 10];
+      let dto = toDto(graph, { maxNodes: caps[0], priorityFileId: primaryFileId });
+      for (let i = 1; i < caps.length && !fitsPayloadBudget('graph.data', { dto }, requestId); i += 1) {
+        dto = toDto(graph, { maxNodes: caps[i], priorityFileId: primaryFileId });
+      }
       lastDto = dto;
       bridge.respond('graph.data', { dto }, requestId);
     });
