@@ -5,7 +5,6 @@ node_modules/**
 src/**
 tests/**
 scripts/**
-docs/**
 context/**
 eslint.config.js
 .prettierrc.json
