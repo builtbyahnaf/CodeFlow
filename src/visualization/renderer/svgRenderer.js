@@ -388,15 +388,13 @@ export function createSvgRenderer(options) {
       edgeElements.set(edge.id, path);
 
       if (edge.label && edge.label.length > 0) {
-        const from = nodePoint(source, 'out');
-        const to = nodePoint(target, 'in');
         const label = svgEl('text', {
           class: 'cf-edge-label',
-          x: (from.x + to.x) / 2,
-          y: (from.y + to.y) / 2 - 4,
+          x: geom.labelPos.x,
+          y: geom.labelPos.y,
           'text-anchor': 'middle',
         });
-        label.textContent = truncate(edge.label, 22);
+        label.textContent = truncate(edge.label, 32);
         viewport.appendChild(label);
       }
     }
@@ -418,15 +416,7 @@ export function createSvgRenderer(options) {
         })
       );
 
-      group.appendChild(
-        svgEl('rect', {
-          class: 'cf-node-box',
-          width: node.position.width,
-          height: node.position.height,
-          rx: 6,
-          ry: 6,
-        }),
-      );
+      appendNodeShape(group, node);
 
       const rawLines =
         Array.isArray(node.labelLines) && node.labelLines.length > 0
@@ -436,44 +426,29 @@ export function createSvgRenderer(options) {
         (node.label && String(node.label).trim()) ||
         (node.kind && String(node.kind).trim()) ||
         node.id;
-      const lines =
-        rawLines.length > 0 ? rawLines.slice(0, 2) : [truncate(fallbackLabel, 26)];
-      const lineHeight = 13;
+      const lines = rawLines.length > 0 ? rawLines : [fallbackLabel];
+      const lineHeight = 15;
       const blockHeight = lines.length * lineHeight;
-      const showKind =
-        node.position.height >= 56 &&
-        lines.length === 1 &&
-        node.kind &&
-        String(fallbackLabel).toLowerCase() !== String(node.kind).toLowerCase();
-
-      const startY = showKind
-        ? Math.max(14, (node.position.height - 18) / 2 - blockHeight / 2 + lineHeight)
-        : Math.max(14, node.position.height / 2 - blockHeight / 2 + lineHeight - 3);
+      const firstBaseline = Math.max(
+        lineHeight,
+        node.position.height / 2 - blockHeight / 2 + lineHeight * 0.75,
+      );
 
       const label = svgEl('text', {
         class: 'cf-node-label',
-        x: 10,
-        y: startY,
+        x: node.position.width / 2,
+        y: firstBaseline,
+        'text-anchor': 'middle',
       });
       for (const [index, text] of lines.entries()) {
         const span = svgEl('tspan', {
-          x: 10,
+          x: node.position.width / 2,
           ...(index === 0 ? {} : { dy: lineHeight }),
         });
         span.textContent = text;
         label.appendChild(span);
       }
       group.appendChild(label);
-
-      if (showKind) {
-        const kind = svgEl('text', {
-          class: 'cf-node-kind',
-          x: 10,
-          y: node.position.height - 8,
-        });
-        kind.textContent = node.external ? `${node.kind} · external` : node.kind;
-        group.appendChild(kind);
-      }
 
       const badgeText =
         Array.isArray(node.badges) && node.badges.length > 0
