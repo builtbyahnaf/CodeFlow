@@ -16,6 +16,7 @@ import {
 } from '../../core/csr/entities.js';
 import { CSR_VERSION } from '../../core/csr/types.js';
 import { createIdentityAllocator, createRelationshipAllocator } from '../../core/csr/identity.js';
+import { sliceRange } from '../../core/csr/provenance.js';
 import { createJavaScriptLocator } from './locator.js';
 import { childNodes, parseJavaScript } from './parser.js';
 import { detectModuleKind } from './moduleKind.js';
@@ -109,6 +110,87 @@ function bindingIdentifiers(pattern) {
   };
   visit(pattern);
   return result;
+}
+
+/**
+ * @param {Record<string, any>} moduleInfo
+ * @param {unknown} node
+ * @returns {string}
+ */
+function sourceTextOf(moduleInfo, node) {
+  if (!node) {
+    return '';
+  }
+  try {
+    return sliceRange(moduleInfo.locator.lineIndex, moduleInfo.locator.range(node))
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Describe a declared parameter for the CFG function-context panel.
+ *
+ * @param {Record<string, any>} moduleInfo
+ * @param {Record<string, any>} param
+ * @returns {{name: string, type: string, optional?: boolean, defaultValue?: string}|null}
+ */
+function parameterInfo(moduleInfo, param) {
+  if (!param) {
+    return null;
+  }
+  if (param.type === 'AssignmentPattern') {
+    const names = bindingIdentifiers(param.left).map((identifier) => identifier.name);
+    return {
+      name: names.length > 0 ? names.join(', ') : sourceTextOf(moduleInfo, param.left) || '?',
+      type: 'any',
+      optional: true,
+      ...(sourceTextOf(moduleInfo, param.right)
+        ? { defaultValue: sourceTextOf(moduleInfo, param.right) }
+        : {}),
+    };
+  }
+  if (param.type === 'RestElement') {
+    const names = bindingIdentifiers(param.argument).map((identifier) => identifier.name);
+    return {
+      name: names.length > 0 ? `...${names.join(', ')}` : `...${sourceTextOf(moduleInfo, param.argument)}`,
+      type: 'any',
+      optional: true,
+    };
+  }
+  if (param.type === 'Identifier') {
+    return { name: param.name, type: 'any' };
+  }
+  return {
+    name: sourceTextOf(moduleInfo, param) || '?',
+    type: 'any',
+  };
+}
+
+/**
+ * @param {Record<string, any>} moduleInfo
+ * @param {Array<Record<string, any>>} params
+ * @returns {Array<{name: string, type: string, optional?: boolean, defaultValue?: string}>}
+ */
+function parameterInfos(moduleInfo, params) {
+  return (params ?? []).map((param) => parameterInfo(moduleInfo, param)).filter(Boolean);
+}
+
+/**
+ * @param {Record<string, any>} node
+ * @param {string} name
+ * @param {Array<{name: string, type: string, optional?: boolean, defaultValue?: string}>} parameters
+ * @returns {string}
+ */
+function functionSignature(node, name, parameters) {
+  const prefix = node?.async === true ? 'async ' : '';
+  const generator = node?.generator === true ? '*' : '';
+  const params = parameters
+    .map((param) => `${param.name}${param.defaultValue ? ` = ${param.defaultValue}` : ''}`)
+    .join(', ');
+  return `${prefix}${generator}${name}(${params})`;
 }
 
 /**
@@ -585,6 +667,7 @@ export function mapJavaScript(options) {
       scope?.upper && scope.upper.type !== 'module' && scope.upper.type !== 'global'
         ? `scope${moduleInfo.scopeManager.scopes.indexOf(scope.upper)}`
         : undefined;
+    const parameters = parameterInfos(moduleInfo, node.params ?? []);
     return addSymbol(moduleInfo, {
       name,
       kind,
@@ -596,8 +679,9 @@ export function mapJavaScript(options) {
         async: node.async === true,
         generator: node.generator === true,
         arrow: node.type === 'ArrowFunctionExpression',
+        parameters,
       },
-      signature: `${name}(${(node.params ?? []).map((param) => param.type).join(', ')})`,
+      signature: functionSignature(node, name, parameters),
     });
   }
 
@@ -667,6 +751,7 @@ export function mapJavaScript(options) {
       const kind = isConstructor ? 'constructor' : 'method';
       const parent = context.classSymbol ?? context.functionSymbol ?? moduleInfo.moduleSymbol;
       const disambiguator = node.kind === 'get' || node.kind === 'set' ? node.kind : undefined;
+      const parameters = parameterInfos(moduleInfo, node.value?.params ?? []);
       const symbol = addSymbol(moduleInfo, {
         name: key ?? (isConstructor ? 'constructor' : anonName()),
         kind,
@@ -682,10 +767,9 @@ export function mapJavaScript(options) {
           async: node.value?.async === true,
           generator: node.value?.generator === true,
           private: node.key?.type === 'PrivateIdentifier',
+          parameters,
         },
-        signature: `${key ?? 'constructor'}(${(node.value?.params ?? [])
-          .map((param) => param.type)
-          .join(', ')})`,
+        signature: functionSignature(node.value ?? node, key ?? 'constructor', parameters),
       });
       symbolByAstNode.set(node.value, symbol);
       const inner = { ...context, functionSymbol: symbol, classSymbol: context.classSymbol };
@@ -750,6 +834,7 @@ export function mapJavaScript(options) {
           property.method === true ||
           isFunctionNode(property.value)
         ) {
+          const parameters = parameterInfos(moduleInfo, property.value?.params ?? []);
           const symbol = addSymbol(moduleInfo, {
             name,
             kind: 'method',
@@ -762,7 +847,9 @@ export function mapJavaScript(options) {
               getter: property.kind === 'get',
               setter: property.kind === 'set',
               async: property.value?.async === true,
+              parameters,
             },
+            signature: functionSignature(property.value ?? property, name, parameters),
           });
           methods.set(name, symbol);
           symbolByAstNode.set(property.value, symbol);
