@@ -8,7 +8,9 @@
  */
 
 import * as vscode from 'vscode';
+import nodePath from 'node:path';
 import { createLogger } from './log.js';
+import { isPathInside, toWorkspaceRelative } from './security/paths.js';
 import { createAdapterRegistry } from '../core/adapterRegistry.js';
 import { mockAdapter } from '../adapters/mock/index.js';
 import { CPP_ADAPTER_ID, cppAdapter } from '../adapters/cpp/index.js';
@@ -149,9 +151,17 @@ export async function activate(context) {
           }
         }
         const { parseCppSource } = await import('../adapters/cpp/builtinEngine.js');
+        let enginePath = input?.path || 'unknown.cpp';
+        if (nodePath.isAbsolute(enginePath)) {
+          if (input?.workspaceRoot && isPathInside(input.workspaceRoot, enginePath)) {
+            enginePath = toWorkspaceRelative(input.workspaceRoot, enginePath);
+          } else {
+            enginePath = nodePath.basename(enginePath);
+          }
+        }
         const fallbackRun = parseCppSource({
           runId: input?.runId || `run:cpp-builtin-${Date.now().toString(36)}`,
-          path: input?.path || 'unknown.cpp',
+          path: enginePath,
           text: text || '',
           workspaceRoot: input?.workspaceRoot,
           language: adapter?.id === C_ADAPTER_ID ? 'c' : 'cpp',
