@@ -294,6 +294,7 @@ export function createJavaScriptAnalysisService(options) {
       ok: true,
       value: {
         ...input,
+        path: relativePath,
         text: mainSource.text,
         jsModuleKind: mainModuleKind,
         jsModules: [...modules.values()]
