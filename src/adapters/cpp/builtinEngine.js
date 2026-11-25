@@ -5,11 +5,11 @@ import {
   createRelationship,
   createSymbol,
   createControlConstruct,
+  createDataFact,
 } from '../../core/csr/entities.js';
 import {
   createFileId,
   createIdentityAllocator,
-  createRelationshipAllocator,
   normalizePath,
 } from '../../core/csr/identity.js';
 import { shortHash } from '../../core/csr/hash.js';
@@ -19,12 +19,13 @@ import { shortHash } from '../../core/csr/hash.js';
  *
  * Provides a self-contained, frictionless fallback engine when Clang is absent.
  * It extracts functions, control-flow constructs (if/for/while/switch/return),
- * and call relationships with exact source-range fidelity directly from source text.
+ * call relationships, parameter declarations, return types, and data-flow facts
+ * directly from source text.
  *
  * No external dependencies, no compilers, no process spawning.
  */
 
-export const BUILTIN_ENGINE_VERSION = '1.2.0';
+export const BUILTIN_ENGINE_VERSION = '1.3.0';
 
 /**
  * Convert character offset to 0-based { line, column }.
@@ -191,6 +192,66 @@ export const CPP_KEYWORDS = new Set([
 ]);
 
 /**
+ * Parse function parameters from parameter string.
+ *
+ * @param {string} paramStr
+ * @param {Function} rangeOf
+ * @param {number} startOffset
+ * @returns {Array<{name: string, type: string, defaultValue: string|null, range: any}>}
+ */
+export function parseParameters(paramStr, rangeOf, startOffset) {
+  if (!paramStr || !paramStr.trim()) {
+    return [];
+  }
+  const parts = [];
+  let current = '';
+  let angleDepth = 0;
+  let partStart = 0;
+
+  for (let i = 0; i < paramStr.length; i += 1) {
+    const c = paramStr[i];
+    if (c === '<') angleDepth += 1;
+    else if (c === '>') angleDepth = Math.max(0, angleDepth - 1);
+    else if (c === ',' && angleDepth === 0) {
+      parts.push({ text: current.trim(), start: partStart, end: i });
+      current = '';
+      partStart = i + 1;
+      continue;
+    }
+    current += c;
+  }
+  if (current.trim()) {
+    parts.push({ text: current.trim(), start: partStart, end: paramStr.length });
+  }
+
+  return parts.map(({ text: part, start, end }) => {
+    let defVal = null;
+    let main = part;
+    if (part.includes('=')) {
+      const idx = part.indexOf('=');
+      defVal = part.slice(idx + 1).trim();
+      main = part.slice(0, idx).trim();
+    }
+    const match = main.match(/(.*[\s*&])([a-zA-Z_][a-zA-Z0-9_]*)$/);
+    const range = rangeOf(startOffset + start, startOffset + end);
+    if (match) {
+      return {
+        name: match[2].trim(),
+        type: match[1].trim(),
+        defaultValue: defVal,
+        range,
+      };
+    }
+    return {
+      name: '',
+      type: main.trim(),
+      defaultValue: defVal,
+      range,
+    };
+  });
+}
+
+/**
  * @param {{
  *   runId: string,
  *   path: string,
@@ -200,9 +261,34 @@ export const CPP_KEYWORDS = new Set([
  * }} input
  * @returns {import('../../core/csr/entities.js').AnalysisRun}
  */
+/**
+ * Convert an input path into a clean workspace-relative POSIX path so CSR
+ * validation never sees an absolute filesystem path.
+ *
+ * @param {string} rawPath
+ * @param {string} [workspaceRoot]
+ * @returns {string}
+ */
+function toRelativeEnginePath(rawPath, workspaceRoot) {
+  let clean = normalizePath(rawPath);
+  if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
+    const cleanRoot = normalizePath(workspaceRoot).replace(/\/+$/, '');
+    const isWin = /^[A-Za-z]:/.test(cleanRoot);
+    const left = isWin ? clean.toLowerCase() : clean;
+    const right = isWin ? cleanRoot.toLowerCase() : cleanRoot;
+    if (left.startsWith(`${right}/`)) {
+      clean = clean.slice(cleanRoot.length + 1);
+    }
+  }
+  if (/^[A-Za-z]:\//.test(clean) || clean.startsWith('/')) {
+    clean = clean.split('/').pop() || 'unknown.cpp';
+  }
+  return clean || 'unknown.cpp';
+}
+
 export function parseCppSource(input) {
-  const { runId, path: rawPath, text = '', language = 'cpp' } = input;
-  const filePath = normalizePath(rawPath);
+  const { runId, path: rawPath, text = '', workspaceRoot, language = 'cpp' } = input;
+  const filePath = toRelativeEnginePath(rawPath, workspaceRoot);
   const fileId = createFileId(filePath);
 
   const lines = text.split('\n');
