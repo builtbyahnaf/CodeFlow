@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCppSource } from '../../src/adapters/cpp/builtinEngine.js';
-import { createAdapterRegistry } from '../../src/core/adapterRegistry.js';
-import { cppAdapter } from '../../src/adapters/cpp/index.js';
+
 
 test('built-in fallback engine provides seamless analysis when Clang is absent', () => {
   const code = `
