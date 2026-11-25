@@ -11,6 +11,7 @@
 
 import * as vscode from 'vscode';
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { renderPanelHtml } from './panelTemplate.js';
 import { createPanelWire } from './panelWire.js';
 import { createSourceAccess } from './sourceAccess.js';
@@ -51,8 +52,30 @@ export function createPanelManager({
   let preferredPerspective = 'cfg';
   const analyzer = analysis ?? registry;
 
-  function workspaceRoot() {
+  /** @type {string | null} */
+  let activeWorkspaceRoot = null;
+
+  /**
+   * @param {string|null|undefined} targetPath
+   * @returns {string|undefined}
+   */
+  function workspaceRootFor(targetPath) {
+    if (typeof targetPath === 'string' && targetPath.length > 0 && path.isAbsolute(targetPath)) {
+      const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(targetPath));
+      if (folder) {
+        return folder.uri.fsPath;
+      }
+      return path.dirname(targetPath);
+    }
     return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  function workspaceRoot() {
+    return (
+      activeWorkspaceRoot ??
+      workspaceRootFor(preferredPath) ??
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    );
   }
 
   function previewSettings() {
@@ -213,14 +236,17 @@ export function createPanelManager({
    *   {ok: false, code: string, message: string, issues?: unknown}
    * >}
    */
-  async function analyzeRun(path) {
+  async function analyzeRun(targetPath) {
     runCounter += 1;
     const runId = `run:${Date.now().toString(36)}-${runCounter}`;
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const root = workspaceRootFor(targetPath) ?? workspaceRoot();
+    if (root) {
+      activeWorkspaceRoot = root;
+    }
     const result = await analyzer.analyze({
-      path,
+      path: targetPath,
       runId,
-      ...(workspaceRoot ? { workspaceRoot } : {}),
+      ...(root ? { workspaceRoot: root } : {}),
       trusted: vscode.workspace.isTrusted,
     });
     if (!result.ok) {
