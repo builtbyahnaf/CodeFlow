@@ -64,6 +64,18 @@ export function renderPanelHtml({
         <button id="cf-switch-perspective" type="button" class="cf-button" title="Switch perspective for the selected function" hidden>
           Show in Call Graph
         </button>
+        <button id="cf-zoom-fit" type="button" class="cf-button" title="Zoom graph to fit viewport">
+          Fit
+        </button>
+        <button
+          id="cf-full-window"
+          type="button"
+          class="cf-button"
+          title="Toggle full window graph view"
+          aria-pressed="false"
+        >
+          ⛶ Full Window
+        </button>
         <button id="cf-refresh" type="button" class="cf-button" title="Reload the graph">
           Reload
         </button>
@@ -126,6 +138,10 @@ export function renderPanelHtml({
             </button>
           </footer>
         </section>
+        <aside id="cf-shape-legend" class="cf-shape-legend" aria-label="Node shape legend" hidden>
+          <span class="cf-shape-legend-title">Shape legend</span>
+          <ul id="cf-shape-legend-list" class="cf-shape-legend-list"></ul>
+        </aside>
       </section>
       <aside class="cf-detail" aria-label="Selection details">
         <h2 class="cf-detail-title">Selection</h2>
