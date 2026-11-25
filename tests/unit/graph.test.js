@@ -166,3 +166,59 @@ test('an empty graph still produces a valid DTO', () => {
   assert.equal(validateDto(dto).ok, true);
   assert.ok(dto.extent.width > 0);
 });
+
+test('toDto caps large graphs without dangling edges and prioritizes scoped file', () => {
+  const nodes = Array.from({ length: 30 }, (_, index) => ({
+    id: `n:${String(index).padStart(2, '0')}`,
+    label: `sym_${index}`,
+    kind: index >= 20 ? 'function' : 'variable',
+    status: 'resolved',
+    range: {
+      fileId: index >= 25 ? 'file:primary' : 'file:other',
+      startLine: index,
+      startColumn: 0,
+      endLine: index,
+      endColumn: 5,
+    },
+    fileId: index >= 25 ? 'file:primary' : 'file:other',
+    external: false,
+  }));
+  const edges = [
+    {
+      id: 'e:keep',
+      from: 'n:25',
+      to: 'n:26',
+      type: 'calls',
+      status: 'resolved',
+      label: 'calls',
+    },
+    {
+      id: 'e:drop',
+      from: 'n:25',
+      to: 'n:00',
+      type: 'calls',
+      status: 'resolved',
+      label: 'calls',
+    },
+  ];
+  const dto = toDto(
+    {
+      graphId: 'g:capped',
+      runId: 'run:capped',
+      language: 'javascript',
+      adapterId: 'js-acorn',
+      completeness: 'partial',
+      nodes,
+      edges,
+      diagnostics: [],
+      degradations: [],
+    },
+    { maxNodes: 6, priorityFileId: 'file:primary' },
+  );
+  assert.equal(validateDto(dto).ok, true);
+  assert.equal(dto.nodes.length, 6);
+  assert.ok(dto.nodes.every((node) => node.range?.fileId === 'file:primary' || node.kind === 'function'));
+  assert.equal(dto.edges.length, 1);
+  assert.equal(dto.edges[0].id, 'e:keep');
+  assert.ok(dto.degradations.some((entry) => /capped to 6 of 30/i.test(entry)));
+});
