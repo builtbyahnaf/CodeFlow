@@ -372,24 +372,103 @@ export function parseCppSource(input) {
       qualifiedName: fnName,
     }).symbolId;
 
+    const returnType = match[1].trim();
+    const rawParams = text.slice(parenOpen + 1, parenClose);
+    const parsedParams = parseParameters(rawParams, rangeOf, parenOpen + 1);
+
+    const fnSignature = `${returnType ? returnType + ' ' : ''}${fnName}(${rawParams.trim()})`;
+
     const fnSymbol = createSymbol({
       symbolId: symId,
       kind: 'function',
       name: fnName,
       qualifiedName: fnName,
       language,
+      signature: fnSignature,
       declaration: declRange,
       visibility: 'public',
+      extensions: {
+        returnType,
+        parameters: parsedParams,
+        parameterNames: parsedParams.map((p) => p.name).filter(Boolean),
+      },
     });
 
     symbols.push(fnSymbol);
     functionSymbolsByName.set(fnName, fnSymbol);
 
-    const bodyText = masked.slice(openBrace + 1, closeBrace);
+    // Register parameter symbols and data facts
+    for (const p of parsedParams) {
+      if (p.name) {
+        symbols.push(
+          createSymbol({
+            symbolId: `${symId}:param:${p.name}`,
+            kind: 'parameter',
+            name: p.name,
+            qualifiedName: `${fnName}.${p.name}`,
+            language,
+            parentId: symId,
+            declaration: p.range || declRange,
+            extensions: { type: p.type },
+          }),
+        );
+        dataFacts.push(
+          createDataFact({
+            factId: `df:${symId}:param:${p.name}`,
+            kind: 'definition',
+            symbolId: symId,
+            at: p.range || declRange,
+            extensions: {
+              variableName: p.name,
+              variableType: p.type,
+              role: 'parameter',
+            },
+          }),
+        );
+      }
+    }
+
+    const bodyText = text.slice(openBrace + 1, closeBrace);
+    const maskedBody = masked.slice(openBrace + 1, closeBrace);
     const bodyOffset = openBrace + 1;
-    parseBodyConstructs(bodyText, bodyOffset, symId, rangeOf, controlConstructs, relationships);
+
+    let counter = 0;
+    const nextId = (kind) => `${symId}:cc:${kind}:${(counter += 1)}`;
+    let relCounter = 0;
+    let factCounter = 0;
+
+    const fnConstructs = parseBodyStatements({
+      body: bodyText,
+      maskedBody,
+      baseOffset: bodyOffset,
+      fnSymbolId: symId,
+      parentConstructId: null,
+      rangeOf,
+      nextId,
+      constructs: controlConstructs,
+      relationships,
+      dataFacts,
+      getRelId: (target) => `rel:call:${symId}:${target}:${(relCounter += 1)}`,
+      getFactId: () => `df:${symId}:fact:${(factCounter += 1)}`,
+    });
+
+    // Guarantee: Every function has at least one construct so CFG builds and appears in picker
+    if (fnConstructs.length === 0) {
+      controlConstructs.push(
+        createControlConstruct({
+          constructId: nextId('statement'),
+          kind: 'statement',
+          symbolId: symId,
+          sourceRange: declRange,
+          extensions: { label: `${fnName}()` },
+        }),
+      );
+    }
+
     fnRegex.lastIndex = closeBrace + 1;
   }
+
+  // Fallback if no functions were found in non-empty source
   if (symbols.length === 1 && text.trim().length > 0) {
     const mainSymId = allocator.symbol({
       path: filePath,
@@ -402,12 +481,33 @@ export function parseCppSource(input) {
       name: 'main',
       qualifiedName: 'main',
       language,
+      signature: 'int main()',
       declaration: rangeOf(0, Math.min(100, text.length)),
       visibility: 'public',
+      extensions: { returnType: 'int', parameters: [], parameterNames: [] },
     });
     symbols.push(fallbackFn);
     functionSymbolsByName.set('main', fallbackFn);
-    parseBodyConstructs(masked, 0, mainSymId, rangeOf, controlConstructs, relationships);
+
+    let counter = 0;
+    const nextId = (kind) => `${mainSymId}:cc:${kind}:${(counter += 1)}`;
+    let relCounter = 0;
+    let factCounter = 0;
+
+    parseBodyStatements({
+      body: text,
+      maskedBody: masked,
+      baseOffset: 0,
+      fnSymbolId: mainSymId,
+      parentConstructId: null,
+      rangeOf,
+      nextId,
+      constructs: controlConstructs,
+      relationships,
+      dataFacts,
+      getRelId: (target) => `rel:call:${mainSymId}:${target}:${(relCounter += 1)}`,
+      getFactId: () => `df:${mainSymId}:fact:${(factCounter += 1)}`,
+    });
   }
 
   // Resolve internal call relationships
@@ -421,6 +521,7 @@ export function parseCppSource(input) {
       rel.reasonCode = 'out_of_scope';
     }
   }
+
   const fileRecord = createFileRecord({
     fileId,
     path: filePath,
@@ -434,13 +535,13 @@ export function parseCppSource(input) {
   const diagnostic = createDiagnostic({
     severity: 'info',
     code: 'builtin_engine',
-    message: 'Analysed with CodeFlow built-in engine. Install Clang for full AST compiler semantics.',
+    message: 'Analysed with CodeFlow built-in engine. Rich control & data flow ready.',
   });
 
   return createAnalysisRun({
     runId,
     adapterId: language === 'c' ? 'c-clang' : 'cpp-clang',
-    adapterVersion: '1.2.0',
+    adapterVersion: BUILTIN_ENGINE_VERSION,
     language,
     completeness: 'partial',
     scope: { kind: 'file', path: filePath },
@@ -448,163 +549,841 @@ export function parseCppSource(input) {
     symbols,
     controlConstructs,
     relationships,
+    dataFacts,
     diagnostics: [diagnostic],
   });
 }
 
 /**
- * Parse statements and control constructs inside a function body.
+ * Extract embedded function calls within an expression slice.
  *
- * @param {string} body
- * @param {number} baseOffset
- * @param {string} fnSymbolId
- * @param {Function} rangeOf
- * @param {Array<any>} constructs
- * @param {Array<any>} relationships
+ * @param {string} exprText
+ * @param {string} maskedExpr
+ * @param {number} exprBaseOffset
+ * @param {{
+ *   fnSymbolId: string,
+ *   parentConstructId: string|null,
+ *   rangeOf: Function,
+ *   nextId: Function,
+ *   constructs: any[],
+ *   relationships: any[],
+ *   getRelId: Function,
+ * }} ctx
+ * @param {boolean} [emitConstructs]
+ * @returns {any[]} created call constructs if emitConstructs is true
  */
-function parseBodyConstructs(
-  body,
-  baseOffset,
-  fnSymbolId,
-  rangeOf,
-  constructs,
-  relationships,
-) {
-  let counter = 0;
-  const nextId = (kind) => `${fnSymbolId}:cc:${kind}:${(counter += 1)}`;
-  const keywordRegex = /\b(if|for|while|do|switch|case|default|return|break|continue|goto)\b|([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g;
+function extractEmbeddedCalls(exprText, maskedExpr, exprBaseOffset, ctx, emitConstructs = false) {
+  const created = [];
+  const callRegex = /([a-zA-Z_~][a-zA-Z0-9_:]*)\s*\(/g;
   let m;
-  while ((m = keywordRegex.exec(body)) !== null) {
-    const kw = m[1];
-    const offset = baseOffset + m.index;
-    if (kw === 'return') {
-      const semi = body.indexOf(';', m.index);
-      const endOff = semi !== -1 ? baseOffset + semi + 1 : offset + 6;
-      constructs.push(
-        createControlConstruct({
-          constructId: nextId('return'),
-          kind: 'return',
-          symbolId: fnSymbolId,
-          sourceRange: rangeOf(offset, endOff),
-        }),
-      );
-    } else if (kw === 'break' || kw === 'continue') {
-      const semi = body.indexOf(';', m.index);
-      const endOff = semi !== -1 ? baseOffset + semi + 1 : offset + kw.length;
-      constructs.push(
-        createControlConstruct({
-          constructId: nextId(kw),
-          kind: kw,
-          symbolId: fnSymbolId,
-          sourceRange: rangeOf(offset, endOff),
-        }),
-      );
+  while ((m = callRegex.exec(maskedExpr)) !== null) {
+    const calleeName = m[1];
+    if (CPP_KEYWORDS.has(calleeName)) {
+      continue;
     }
-else if (kw === 'if') {
-      const parenOpen = body.indexOf('(', m.index);
+    const parenOpen = m.index + m[0].length - 1;
+    const parenClose = findMatchingParen(maskedExpr, parenOpen);
+    const endOff = parenClose !== -1 ? parenClose + 1 : m.index + m[0].length;
+    const siteRange = ctx.rangeOf(exprBaseOffset + m.index, exprBaseOffset + endOff);
+    const argsText = parenClose !== -1 ? exprText.slice(parenOpen + 1, parenClose).trim() : '';
+
+    ctx.relationships.push(
+      createRelationship({
+        relationshipId: ctx.getRelId(calleeName),
+        type: 'calls',
+        from: ctx.fnSymbolId,
+        to: calleeName,
+        status: 'inferred',
+        site: siteRange,
+      }),
+    );
+
+    if (emitConstructs) {
+      const cc = createControlConstruct({
+        constructId: ctx.nextId('call'),
+        kind: 'call',
+        symbolId: ctx.fnSymbolId,
+        sourceRange: siteRange,
+        extensions: {
+          calleeName,
+          label: `${calleeName}(${argsText})`,
+        },
+        ...(ctx.parentConstructId ? { parentId: ctx.parentConstructId } : {}),
+      });
+      ctx.constructs.push(cc);
+      created.push(cc);
+    }
+  }
+  return created;
+}
+
+/**
+ * Recursively parse control constructs, calls, statements, and data facts within a code block.
+ *
+ * @param {any} ctx
+ * @returns {any[]} list of constructs created at this hierarchical level
+ */
+export function parseBodyStatements(ctx) {
+  return parseBodyStatementsInternal(ctx).list;
+}
+
+/**
+ * @param {any} ctx
+ * @returns {{list: any[], consumed: number}}
+ */
+function parseBodyStatementsInternal(ctx) {
+  const {
+    body,
+    maskedBody,
+    baseOffset,
+    fnSymbolId,
+    parentConstructId,
+    rangeOf,
+    nextId,
+    constructs,
+    relationships,
+    dataFacts,
+    getRelId,
+    getFactId,
+    maxStatements = Infinity,
+  } = ctx;
+
+  const levelConstructs = [];
+  let cursor = 0;
+  const len = body.length;
+
+  while (cursor < len && levelConstructs.length < maxStatements) {
+    // Skip whitespace
+    while (cursor < len && /\s/.test(body[cursor])) {
+      cursor += 1;
+    }
+    if (cursor >= len) break;
+
+    const remaining = maskedBody.slice(cursor);
+    const origRemaining = body.slice(cursor);
+
+    // 1. IF CONSTRUCT: if (...) { ... } else { ... }
+    const ifMatch = remaining.match(/^if\b/);
+    if (ifMatch) {
+      const parenOpen = remaining.indexOf('(');
       if (parenOpen !== -1) {
-        const parenClose = findMatchingParen(body, parenOpen);
+        const parenClose = findMatchingParen(remaining, parenOpen);
         if (parenClose !== -1) {
-          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
-          constructs.push(
-            createControlConstruct({
-              constructId: nextId('if'),
-              kind: 'if',
-              symbolId: fnSymbolId,
-              condition: condRange,
-              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
-            }),
+          const condText = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const condStart = baseOffset + cursor + parenOpen + 1;
+          const condEnd = baseOffset + cursor + parenClose;
+          const condRange = rangeOf(condStart, condEnd);
+          const condMasked = remaining.slice(parenOpen + 1, parenClose);
+
+          extractEmbeddedCalls(
+            origRemaining.slice(parenOpen + 1, parenClose),
+            condMasked,
+            condStart,
+            ctx,
+            false,
           );
+
+          // Find then body
+          let afterParen = parenClose + 1;
+          while (afterParen < remaining.length && /\s/.test(remaining[afterParen])) {
+            afterParen += 1;
+          }
+
+          let thenBody = '';
+          let thenOffset = 0;
+          let thenRange = null;
+          let nextCursor = 0;
+
+          if (remaining[afterParen] === '{') {
+            const openBrace = afterParen;
+            const closeBrace = findMatchingBrace(remaining, openBrace);
+            if (closeBrace !== -1) {
+              thenBody = origRemaining.slice(openBrace + 1, closeBrace);
+              thenOffset = baseOffset + cursor + openBrace + 1;
+              thenRange = rangeOf(
+                baseOffset + cursor + openBrace,
+                baseOffset + cursor + closeBrace + 1,
+              );
+              nextCursor = cursor + closeBrace + 1;
+            } else {
+              nextCursor = cursor + afterParen + 1;
+            }
+          } else {
+            const innerRes = parseBodyStatementsInternal({
+              ...ctx,
+              body: origRemaining.slice(afterParen),
+              maskedBody: remaining.slice(afterParen),
+              baseOffset: baseOffset + cursor + afterParen,
+              parentConstructId: null,
+              maxStatements: 1,
+            });
+            const semi = remaining.indexOf(';', afterParen);
+            const fallbackEnd = semi !== -1 ? semi + 1 : afterParen + 1;
+            const singleEnd = innerRes.consumed > 0 ? afterParen + innerRes.consumed : fallbackEnd;
+            thenBody = origRemaining.slice(afterParen, singleEnd);
+            thenOffset = baseOffset + cursor + afterParen;
+            thenRange = rangeOf(thenOffset, baseOffset + cursor + singleEnd);
+            nextCursor = cursor + singleEnd;
+            // Discard temporary constructs from innerRes pass so we re-parent properly below
+            for (const tmp of innerRes.list) {
+              const idx = constructs.indexOf(tmp);
+              if (idx !== -1) constructs.splice(idx, 1);
+            }
+          }
+
+          const ifConstruct = createControlConstruct({
+            constructId: nextId('if'),
+            kind: 'if',
+            symbolId: fnSymbolId,
+            condition: condRange,
+            sourceRange: rangeOf(baseOffset + cursor, baseOffset + nextCursor),
+            extensions: {
+              expression: { type: 'leaf', range: condRange, label: condText },
+              conditionText: condText,
+              label: condText,
+            },
+            ...(parentConstructId ? { parentId: parentConstructId } : {}),
+          });
+          constructs.push(ifConstruct);
+          levelConstructs.push(ifConstruct);
+
+          const thenConstruct = createControlConstruct({
+            constructId: nextId('block'),
+            kind: 'block',
+            symbolId: fnSymbolId,
+            sourceRange: thenRange || condRange,
+            parentId: ifConstruct.constructId,
+          });
+          constructs.push(thenConstruct);
+
+          const thenChildren = parseBodyStatements({
+            ...ctx,
+            body: thenBody,
+            maskedBody: maskedBody.slice(thenOffset - baseOffset, thenOffset - baseOffset + thenBody.length),
+            baseOffset: thenOffset,
+            parentConstructId: thenConstruct.constructId,
+          });
+          thenConstruct.children = thenChildren.map((c) => c.constructId);
+
+          // Check for ELSE
+          let elseConstruct = null;
+          let checkElseIdx = nextCursor;
+          while (checkElseIdx < len && /\s/.test(body[checkElseIdx])) {
+            checkElseIdx += 1;
+          }
+
+          if (maskedBody.slice(checkElseIdx).match(/^else\b/)) {
+            let afterElse = checkElseIdx + 4;
+            while (afterElse < len && /\s/.test(body[afterElse])) {
+              afterElse += 1;
+            }
+
+            if (maskedBody.slice(afterElse).match(/^if\b/)) {
+              elseConstruct = createControlConstruct({
+                constructId: nextId('else'),
+                kind: 'else',
+                symbolId: fnSymbolId,
+                sourceRange: rangeOf(baseOffset + afterElse, baseOffset + afterElse + 2),
+                parentId: ifConstruct.constructId,
+              });
+              constructs.push(elseConstruct);
+
+              const elseIfRes = parseBodyStatementsInternal({
+                ...ctx,
+                body: body.slice(afterElse),
+                maskedBody: maskedBody.slice(afterElse),
+                baseOffset: baseOffset + afterElse,
+                parentConstructId: elseConstruct.constructId,
+                maxStatements: 1,
+              });
+              elseConstruct.children = elseIfRes.list.map((c) => c.constructId);
+              nextCursor = afterElse + elseIfRes.consumed;
+              if (elseIfRes.list.length > 0) {
+                elseConstruct.sourceRange = elseIfRes.list[0].sourceRange;
+              }
+            } else {
+              let elseBody = '';
+              let elseOffset = 0;
+              let elseRange = null;
+
+              if (body[afterElse] === '{') {
+                const openBrace = afterElse;
+                const closeBrace = findMatchingBrace(maskedBody, openBrace);
+                if (closeBrace !== -1) {
+                  elseBody = body.slice(openBrace + 1, closeBrace);
+                  elseOffset = baseOffset + openBrace + 1;
+                  elseRange = rangeOf(baseOffset + openBrace, baseOffset + closeBrace + 1);
+                  nextCursor = closeBrace + 1;
+                }
+              } else {
+                const semi = maskedBody.indexOf(';', afterElse);
+                if (semi !== -1) {
+                  elseBody = body.slice(afterElse, semi + 1);
+                  elseOffset = baseOffset + afterElse;
+                  elseRange = rangeOf(baseOffset + afterElse, baseOffset + semi + 1);
+                  nextCursor = semi + 1;
+                }
+              }
+
+              if (elseRange) {
+                elseConstruct = createControlConstruct({
+                  constructId: nextId('else'),
+                  kind: 'else',
+                  symbolId: fnSymbolId,
+                  sourceRange: elseRange,
+                  parentId: ifConstruct.constructId,
+                });
+                constructs.push(elseConstruct);
+
+                const elseChildren = parseBodyStatements({
+                  ...ctx,
+                  body: elseBody,
+                  maskedBody: maskedBody.slice(elseOffset - baseOffset, elseOffset - baseOffset + elseBody.length),
+                  baseOffset: elseOffset,
+                  parentConstructId: elseConstruct.constructId,
+                });
+                elseConstruct.children = elseChildren.map((c) => c.constructId);
+              }
+            }
+          }
+
+          ifConstruct.children = elseConstruct
+            ? [thenConstruct.constructId, elseConstruct.constructId]
+            : [thenConstruct.constructId];
+
+          cursor = nextCursor;
+          continue;
         }
       }
     }
-else if (kw === 'while') {
-      const parenOpen = body.indexOf('(', m.index);
+
+    // 2. WHILE LOOP: while (...) { ... }
+    const whileMatch = remaining.match(/^while\b/);
+    if (whileMatch) {
+      const parenOpen = remaining.indexOf('(');
       if (parenOpen !== -1) {
-        const parenClose = findMatchingParen(body, parenOpen);
+        const parenClose = findMatchingParen(remaining, parenOpen);
         if (parenClose !== -1) {
-          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
-          constructs.push(
-            createControlConstruct({
+          const condText = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const condRange = rangeOf(
+            baseOffset + cursor + parenOpen + 1,
+            baseOffset + cursor + parenClose,
+          );
+
+          let afterParen = parenClose + 1;
+          while (afterParen < remaining.length && /\s/.test(remaining[afterParen])) {
+            afterParen += 1;
+          }
+
+          let bodyText = '';
+          let bodyOffset = 0;
+          let bodyRange = null;
+          let nextCursor = 0;
+
+          if (remaining[afterParen] === '{') {
+            const openBrace = afterParen;
+            const closeBrace = findMatchingBrace(remaining, openBrace);
+            if (closeBrace !== -1) {
+              bodyText = origRemaining.slice(openBrace + 1, closeBrace);
+              bodyOffset = baseOffset + cursor + openBrace + 1;
+              bodyRange = rangeOf(
+                baseOffset + cursor + openBrace,
+                baseOffset + cursor + closeBrace + 1,
+              );
+              nextCursor = cursor + closeBrace + 1;
+            }
+          } else {
+            const semi = remaining.indexOf(';', afterParen);
+            if (semi !== -1) {
+              bodyText = origRemaining.slice(afterParen, semi + 1);
+              bodyOffset = baseOffset + cursor + afterParen;
+              bodyRange = rangeOf(
+                baseOffset + cursor + afterParen,
+                baseOffset + cursor + semi + 1,
+              );
+              nextCursor = cursor + semi + 1;
+            }
+          }
+
+          if (bodyRange) {
+            const whileConstruct = createControlConstruct({
               constructId: nextId('while'),
               kind: 'while',
               symbolId: fnSymbolId,
               condition: condRange,
-              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
-            }),
-          );
+              sourceRange: rangeOf(baseOffset + cursor, baseOffset + nextCursor),
+              extensions: {
+                expression: { type: 'leaf', range: condRange, label: condText },
+                conditionText: condText,
+                label: condText,
+              },
+              ...(parentConstructId ? { parentId: parentConstructId } : {}),
+            });
+            constructs.push(whileConstruct);
+            levelConstructs.push(whileConstruct);
+
+            const bodyBlock = createControlConstruct({
+              constructId: nextId('block'),
+              kind: 'block',
+              symbolId: fnSymbolId,
+              sourceRange: bodyRange,
+              parentId: whileConstruct.constructId,
+            });
+            constructs.push(bodyBlock);
+
+            const whileChildren = parseBodyStatements({
+              ...ctx,
+              body: bodyText,
+              maskedBody: maskedBody.slice(bodyOffset - baseOffset, bodyOffset - baseOffset + bodyText.length),
+              baseOffset: bodyOffset,
+              parentConstructId: bodyBlock.constructId,
+            });
+            bodyBlock.children = whileChildren.map((c) => c.constructId);
+            whileConstruct.children = [bodyBlock.constructId];
+
+            cursor = nextCursor;
+            continue;
+          }
         }
       }
-    } else if (kw === 'for') {
-      const parenOpen = body.indexOf('(', m.index);
+    }
+
+    // 3. FOR LOOP: for (init; cond; update) { ... }
+    const forMatch = remaining.match(/^for\b/);
+    if (forMatch) {
+      const parenOpen = remaining.indexOf('(');
       if (parenOpen !== -1) {
-        const parenClose = findMatchingParen(body, parenOpen);
+        const parenClose = findMatchingParen(remaining, parenOpen);
         if (parenClose !== -1) {
-          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
-          constructs.push(
-            createControlConstruct({
+          const headerText = origRemaining.slice(parenOpen + 1, parenClose);
+          const parts = headerText.split(';');
+          const initText = (parts[0] || '').trim();
+          const condText = (parts[1] || '').trim();
+          const updateText = (parts[2] || '').trim();
+          const condRange = rangeOf(
+            baseOffset + cursor + parenOpen + 1,
+            baseOffset + cursor + parenClose,
+          );
+
+          let afterParen = parenClose + 1;
+          while (afterParen < remaining.length && /\s/.test(remaining[afterParen])) {
+            afterParen += 1;
+          }
+
+          let bodyText = '';
+          let bodyOffset = 0;
+          let bodyRange = null;
+          let nextCursor = 0;
+
+          if (remaining[afterParen] === '{') {
+            const openBrace = afterParen;
+            const closeBrace = findMatchingBrace(remaining, openBrace);
+            if (closeBrace !== -1) {
+              bodyText = origRemaining.slice(openBrace + 1, closeBrace);
+              bodyOffset = baseOffset + cursor + openBrace + 1;
+              bodyRange = rangeOf(
+                baseOffset + cursor + openBrace,
+                baseOffset + cursor + closeBrace + 1,
+              );
+              nextCursor = cursor + closeBrace + 1;
+            }
+          } else {
+            const semi = remaining.indexOf(';', afterParen);
+            if (semi !== -1) {
+              bodyText = origRemaining.slice(afterParen, semi + 1);
+              bodyOffset = baseOffset + cursor + afterParen;
+              bodyRange = rangeOf(
+                baseOffset + cursor + afterParen,
+                baseOffset + cursor + semi + 1,
+              );
+              nextCursor = cursor + semi + 1;
+            }
+          }
+
+          if (bodyRange) {
+            const forConstruct = createControlConstruct({
               constructId: nextId('for'),
               kind: 'for',
               symbolId: fnSymbolId,
               condition: condRange,
-              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
-              extensions: { hasInit: true, hasCondition: true, hasUpdate: true },
-            }),
-          );
-        }
-      }
-    }
-else if (kw === 'switch') {
-      const parenOpen = body.indexOf('(', m.index);
-      if (parenOpen !== -1) {
-        const parenClose = findMatchingParen(body, parenOpen);
-        if (parenClose !== -1) {
-          const condRange = rangeOf(baseOffset + parenOpen, baseOffset + parenClose + 1);
-          constructs.push(
-            createControlConstruct({
-              constructId: nextId('switch'),
-              kind: 'switch',
+              sourceRange: rangeOf(baseOffset + cursor, baseOffset + nextCursor),
+              extensions: {
+                hasInit: Boolean(initText),
+                hasCondition: Boolean(condText),
+                hasUpdate: Boolean(updateText),
+                expression: {
+                  type: 'leaf',
+                  range: condRange,
+                  label: condText || 'for condition',
+                },
+                label: condText || 'for loop',
+                conditionText: condText,
+                initText,
+                updateText,
+              },
+              ...(parentConstructId ? { parentId: parentConstructId } : {}),
+            });
+            constructs.push(forConstruct);
+            levelConstructs.push(forConstruct);
+
+            const bodyBlock = createControlConstruct({
+              constructId: nextId('block'),
+              kind: 'block',
               symbolId: fnSymbolId,
-              condition: condRange,
-              sourceRange: rangeOf(offset, baseOffset + parenClose + 1),
-            }),
-          );
+              sourceRange: bodyRange,
+              parentId: forConstruct.constructId,
+            });
+            constructs.push(bodyBlock);
+
+            const forChildren = parseBodyStatements({
+              ...ctx,
+              body: bodyText,
+              maskedBody: maskedBody.slice(bodyOffset - baseOffset, bodyOffset - baseOffset + bodyText.length),
+              baseOffset: bodyOffset,
+              parentConstructId: bodyBlock.constructId,
+            });
+            bodyBlock.children = forChildren.map((c) => c.constructId);
+            forConstruct.children = [bodyBlock.constructId];
+
+            cursor = nextCursor;
+            continue;
+          }
         }
       }
-    } else if (kw === 'case' || kw === 'default') {
-      const colon = body.indexOf(':', m.index);
-      const endOff = colon !== -1 ? baseOffset + colon + 1 : offset + kw.length;
-      constructs.push(
-        createControlConstruct({
-          constructId: nextId(kw),
-          kind: kw,
-          symbolId: fnSymbolId,
-          sourceRange: rangeOf(offset, endOff),
-        }),
-      );
     }
-const callTarget = m[2];
-    if (callTarget && !CPP_KEYWORDS.has(callTarget)) {
-      const parenClose = findMatchingParen(body, m.index + m[0].length - 1);
-      const endOff = parenClose !== -1 ? baseOffset + parenClose + 1 : offset + m[0].length;
-      const cc = createControlConstruct({
-        constructId: nextId('call'),
-        kind: 'call',
+
+    // 4. SWITCH STATEMENT: switch (expr) { case ... }
+    const switchMatch = remaining.match(/^switch\b/);
+    if (switchMatch) {
+      const parenOpen = remaining.indexOf('(');
+      if (parenOpen !== -1) {
+        const parenClose = findMatchingParen(remaining, parenOpen);
+        if (parenClose !== -1) {
+          const exprText = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const condRange = rangeOf(
+            baseOffset + cursor + parenOpen + 1,
+            baseOffset + cursor + parenClose,
+          );
+
+          let afterParen = parenClose + 1;
+          while (afterParen < remaining.length && /\s/.test(remaining[afterParen])) {
+            afterParen += 1;
+          }
+
+          if (remaining[afterParen] === '{') {
+            const openBrace = afterParen;
+            const closeBrace = findMatchingBrace(remaining, openBrace);
+            if (closeBrace !== -1) {
+              const switchConstruct = createControlConstruct({
+                constructId: nextId('switch'),
+                kind: 'switch',
+                symbolId: fnSymbolId,
+                condition: condRange,
+                sourceRange: rangeOf(
+                  baseOffset + cursor,
+                  baseOffset + cursor + closeBrace + 1,
+                ),
+                extensions: {
+                  label: `switch (${exprText})`,
+                  conditionText: exprText,
+                },
+                ...(parentConstructId ? { parentId: parentConstructId } : {}),
+              });
+              constructs.push(switchConstruct);
+              levelConstructs.push(switchConstruct);
+
+              const switchBody = origRemaining.slice(openBrace + 1, closeBrace);
+              const switchMasked = remaining.slice(openBrace + 1, closeBrace);
+              const switchOffset = baseOffset + cursor + openBrace + 1;
+
+              // Parse cases inside switch
+              const caseRegex = /\b(case\s+([^:]+)|default)\s*:/g;
+              const caseIndices = [];
+              let cm;
+              while ((cm = caseRegex.exec(switchMasked)) !== null) {
+                caseIndices.push({
+                  index: cm.index,
+                  test: cm[2] ? cm[2].trim() : 'default',
+                  headerEnd: caseRegex.lastIndex,
+                });
+              }
+
+              const caseConstructIds = [];
+              for (let ci = 0; ci < caseIndices.length; ci += 1) {
+                const currentCase = caseIndices[ci];
+                const nextCaseStart =
+                  ci + 1 < caseIndices.length ? caseIndices[ci + 1].index : switchBody.length;
+                const caseCode = switchBody.slice(currentCase.headerEnd, nextCaseStart);
+                const caseCodeOffset = switchOffset + currentCase.headerEnd;
+
+                const caseKind = currentCase.test === 'default' ? 'default' : 'case';
+                const caseConstruct = createControlConstruct({
+                  constructId: nextId(caseKind),
+                  kind: caseKind,
+                  symbolId: fnSymbolId,
+                  sourceRange: rangeOf(
+                    switchOffset + currentCase.index,
+                    switchOffset + nextCaseStart,
+                  ),
+                  extensions: { test: currentCase.test },
+                  parentId: switchConstruct.constructId,
+                });
+                constructs.push(caseConstruct);
+                caseConstructIds.push(caseConstruct.constructId);
+
+                const caseChildren = parseBodyStatements({
+                  ...ctx,
+                  body: caseCode,
+                  maskedBody: switchMasked.slice(currentCase.headerEnd, nextCaseStart),
+                  baseOffset: caseCodeOffset,
+                  parentConstructId: caseConstruct.constructId,
+                });
+                caseConstruct.children = caseChildren.map((c) => c.constructId);
+              }
+
+              switchConstruct.children = caseConstructIds;
+              cursor += closeBrace + 1;
+              continue;
+            }
+          }
+        }
+      }
+    }
+
+    // 5. RETURN STATEMENT: return expr;
+    const returnMatch = remaining.match(/^return\b/);
+    if (returnMatch) {
+      const semi = remaining.indexOf(';');
+      const retExpr = semi !== -1 ? origRemaining.slice(6, semi).trim() : '';
+      const endOff = semi !== -1 ? semi + 1 : 6;
+      const retLabel = retExpr ? `return ${retExpr}` : 'return';
+      const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + endOff);
+
+      const retConstruct = createControlConstruct({
+        constructId: nextId('return'),
+        kind: 'return',
         symbolId: fnSymbolId,
-        sourceRange: rangeOf(offset, endOff),
-        extensions: { calleeName: callTarget },
+        sourceRange: stmtRange,
+        extensions: {
+          label: retLabel,
+          returnExpression: retExpr,
+          valueRange: retExpr
+            ? rangeOf(baseOffset + cursor + 6, baseOffset + cursor + endOff - 1)
+            : null,
+        },
+        ...(parentConstructId ? { parentId: parentConstructId } : {}),
+      });
+      constructs.push(retConstruct);
+      levelConstructs.push(retConstruct);
+
+      if (retExpr) {
+        const retExprRaw = origRemaining.slice(6, semi);
+        const retExprMasked = remaining.slice(6, semi);
+        const embeddedCalls = extractEmbeddedCalls(
+          retExprRaw,
+          retExprMasked,
+          baseOffset + cursor + 6,
+          { ...ctx, parentConstructId: retConstruct.constructId },
+          true,
+        );
+        if (embeddedCalls.length > 0) {
+          retConstruct.children = embeddedCalls.map((c) => c.constructId);
+        }
+        dataFacts.push(
+          createDataFact({
+            factId: getFactId(),
+            kind: 'use',
+            symbolId: fnSymbolId,
+            at: stmtRange,
+            extensions: { expression: retExpr, role: 'return' },
+          }),
+        );
+      }
+
+      cursor += endOff;
+      continue;
+    }
+
+    // 6. BREAK & CONTINUE
+    const jumpMatch = remaining.match(/^(break|continue)\b/);
+    if (jumpMatch) {
+      const kw = jumpMatch[1];
+      const semi = remaining.indexOf(';');
+      const endOff = semi !== -1 ? semi + 1 : kw.length;
+
+      const cc = createControlConstruct({
+        constructId: nextId(kw),
+        kind: kw,
+        symbolId: fnSymbolId,
+        sourceRange: rangeOf(baseOffset + cursor, baseOffset + cursor + endOff),
+        ...(parentConstructId ? { parentId: parentConstructId } : {}),
       });
       constructs.push(cc);
-      relationships.push(
-        createRelationship({
-          relationshipId: `rel:call:${fnSymbolId}:${callTarget}:${counter}`,
-          type: 'calls',
-          from: fnSymbolId,
-          to: callTarget,
-          status: 'inferred',
-          site: rangeOf(offset, endOff),
-        }),
-      );
+      levelConstructs.push(cc);
+
+      cursor += endOff;
+      continue;
     }
+
+    // 7. CALL WITH ASSIGNMENT: let a = getData(); / int a = getData(); / a = getData();
+    const callAssignMatch = remaining.match(
+      /^(?:(?:const|let|var|auto|int|float|double|char|string|std::string|bool|size_t|uint32_t|int32_t)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_~][a-zA-Z0-9_:]*)\s*\(/,
+    );
+    if (callAssignMatch) {
+      const varName = callAssignMatch[1];
+      const calleeName = callAssignMatch[2];
+      if (!CPP_KEYWORDS.has(calleeName)) {
+        const parenOpen = remaining.indexOf('(');
+        const parenClose = findMatchingParen(remaining, parenOpen);
+        if (parenClose !== -1) {
+          const semi = remaining.indexOf(';', parenClose);
+          const endOff = semi !== -1 ? semi + 1 : parenClose + 1;
+          const callArgs = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const fullLabel = `${varName} = ${calleeName}(${callArgs})`;
+          const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + endOff);
+
+          const callConstruct = createControlConstruct({
+            constructId: nextId('call'),
+            kind: 'call',
+            symbolId: fnSymbolId,
+            sourceRange: stmtRange,
+            extensions: {
+              calleeName,
+              assignmentTarget: varName,
+              expression: fullLabel,
+              label: fullLabel,
+            },
+            ...(parentConstructId ? { parentId: parentConstructId } : {}),
+          });
+          constructs.push(callConstruct);
+          levelConstructs.push(callConstruct);
+
+          relationships.push(
+            createRelationship({
+              relationshipId: getRelId(calleeName),
+              type: 'calls',
+              from: fnSymbolId,
+              to: calleeName,
+              status: 'inferred',
+              site: stmtRange,
+            }),
+          );
+
+          dataFacts.push(
+            createDataFact({
+              factId: getFactId(),
+              kind: 'definition',
+              symbolId: fnSymbolId,
+              at: stmtRange,
+              extensions: {
+                variableName: varName,
+                sourceCall: calleeName,
+                label: fullLabel,
+              },
+            }),
+          );
+
+          cursor += endOff;
+          continue;
+        }
+      }
+    }
+
+    // 8. DIRECT CALL: callee(args);
+    const directCallMatch = remaining.match(/^([a-zA-Z_~][a-zA-Z0-9_:]*)\s*\(/);
+    if (directCallMatch) {
+      const calleeName = directCallMatch[1];
+      if (!CPP_KEYWORDS.has(calleeName)) {
+        const parenOpen = remaining.indexOf('(');
+        const parenClose = findMatchingParen(remaining, parenOpen);
+        if (parenClose !== -1) {
+          const semi = remaining.indexOf(';', parenClose);
+          const endOff = semi !== -1 ? semi + 1 : parenClose + 1;
+          const callArgs = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const fullLabel = `${calleeName}(${callArgs})`;
+          const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + endOff);
+
+          const callConstruct = createControlConstruct({
+            constructId: nextId('call'),
+            kind: 'call',
+            symbolId: fnSymbolId,
+            sourceRange: stmtRange,
+            extensions: {
+              calleeName,
+              label: fullLabel,
+            },
+            ...(parentConstructId ? { parentId: parentConstructId } : {}),
+          });
+          constructs.push(callConstruct);
+          levelConstructs.push(callConstruct);
+
+          relationships.push(
+            createRelationship({
+              relationshipId: getRelId(calleeName),
+              type: 'calls',
+              from: fnSymbolId,
+              to: calleeName,
+              status: 'inferred',
+              site: stmtRange,
+            }),
+          );
+
+          cursor += endOff;
+          continue;
+        }
+      }
+    }
+
+    // 9. GENERAL STATEMENT ENDING WITH SEMICOLON
+    const semi = remaining.indexOf(';');
+    if (semi !== -1) {
+      const stmtText = origRemaining.slice(0, semi + 1).trim();
+      if (stmtText.length > 0) {
+        const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + semi + 1);
+        const stmtConstruct = createControlConstruct({
+          constructId: nextId('statement'),
+          kind: 'statement',
+          symbolId: fnSymbolId,
+          sourceRange: stmtRange,
+          extensions: { label: stmtText },
+          ...(parentConstructId ? { parentId: parentConstructId } : {}),
+        });
+        constructs.push(stmtConstruct);
+        levelConstructs.push(stmtConstruct);
+
+        const stmtMasked = remaining.slice(0, semi + 1);
+        extractEmbeddedCalls(
+          origRemaining.slice(0, semi + 1),
+          stmtMasked,
+          baseOffset + cursor,
+          ctx,
+          false,
+        );
+        // Check if variable assignment / modification
+        const assignMatch = stmtText.match(
+          /^(?:(?:const|let|var|auto|int|float|double|char|string|std::string|bool|size_t)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|\+=|-=|\*=|\/=|%=)\s*([^;]+);/,
+        );
+        if (assignMatch) {
+          dataFacts.push(
+            createDataFact({
+              factId: getFactId(),
+              kind: 'definition',
+              symbolId: fnSymbolId,
+              at: stmtRange,
+              extensions: {
+                variableName: assignMatch[1],
+                expression: stmtText,
+              },
+            }),
+          );
+        }
+      }
+      cursor += semi + 1;
+      continue;
+    }
+
+    cursor += 1;
   }
+
+  return { list: levelConstructs, consumed: cursor };
 }
