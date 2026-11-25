@@ -309,20 +309,31 @@ export function createPanelWire({
         );
         return;
       }
-      bridge.respond(
-        'cfg.functions',
-        {
-          ok: true,
-          functions: result.value.map((symbol) => ({
-            symbolId: symbol.symbolId,
-            name: symbol.name,
-            qualifiedName: symbol.qualifiedName,
-            kind: symbol.kind,
-            range: symbol.declaration,
-          })),
-        },
-        requestId,
-      );
+      const primaryFileId = loaded.run.scope?.path
+        ? fileIdForPath(loaded.run.scope.path)
+        : null;
+      const mapped = result.value.map((symbol) => ({
+        symbolId: symbol.symbolId,
+        name: symbol.name,
+        qualifiedName: symbol.qualifiedName,
+        kind: symbol.kind,
+        range: symbol.declaration,
+      }));
+      if (primaryFileId) {
+        mapped.sort((left, right) => {
+          const leftPrimary = left.range?.fileId === primaryFileId ? 0 : 1;
+          const rightPrimary = right.range?.fileId === primaryFileId ? 0 : 1;
+          return leftPrimary - rightPrimary;
+        });
+      }
+      let functions = mapped;
+      while (
+        functions.length > 10 &&
+        !fitsPayloadBudget('cfg.functions', { ok: true, functions }, requestId)
+      ) {
+        functions = functions.slice(0, Math.max(10, Math.floor(functions.length / 2)));
+      }
+      bridge.respond('cfg.functions', { ok: true, functions }, requestId);
     });
 
     bridge.on('cfg.load', async (payload, { requestId }) => {
@@ -347,7 +358,13 @@ export function createPanelWire({
         );
         return;
       }
-      const dto = toCfgDto(result.cfg);
+      let dto = toCfgDto(result.cfg);
+      for (const limit of [1000, 500, 250, 100, 40]) {
+        if (fitsPayloadBudget('cfg.data', { ok: true, dto }, requestId)) {
+          break;
+        }
+        dto = toCfgDto(result.cfg, { maxNodes: limit });
+      }
       lastCfg = result.cfg;
       lastDto = dto;
       bridge.respond('cfg.data', { ok: true, dto }, requestId);
@@ -787,23 +804,105 @@ export function createPanelWire({
       return { ok: true, session: zoomSession };
     }
 
+    /**
+     * Wrap a semantic-zoom label without truncating it. Zoom labels are short
+     * (directory and symbol names), but file paths and cluster captions can
+     * still exceed one line.
+     *
+     * @param {string} label
+     * @returns {string[]}
+     */
+    function wrapZoomLabel(label) {
+      const text = String(label ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (text.length === 0) {
+        return [''];
+      }
+      const maxChars = 34;
+      if (text.length <= maxChars) {
+        return [text];
+      }
+      /** @type {string[]} */
+      const lines = [];
+      let rest = text;
+      while (rest.length > maxChars) {
+        let split = rest.lastIndexOf(' ', maxChars);
+        if (split <= 0) {
+          const next = rest.indexOf(' ', maxChars);
+          split = next > 0 && next <= Math.floor(maxChars * 1.6) ? next : maxChars;
+        }
+        lines.push(rest.slice(0, split).trimEnd());
+        rest = rest.slice(split).trimStart();
+      }
+      if (rest.length > 0) {
+        lines.push(rest);
+      }
+      return lines;
+    }
+
     function stampZoomDto(dto) {
       const run = current?.run;
-      const nodes = Array.isArray(dto?.nodes) ? dto.nodes : [];
-      const edges = Array.isArray(dto?.edges) ? dto.edges : [];
+      const rawNodes = Array.isArray(dto?.nodes) ? dto.nodes : [];
+      const rawEdges = Array.isArray(dto?.edges) ? dto.edges : [];
+
+      // The zoom layout emits flat x/y/width/height. The renderer consumes a
+      // nested `position`, so normalize here, at the host/webview boundary.
+      const nodes = rawNodes.map((node) => {
+        const width = Number(node.position?.width ?? node.width ?? 180);
+        const height = Number(node.position?.height ?? node.height ?? 64);
+        const x = Number(node.position?.x ?? node.x ?? 0);
+        const y = Number(node.position?.y ?? node.y ?? 0);
+        const label = String(node.label ?? node.id ?? '');
+        const labelLines =
+          Array.isArray(node.labelLines) && node.labelLines.length > 0
+            ? node.labelLines
+            : wrapZoomLabel(label);
+        const badges = Array.isArray(node.badges) ? node.badges : [];
+        return {
+          ...node,
+          label,
+          labelLines,
+          status: String(node.status ?? node.displayStatus ?? 'resolved'),
+          badge: String(node.badge ?? (badges.length > 0 ? badges.join(' · ') : '')),
+          badges,
+          external: Boolean(node.external),
+          range: node.range ?? null,
+          position: {
+            x,
+            y,
+            width,
+            height,
+            layer: Number.isInteger(node.layer) ? node.layer : 0,
+          },
+        };
+      });
+
+      const edges = rawEdges.map((edge) => ({
+        ...edge,
+        type: String(edge.type ?? edge.kind ?? 'dependency'),
+        kind: String(edge.kind ?? edge.type ?? 'dependency'),
+        status: String(edge.status ?? edge.displayStatus ?? 'resolved'),
+        label: String(edge.label ?? ''),
+        dash: String(edge.dash ?? ''),
+        glyphHint: String(edge.glyphHint ?? ''),
+      }));
+
       let maxX = 0;
       let maxY = 0;
       for (const node of nodes) {
-        const nx = (node.position?.x ?? 0) + (node.position?.width ?? 160);
-        const ny = (node.position?.y ?? 0) + (node.position?.height ?? 50);
+        const nx = node.position.x + node.position.width;
+        const ny = node.position.y + node.position.height;
         if (nx > maxX) maxX = nx;
         if (ny > maxY) maxY = ny;
       }
+
       return {
+        ...dto,
         dtoVersion: GRAPH_DTO_VERSION,
-        graphId: `zoom:${dto?.level ?? 'L0'}`,
+        graphId: `zoom:${dto?.level ?? 'workspace'}`,
         runId: dto?.runId ?? run?.runId ?? 'run:zoom',
-        language: run?.files?.[0]?.language ?? 'workspace',
+        language: run?.language ?? run?.files?.[0]?.language ?? 'workspace',
         adapterId: run?.adapterId ?? 'semantic_zoom',
         completeness: run?.completeness ?? 'complete',
         extent: {
@@ -811,11 +910,12 @@ export function createPanelWire({
           height: Math.max(600, maxY + 64),
         },
         legend: {
-          statuses: ['resolved', 'unresolved'],
+          statuses: [...new Set(nodes.map((n) => n.status))].sort(),
           kinds: [...new Set(nodes.map((n) => n.kind))].sort(),
-          edgeKinds: [...new Set(edges.map((e) => e.type || e.kind || 'dependency'))].sort(),
+          edgeKinds: [...new Set(edges.map((e) => e.type))].sort(),
         },
-        ...dto,
+        nodes,
+        edges,
       };
     }
 
