@@ -154,7 +154,6 @@ int factorial(int n) {
   assert.equal(validation.issues.length, 0);
 });
 
-import { createAdapterRegistry } from '../../src/core/adapterRegistry.js';
 import { cppAdapter } from '../../src/adapters/cpp/index.js';
 import { buildCfg } from '../../src/core/graph/cfg/builder.js';
 import { toCfgDto } from '../../src/core/graph/cfg/dto.js';
@@ -176,4 +175,85 @@ int compute(int x) {
   assert.ok(cfgRes.cfg.nodes.length >= 2);
   const dto = toCfgDto(cfgRes.cfg);
   assert.ok(dto.nodes.length >= 2);
+});
+
+import { resolveLanguage } from '../../src/webview/highlight.js';
+
+test('parseCppSource extracts parameters, return type, call data flow, and branched CFG', () => {
+  const code = `
+int getData() {
+  return 42;
+}
+
+int MyClass::process(int limit, const char* tag) {
+  int a = getData();
+  if (a < limit) {
+    return a;
+  } else if (a > 100) {
+    return 100;
+  } else {
+    return limit;
+  }
+}
+`;
+  const run = parseCppSource({ runId: 'run:13', path: 'src/review.cpp', text: code });
+  const proc = run.symbols.find((s) => s.qualifiedName === 'MyClass::process');
+  assert.ok(proc, 'qualified class method should be extracted');
+  assert.equal(proc.extensions?.returnType, 'int');
+  assert.equal(proc.extensions?.parameters?.length, 2);
+  assert.equal(proc.extensions?.parameters?.[0]?.name, 'limit');
+
+  const query = createQueryLayer(run, { capabilities: cppAdapter.capabilities });
+  const cfgRes = buildCfg(query, proc.symbolId);
+  assert.equal(cfgRes.ok, true);
+  const cfg = cfgRes.cfg;
+
+  // Verify condition labels and branching edges (true + false)
+  const condNodes = cfg.nodes.filter((n) => n.kind === 'condition');
+  assert.ok(condNodes.some((n) => n.label === 'a < limit'));
+  assert.ok(condNodes.some((n) => n.label === 'a > 100'));
+  assert.ok(cfg.edges.some((e) => e.kind === 'true'));
+  assert.ok(cfg.edges.some((e) => e.kind === 'false'));
+
+  // Verify call assignment tracking (a = getData())
+  assert.equal(cfg.function.dataFlows.length, 1);
+  assert.equal(cfg.function.dataFlows[0].target, 'a');
+  assert.equal(cfg.function.dataFlows[0].sourceCall, 'getData');
+  assert.deepEqual(cfg.function.returns, ['a', '100', 'limit']);
+
+  const dto = toCfgDto(cfg);
+  assert.ok(dto.function.signature.includes('MyClass::process'));
+  assert.equal(dto.function.parameters.length, 2);
+
+  // Verify true branch is positioned to the left of false branch at split layers
+  const firstCond = condNodes.find((n) => n.label === 'a < limit');
+  const firstTrueEdge = cfg.edges.find((e) => e.from === firstCond.id && e.kind === 'true');
+  const firstFalseEdge = cfg.edges.find((e) => e.from === firstCond.id && e.kind === 'false');
+  const trueNode = dto.nodes.find((n) => n.id === firstTrueEdge.to);
+  const falseNode = dto.nodes.find((n) => n.id === firstFalseEdge.to);
+  assert.ok(trueNode && falseNode);
+  if (trueNode.position.layer === falseNode.position.layer) {
+    assert.ok(trueNode.position.x < falseNode.position.x, 'true branch should be left of false branch');
+  }
+});
+
+test('resolveLanguage identifies language from fileId paths and extensions', () => {
+  assert.equal(resolveLanguage('file:src/test.cpp').language, 'cpp');
+  assert.equal(resolveLanguage('src/header.hpp').language, 'cpp');
+  assert.equal(resolveLanguage('file:///d:/app/index.js').language, 'javascript');
+  assert.equal(resolveLanguage('Main.java').language, 'java');
+  assert.equal(resolveLanguage('script.py').language, 'python');
+  assert.equal(resolveLanguage('cpp').language, 'cpp');
+});
+
+test('parseCppSource converts absolute Windows paths to workspace-relative CSR paths', () => {
+  const run = parseCppSource({
+    runId: 'run:relpath',
+    path: 'd:\\project\\src\\sample.cpp',
+    workspaceRoot: 'D:\\project',
+    text: 'int add(int a, int b) { return a + b; }',
+  });
+  assert.equal(run.files[0].path, 'src/sample.cpp');
+  const validation = validateAnalysisRun(run, { mode: 'strict' });
+  assert.equal(validation.issues.length, 0);
 });
