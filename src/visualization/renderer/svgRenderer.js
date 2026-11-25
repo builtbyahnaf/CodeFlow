@@ -40,6 +40,75 @@ function truncate(value, max) {
 }
 
 /**
+ * Standard flowchart outline for a node. Keeping the outline in one place
+ * lets the legend, DTO and renderer agree on what each kind means.
+ *
+ * @param {string|undefined} kind
+ * @param {number} width
+ * @param {number} height
+ * @returns {{tag: string, attrs: Record<string, string|number>}}
+ */
+export function shapeOutline(kind, width, height) {
+  const normalized = String(kind ?? 'statement');
+
+  if (normalized === 'entry' || normalized === 'exit') {
+    const radius = Math.min(height / 2, 28);
+    return { tag: 'rect', attrs: { width, height, rx: radius, ry: radius } };
+  }
+
+  if (normalized === 'condition') {
+    return {
+      tag: 'path',
+      attrs: {
+        d: `M ${width / 2} 0 L ${width} ${height / 2} L ${width / 2} ${height} L 0 ${height / 2} Z`,
+      },
+    };
+  }
+
+  if (
+    normalized === 'multiway' ||
+    normalized === 'loop_header' ||
+    normalized === 'loop_latch'
+  ) {
+    const cut = Math.min(24, width * 0.14);
+    return {
+      tag: 'path',
+      attrs: {
+        d: `M ${cut} 0 H ${width - cut} L ${width} ${height / 2} L ${width - cut} ${height} H ${cut} L 0 ${height / 2} Z`,
+      },
+    };
+  }
+
+  if (normalized === 'return' || normalized === 'throw') {
+    const slant = Math.min(20, width * 0.12);
+    return {
+      tag: 'path',
+      attrs: { d: `M ${slant} 0 H ${width} L ${width - slant} ${height} H 0 Z` },
+    };
+  }
+
+  if (normalized === 'call' || normalized === 'await') {
+    const inset = Math.min(16, width * 0.08);
+    return {
+      tag: 'path',
+      attrs: {
+        d: `M 0 0 H ${width} V ${height} H 0 Z M ${inset} 0 V ${height} M ${width - inset} 0 V ${height}`,
+      },
+    };
+  }
+
+  if (normalized === 'merge') {
+    return {
+      tag: 'ellipse',
+      attrs: { cx: width / 2, cy: height / 2, rx: width / 2, ry: height / 2 },
+    };
+  }
+
+  const radius = normalized === 'unmodeled' || normalized === 'unreachable' ? 0 : 4;
+  return { tag: 'rect', attrs: { width, height, rx: radius, ry: radius } };
+}
+
+/**
  * @param {{
  *   svg: SVGSVGElement,
  *   onSelect: (nodeId: string, node: DtoNode) => void,
@@ -78,33 +147,136 @@ export function createSvgRenderer(options) {
     }
   }
 
-  function nodePoint(node, side) {
-    if (side === 'out') {
+  function edgeAnchors(source, target) {
+    const sx = source.position.x + source.position.width / 2;
+    const sy = source.position.y + source.position.height / 2;
+    const tx = target.position.x + target.position.width / 2;
+    const ty = target.position.y + target.position.height / 2;
+    const dx = tx - sx;
+    const dy = ty - sy;
+
+    if (target.position.y > source.position.y + 10) {
       return {
-        x: node.position.x + node.position.width,
-        y: node.position.y + node.position.height / 2,
+        mode: 'down',
+        from: {
+          x: source.position.x + source.position.width / 2,
+          y: source.position.y + source.position.height,
+        },
+        to: {
+          x: target.position.x + target.position.width / 2,
+          y: target.position.y,
+        },
       };
     }
-    return { x: node.position.x, y: node.position.y + node.position.height / 2 };
+
+    if (Math.abs(dy) >= Math.abs(dx) && target.position.y < source.position.y - 10) {
+      return {
+        mode: 'back-up',
+        from: {
+          x: source.position.x,
+          y: source.position.y + source.position.height / 2,
+        },
+        to: {
+          x: target.position.x,
+          y: target.position.y + target.position.height / 2,
+        },
+      };
+    }
+
+    if (target.position.x >= source.position.x) {
+      return {
+        mode: 'right',
+        from: {
+          x: source.position.x + source.position.width,
+          y: source.position.y + source.position.height / 2,
+        },
+        to: {
+          x: target.position.x,
+          y: target.position.y + target.position.height / 2,
+        },
+      };
+    }
+
+    return {
+      mode: 'back-left',
+      from: {
+        x: source.position.x + source.position.width / 2,
+        y: source.position.y,
+      },
+      to: {
+        x: target.position.x + target.position.width / 2,
+        y: target.position.y,
+      },
+    };
   }
 
-  function edgePath(source, target) {
+  function edgeGeometry(source, target) {
     if (source.id === target.id) {
       const { x, y, width, height } = source.position;
       const cx = x + width / 2;
       const startY = y - 2;
-      return `M ${cx} ${startY} C ${cx - 46} ${y - 60}, ${cx + 46} ${y - 60}, ${cx} ${y + height + 2}`;
+      return {
+        path: `M ${cx} ${startY} C ${cx - 46} ${y - 60}, ${cx + 46} ${y - 60}, ${cx} ${y + height + 2}`,
+        labelPos: { x: cx, y: y - 48 },
+      };
     }
-    const from = nodePoint(source, 'out');
-    const to = nodePoint(target, 'in');
+    const anchor = edgeAnchors(source, target);
+    const { from, to, mode } = anchor;
+
+    if (mode === 'down') {
+      const dy = Math.max(16, to.y - from.y);
+      const bend = Math.max(24, dy / 2);
+      return {
+        path: `M ${from.x} ${from.y} C ${from.x} ${from.y + bend}, ${to.x} ${to.y - bend}, ${to.x} ${to.y}`,
+        labelPos: { x: (from.x + to.x) / 2 + (to.x < from.x ? -16 : 16), y: (from.y + to.y) / 2 },
+      };
+    }
+
+    if (mode === 'back-up') {
+      const minX = Math.min(from.x, to.x) - 52;
+      return {
+        path: `M ${from.x} ${from.y} C ${minX} ${from.y}, ${minX} ${to.y}, ${to.x} ${to.y}`,
+        labelPos: { x: minX + 12, y: (from.y + to.y) / 2 },
+      };
+    }
+
+    if (mode === 'back-left') {
+      const minY = Math.min(from.y, to.y) - 42;
+      return {
+        path: `M ${from.x} ${from.y} C ${from.x} ${minY}, ${to.x} ${minY}, ${to.x} ${to.y}`,
+        labelPos: { x: (from.x + to.x) / 2, y: minY + 12 },
+      };
+    }
+
     const bend = Math.max(36, Math.abs(to.x - from.x) / 2);
-    return `M ${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${to.x - bend} ${to.y}, ${to.x} ${to.y}`;
+    return {
+      path: `M ${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${to.x - bend} ${to.y}, ${to.x} ${to.y}`,
+      labelPos: { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 - 6 },
+    };
   }
 
   function clear() {
     if (viewport) {
       svg.removeChild(viewport);
     }
+    const existingDefs = svg.querySelector('defs');
+    if (existingDefs) {
+      svg.removeChild(existingDefs);
+    }
+    const defs = svgEl('defs');
+    const marker = svgEl('marker', {
+      id: 'cf-arrow',
+      viewBox: '0 0 10 10',
+      refX: 8,
+      refY: 5,
+      markerWidth: 6,
+      markerHeight: 6,
+      orient: 'auto-start-reverse',
+    });
+    marker.appendChild(svgEl('path', { d: 'M 0 1 L 8 5 L 0 9 z', fill: 'currentColor' }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
     viewport = svgEl('g', { class: 'cf-viewport' });
     svg.appendChild(viewport);
     nodeElements.clear();
@@ -161,6 +333,20 @@ export function createSvgRenderer(options) {
   }
 
   /**
+   * @param {SVGGElement} group
+   * @param {DtoNode} node
+   */
+  function appendNodeShape(group, node) {
+    const outline = shapeOutline(node.kind, node.position.width, node.position.height);
+    group.appendChild(
+      svgEl(outline.tag, {
+        class: 'cf-node-box cf-node-shape',
+        ...outline.attrs,
+      }),
+    );
+  }
+
+  /**
    * @param {GraphDto} nextDto
    */
   function render(nextDto) {
@@ -178,12 +364,14 @@ export function createSvgRenderer(options) {
       if (!source || !target) {
         continue;
       }
+      const geom = edgeGeometry(source, target);
       const path = /** @type {SVGPathElement} */ (
         svgEl('path', {
           class: `cf-edge cf-edge--${edge.status} cf-edge--kind-${edge.kind ?? edge.type}${
             edge.isCycle ? ' cf-edge--cycle' : ''
           }${edge.dimmed ? ' is-dimmed' : ''}`,
-          d: edgePath(source, target),
+          d: geom.path,
+          'marker-end': 'url(#cf-arrow)',
           'data-from': edge.from,
           'data-to': edge.to,
           ...(edge.dash ? { 'stroke-dasharray': edge.dash } : {}),
