@@ -376,3 +376,15 @@ test('a non-JavaScript path falls through to the registry', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.code, 'E_UNSUPPORTED');
 });
+
+test('an absolute Windows input path is normalized to workspace-relative CSR without drops', async () => {
+  const fs = createFileSystem({
+    'D:/w/js/app.js': '(function () { function helper(x) { return x * 2; } return helper(3); })();',
+  });
+  const service = createService(fs);
+  const result = await service.analyze(baseInput('d:\\w\\js\\app.js'));
+  assert.equal(result.ok, true);
+  assert.equal(result.dropped, undefined);
+  assert.equal(result.run.files[0].path, 'js/app.js');
+  assert.ok(result.run.symbols.some((symbol) => symbol.kind === 'function' && symbol.name === 'helper'));
+});
