@@ -48,14 +48,76 @@ export const GRAPH_DTO_VERSION = 1;
  * @property {{statuses: string[], kinds: string[]}} legend
  */
 
+const STRUCTURAL_KINDS = new Set([
+  'file',
+  'module',
+  'namespace',
+  'class',
+  'struct',
+  'interface',
+  'enum',
+  'function',
+  'method',
+]);
+
+/**
+ * Rank nodes when capping an oversized overview graph so the scoped file and
+ * high-level structural symbols are kept ahead of leaf locals/parameters.
+ *
+ * @param {Graph['nodes'][number]} node
+ * @param {string|null|undefined} priorityFileId
+ * @returns {number}
+ */
+function nodePriority(node, priorityFileId) {
+  let score = 0;
+  if (priorityFileId && node.fileId === priorityFileId) {
+    score -= 100;
+  }
+  if (STRUCTURAL_KINDS.has(node.kind)) {
+    score -= 20;
+  }
+  if (!node.external) {
+    score -= 5;
+  }
+  return score;
+}
+
 /**
  * @param {Graph} graph
+ * @param {{maxNodes?: number, priorityFileId?: string|null}} [options]
  * @returns {GraphDto}
  */
-export function toDto(graph) {
-  const layout = computeLayout(graph);
+export function toDto(graph, options = {}) {
+  const maxNodes =
+    typeof options.maxNodes === 'number' && Number.isFinite(options.maxNodes) && options.maxNodes > 0
+      ? Math.floor(options.maxNodes)
+      : null;
 
-  const nodes = graph.nodes.map((node) => ({
+  let workingGraph = graph;
+  const extraDegradations = [];
+
+  if (maxNodes !== null && graph.nodes.length > maxNodes) {
+    const ranked = [...graph.nodes].sort((left, right) => {
+      const diff =
+        nodePriority(left, options.priorityFileId) - nodePriority(right, options.priorityFileId);
+      return diff !== 0 ? diff : left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+    });
+    const keptNodes = ranked.slice(0, maxNodes).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const keptIds = new Set(keptNodes.map((node) => node.id));
+    const keptEdges = graph.edges.filter((edge) => keptIds.has(edge.from) && keptIds.has(edge.to));
+    workingGraph = {
+      ...graph,
+      nodes: keptNodes,
+      edges: keptEdges,
+    };
+    extraDegradations.push(
+      `Overview graph capped to ${keptNodes.length} of ${graph.nodes.length} nodes for display.`,
+    );
+  }
+
+  const layout = computeLayout(workingGraph);
+
+  const nodes = workingGraph.nodes.map((node) => ({
     id: node.id,
     label: node.label,
     kind: node.kind,
@@ -77,13 +139,13 @@ export function toDto(graph) {
 
   return {
     dtoVersion: GRAPH_DTO_VERSION,
-    graphId: graph.graphId,
-    runId: graph.runId,
-    language: graph.language,
-    adapterId: graph.adapterId,
-    completeness: graph.completeness,
+    graphId: workingGraph.graphId,
+    runId: workingGraph.runId,
+    language: workingGraph.language,
+    adapterId: workingGraph.adapterId,
+    completeness: workingGraph.completeness,
     nodes,
-    edges: graph.edges.map((edge) => {
+    edges: workingGraph.edges.map((edge) => {
       /** @type {{id: string, from: string, to: string, type: string, status: string, label: string, reasonCode?: string}} */
       const dtoEdge = {
         id: edge.id,
@@ -100,8 +162,8 @@ export function toDto(graph) {
       }
       return dtoEdge;
     }),
-    diagnostics: graph.diagnostics,
-    degradations: graph.degradations,
+    diagnostics: workingGraph.diagnostics,
+    degradations: [...workingGraph.degradations, ...extraDegradations],
     extent: { width: layout.width, height: layout.height },
     legend: { statuses, kinds },
   };
