@@ -97,8 +97,7 @@ test('10,000-file workspace overview aggregates into <= 60 clusters in < 2s with
   assert.equal(moduleView.nodes.length, 10);
 });
 
-test('L2 dense file symbol clustering, L4 1,500-node CFG construct clustering, and L5 statement view with DFG overlay slot (P10-09, P10-10)', () => {
-  // L2 File with 160 symbols (> 120 cap) groups by kind
+test('L2 dense file symbol clustering, L4 1,500-node CFG construct clustering, and L5 statement view with DFG overlay slot (P10-09, P10-10)', () => {  // L2 File with 160 symbols (> 120 cap) groups by kind
   const denseSymbols = [
     ...Array.from({ length: 100 }, (_, i) => ({
       symbolId: `sym:fn_${i}`,
@@ -163,4 +162,31 @@ test('L2 dense file symbol clustering, L4 1,500-node CFG construct clustering, a
   });
   assert.equal(stmtView.nodes.length, 50);
   assert.equal(stmtView.overlays.dfg.length, 1);
+});
+
+test('unindexed runs fall back to run files and L1 file nodes keep a valid fileId scope', () => {
+  const files = [{ fileId: 'file:src/a.js', path: 'src/a.js', language: 'javascript' }];
+  const symbols = [
+    { symbolId: 'sym:a', name: 'a', qualifiedName: 'a', kind: 'function', fileId: 'file:src/a.js' },
+  ];
+  const query = {
+    allSymbols: () => ({ ok: true, value: symbols }),
+    allRelationships: () => ({ ok: true, value: [] }),
+  };
+  const emptyIndex = {
+    filesUnder: () => ({ items: [] }),
+    allSymbols: () => [],
+    allRelationships: () => [],
+  };
+
+  const overview = buildWorkspaceOverview({ index: emptyIndex, query, files });
+  assert.equal(overview.totalFiles, 1);
+  assert.equal(overview.nodes.length, 1);
+  assert.equal(overview.nodes[0].fileCount, 1);
+
+  const moduleView = buildModuleView({ modulePrefix: 'src', index: emptyIndex, query, files });
+  const fileNode = moduleView.nodes.find((node) => node.kind === 'file');
+  assert.ok(fileNode);
+  assert.equal(fileNode.scopeId, 'file:src/a.js');
+  assert.equal(fileNode.expandable, true);
 });

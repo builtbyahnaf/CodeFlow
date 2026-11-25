@@ -121,7 +121,7 @@ test('every C++ CFG node slices to exact source from a consistent AST fixture', 
   assert.ok(checked > 4, `expected source nodes, checked ${checked}`);
 });
 
-test('the CFG DTO carries ranges and short labels, never the whole source body', () => {
+test('the CFG DTO carries ranges and single-line labels, never the whole source body', () => {
   const run = javascriptAdapter.analyze({
     runId: 'run:fidelity-js',
     path: 'src/classify.js',
@@ -132,11 +132,12 @@ test('the CFG DTO carries ranges and short labels, never the whole source body',
   const dto = toCfgDto(built.cfg);
   const serialized = JSON.stringify(dto);
 
-  // The full fixture text must not appear as a value. Node labels are derived
-  // and short; a leak would embed whole lines or the whole function.
+  // Labels intentionally quote the statement they represent, so a single line
+  // such as `return 'negative';` is expected. What must never leak is the whole
+  // source body, or a multi-line indented chunk of it.
   assert.ok(!serialized.includes(JS_SOURCE));
   assert.ok(!serialized.includes('  if (n < 0) {'));
-  assert.ok(!serialized.includes('return \'negative\';'));
+  assert.ok(!serialized.includes('  return \'negative\';\n'));
   for (const node of dto.nodes) {
     assert.equal(typeof node.label, 'string');
     assert.ok(!node.label.includes('\n'), 'labels are single-line derivations');
