@@ -801,6 +801,13 @@ test('index.status returns index stats and health, and indexed indexProvider upg
   assert.equal(zoomOpened.kind, 'zoom.data');
   assert.equal(zoomOpened.payload.dto.dtoKind, 'semantic_zoom');
   assert.equal(zoomOpened.payload.dto.level, 'workspace');
+  assert.ok(zoomOpened.payload.dto.nodes.length > 0);
+  for (const node of zoomOpened.payload.dto.nodes) {
+    assert.ok(Number.isFinite(node.position?.x), 'zoom nodes need renderer-ready positions');
+    assert.ok(Number.isFinite(node.position?.y));
+    assert.ok(node.position.width > 0);
+    assert.ok(node.position.height > 0);
+  }
 
   const zoomDescended = await panel.request('zoom.descend', {
     level: 'module',
@@ -851,4 +858,28 @@ test('dfg.load, dfg.trace, and dfg.slice respond via the protocol', async () => 
   const sliceRes = await panel.request('dfg.slice', { nodeId: 'unknown', direction: 'backward' });
   assert.equal(sliceRes.kind, 'dfg.data');
   assert.equal(sliceRes.payload.ok, true);
+});
+
+test('graph.load caps large runs safely instead of failing with oversized message', async () => {
+  const sourceLines = Array.from(
+    { length: 600 },
+    (_, i) => `function fn_${i}(x) { const v_${i} = x + ${i}; return v_${i}; }`,
+  ).join('\n');
+  const run = javascriptAdapter.analyze({
+    runId: 'run:large_graph_load',
+    path: 'src/large.js',
+    text: sourceLines,
+  });
+  const { wire } = createHarness(async () => ({ ok: true, run }));
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const response = await panel.requestRaw('graph.load', { demo: true });
+  assert.notEqual(response.kind, 'protocol.error');
+  assert.equal(response.kind, 'graph.data');
+  assert.ok(response.payload.dto.nodes.length <= 400);
+  assert.ok(
+    response.payload.dto.degradations.some((entry) => /capped/i.test(entry)),
+    'capped overview graph should report a degradation notice',
+  );
 });
