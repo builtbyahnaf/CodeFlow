@@ -8,9 +8,13 @@
 import hljs from 'highlight.js/lib/core';
 import cpp from 'highlight.js/lib/languages/cpp';
 import javascript from 'highlight.js/lib/languages/javascript';
+import java from 'highlight.js/lib/languages/java';
+import python from 'highlight.js/lib/languages/python';
 
 hljs.registerLanguage('cpp', cpp);
 hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('java', java);
+hljs.registerLanguage('python', python);
 
 /**
  * @typedef {{text: string, className: string}} PreviewToken
@@ -21,12 +25,52 @@ hljs.registerLanguage('javascript', javascript);
  * @returns {{language: string|null, degraded: boolean}}
  */
 export function resolveLanguage(languageId) {
-  const id = String(languageId ?? '').toLowerCase();
-  if (id === 'cpp' || id === 'c++' || id === 'c' || id === 'objective-c++') {
+  const raw = String(languageId ?? '').toLowerCase().trim();
+  const clean = raw.replace(/^file:\/\//, '').replace(/^file:/, '');
+  const ext = clean.includes('.') ? clean.slice(clean.lastIndexOf('.')) : '';
+
+  if (
+    clean === 'cpp' ||
+    clean === 'c++' ||
+    clean === 'c' ||
+    clean === 'objective-c' ||
+    clean === 'objective-c++' ||
+    clean === 'cuda-cpp' ||
+    ext === '.cpp' ||
+    ext === '.cc' ||
+    ext === '.cxx' ||
+    ext === '.c++' ||
+    ext === '.c' ||
+    ext === '.h' ||
+    ext === '.hpp' ||
+    ext === '.hh' ||
+    ext === '.hxx'
+  ) {
     return { language: 'cpp', degraded: false };
   }
-  if (id === 'javascript' || id === 'js' || id === 'mjs' || id === 'cjs') {
+  if (
+    clean === 'javascript' ||
+    clean === 'js' ||
+    clean === 'mjs' ||
+    clean === 'cjs' ||
+    clean === 'jsx' ||
+    clean === 'typescript' ||
+    clean === 'ts' ||
+    clean === 'tsx' ||
+    ext === '.js' ||
+    ext === '.mjs' ||
+    ext === '.cjs' ||
+    ext === '.jsx' ||
+    ext === '.ts' ||
+    ext === '.tsx'
+  ) {
     return { language: 'javascript', degraded: false };
+  }
+  if (clean === 'java' || ext === '.java') {
+    return { language: 'java', degraded: false };
+  }
+  if (clean === 'python' || clean === 'py' || ext === '.py') {
+    return { language: 'python', degraded: false };
   }
   return { language: null, degraded: true };
 }
