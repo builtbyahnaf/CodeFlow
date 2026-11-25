@@ -1291,6 +1291,7 @@ function handleGraph(payload) {
   empty.hidden = true;
   renderer.render(dto);
   renderLegend(dto);
+  renderShapeLegend(dto);
   clearDetail();
   void validateGraph(dto);
   void loadFunctionSummary(dto);
@@ -1319,7 +1320,11 @@ function handleGraph(payload) {
       ? entry
       : `${entry.severity === 'info' ? '' : `${entry.severity}: `}${entry.message}`,
   );
-  setBanner(messages.length > 0 ? messages.join(' · ') : '', false);
+  if (messages.length > 3) {
+    setBanner(`${messages.slice(0, 3).join(' · ')} (+${messages.length - 3} more)`, false);
+  } else {
+    setBanner(messages.length > 0 ? messages.join(' · ') : '', false);
+  }
 }
 
 bridge.on('protocol.error', (payload) => {
@@ -1395,9 +1400,18 @@ preview.addEventListener('keydown', (event) => {
   }
 });
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !preview.hidden) {
-    previewController.dismiss();
-    hidePreview();
+  if (event.key === 'Escape') {
+    if (!preview.hidden) {
+      previewController.dismiss();
+      hidePreview();
+    } else if (document.body.classList.contains('cf-full-window')) {
+      document.body.classList.remove('cf-full-window');
+      if (fullWindowButton) {
+        fullWindowButton.textContent = '⛶ Full Window';
+        fullWindowButton.setAttribute('aria-pressed', 'false');
+      }
+      window.requestAnimationFrame(() => renderer.zoomToFit());
+    }
   }
 });
 
@@ -1414,7 +1428,9 @@ function updateZoomBar(dto) {
   }
   zoomBar.hidden = false;
   if (zoomLevelBadge) {
-    zoomLevelBadge.textContent = dto.level ? `${dto.level}` : 'Semantic Zoom';
+    zoomLevelBadge.textContent = dto.level
+      ? (LEVEL_LABELS[dto.level] ?? String(dto.level))
+      : 'Semantic Zoom';
   }
   if (zoomBreadcrumbs && Array.isArray(dto.breadcrumbs)) {
     zoomBreadcrumbs.replaceChildren();
@@ -1458,12 +1474,13 @@ async function descendSemanticZoom(nodeId, node = nodeById(nodeId)) {
     return;
   }
   const currentLevel = currentDto?.level;
-  let nextLevel = 'L1_MODULE';
-  if (currentLevel === 'L0_WORKSPACE') nextLevel = 'L1_MODULE';
-  else if (currentLevel === 'L1_MODULE') nextLevel = 'L2_FILE';
-  else if (currentLevel === 'L2_FILE') nextLevel = 'L3_SYMBOL';
-  else if (currentLevel === 'L3_SYMBOL') nextLevel = 'L4_FUNCTION';
-  else if (currentLevel === 'L4_FUNCTION') nextLevel = 'L5_STATEMENT';
+  const currentIndex = LEVEL_ORDER.indexOf(String(currentLevel ?? ''));
+  const nextLevel =
+    currentIndex >= 0 ? LEVEL_ORDER[currentIndex + 1] : LEVEL_ORDER[1];
+  if (!nextLevel) {
+    setStatus('Already at the most detailed level.');
+    return;
+  }
 
   try {
     const res = await bridge.request('zoom.descend', {
@@ -1546,6 +1563,7 @@ async function loadGraph() {
       return;
     }
   }
+  let fallbackReason = null;
   try {
     const response = await bridge.request('cfg.functions', {});
     const list = Array.isArray(response.payload.functions) ? response.payload.functions : [];
@@ -1563,15 +1581,18 @@ async function loadGraph() {
         return;
       }
     }
-  } catch {
+  } catch (error) {
     // The CFG capability may be absent (for example the built-in demo run).
-    // Falling back to the call graph keeps the panel useful and honest.
+    // Falling back to the overview graph keeps the panel useful and honest.
+    fallbackReason = error;
   }
   try {
     const response = await bridge.request('graph.load', { demo: true });
     handleGraph(response.payload);
   } catch (error) {
-    setBanner(`Could not load graph: ${error?.message ?? String(error)}`, true);
+    const detail = error?.message ?? String(error);
+    const prefix = fallbackReason?.message ? `${fallbackReason.message}; ` : '';
+    setBanner(`Could not load graph: ${prefix}${detail}`, true);
     setStatus('Load failed');
     empty.hidden = false;
   }
@@ -1579,6 +1600,17 @@ async function loadGraph() {
 
 reloadButton.addEventListener('click', () => {
   void loadGraph();
+});
+
+zoomFitButton?.addEventListener('click', () => {
+  renderer.zoomToFit();
+});
+
+fullWindowButton?.addEventListener('click', () => {
+  const active = document.body.classList.toggle('cf-full-window');
+  fullWindowButton.textContent = active ? '⛶ Restore' : '⛶ Full Window';
+  fullWindowButton.setAttribute('aria-pressed', String(active));
+  window.requestAnimationFrame(() => renderer.zoomToFit());
 });
 
 functionPicker?.addEventListener('change', () => {
