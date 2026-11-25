@@ -12,7 +12,7 @@
 export const PROTOCOL_VERSION = 1;
 
 /** Hard ceiling on a serialized message. Larger messages are rejected, never truncated. */
-export const MAX_PAYLOAD_BYTES = 1_000_000;
+export const MAX_PAYLOAD_BYTES = 8_000_000;
 
 /** `domain.action` in lower case, at least two segments. */
 export const KIND_PATTERN = /^[a-z]+(\.[a-z]+)+$/;
