@@ -310,7 +310,6 @@ export function parseCppSource(input) {
     };
   };
   const allocator = createIdentityAllocator({ language });
-  const relAllocator = createRelationshipAllocator();
 
   const fileSymbolId = allocator.symbol({
     path: filePath,
@@ -331,10 +330,15 @@ export function parseCppSource(input) {
   const symbols = [fileSymbol];
   const controlConstructs = [];
   const relationships = [];
+  const dataFacts = [];
   const functionSymbolsByName = new Map();
   const masked = maskCommentsAndStrings(text);
-  const fnRegex = /(?:^|[;}{\n])\s*([a-zA-Z_~][a-zA-Z0-9_:<>&*,\s]*?)\s+([a-zA-Z_~][a-zA-Z0-9_]*)\s*\(/g;
+
+  // Match function definitions including class members, operators, templates
+  const fnRegex =
+    /(?:^|[;}{\n])\s*(?:template\s*<[^>]*>\s*)?(?:(?:static|inline|virtual|explicit|constexpr|const|volatile|friend)\s+)*([a-zA-Z_~][a-zA-Z0-9_:<>&*,\s]*?)\s+((?:operator\s*(?:[+\-*/%^&|~!=<>]+|\[\]|\(\)|->)+|[a-zA-Z_~][a-zA-Z0-9_:]*))\s*\(/g;
   let match;
+
   while ((match = fnRegex.exec(masked)) !== null) {
     const fnName = match[2];
     if (CPP_KEYWORDS.has(fnName)) {
@@ -345,11 +349,6 @@ export function parseCppSource(input) {
     const parenClose = findMatchingParen(masked, parenOpen);
     if (parenClose === -1) {
       continue;
-    }
-
-    let braceIndex = parenClose + 1;
-    while (braceIndex < masked.length && /\s/.test(masked[braceIndex])) {
-      braceIndex += 1;
     }
 
     const afterParen = masked.slice(parenClose + 1, Math.min(masked.length, parenClose + 120));
@@ -363,6 +362,7 @@ export function parseCppSource(input) {
     if (closeBrace === -1) {
       continue;
     }
+
     const declStart = match.index + (match[0].indexOf(match[1]) || 0);
     const declRange = rangeOf(declStart, closeBrace + 1);
 
