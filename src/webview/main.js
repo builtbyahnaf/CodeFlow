@@ -8,7 +8,8 @@
 import { createBridge } from '../core/protocol/bridge.js';
 import { DIRECTIONS, PROTOCOL_VERSION } from '../core/protocol/envelope.js';
 import { validateDto } from '../core/graph/dto.js';
-import { createSvgRenderer } from '../visualization/renderer/svgRenderer.js';
+import { createSvgRenderer, shapeOutline } from '../visualization/renderer/svgRenderer.js';
+import { LEVEL_LABELS, LEVEL_ORDER } from '../core/graph/zoom/levels.js';
 import { buildPreviewModel } from '../core/source/presentation.js';
 import { resolvePreviewSettings } from '../core/source/settings.js';
 import { clampExplanationDepth, resolveExplanationSettings } from '../core/explanation/settings.js';
@@ -24,7 +25,19 @@ const banner = /** @type {HTMLElement} */ (document.getElementById('cf-banner'))
 const empty = /** @type {HTMLElement} */ (document.getElementById('cf-empty'));
 const detailBody = /** @type {HTMLElement} */ (document.getElementById('cf-detail-body'));
 const legend = /** @type {HTMLElement} */ (document.getElementById('cf-legend'));
+const shapeLegend = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-shape-legend')
+);
+const shapeLegendList = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-shape-legend-list')
+);
 const reloadButton = /** @type {HTMLButtonElement} */ (document.getElementById('cf-refresh'));
+const fullWindowButton = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-full-window')
+);
+const zoomFitButton = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-zoom-fit')
+);
 const functionPicker = /** @type {HTMLSelectElement|null} */ (
   document.getElementById('cf-function')
 );
@@ -164,6 +177,9 @@ const renderer = createSvgRenderer({
   },
   onNavigate: (nodeId, node, trigger) => {
     if (currentDto?.dtoKind === 'semantic_zoom') {
+      if (node?.expandable === false) {
+        return;
+      }
       void descendSemanticZoom(nodeId, node);
       return;
     }
@@ -236,13 +252,151 @@ function setStatus(text) {
   status.textContent = text;
 }
 
+function renderGraphOverview() {
+  detailBody.replaceChildren();
+  if (!currentDto) {
+    const paragraph = document.createElement('p');
+    paragraph.className = 'cf-muted';
+    paragraph.textContent = 'Select a node to inspect it.';
+    detailBody.appendChild(paragraph);
+    return;
+  }
+
+  if (currentDto.dtoKind === 'cfg' && currentDto.function) {
+    const fn = currentDto.function;
+    const review = document.createElement('div');
+    review.className = 'cf-review-section';
+
+    if (fn.signature) {
+      const sigHeading = document.createElement('h3');
+      sigHeading.className = 'cf-detail-title';
+      sigHeading.textContent = 'Signature';
+      const sigBox = document.createElement('div');
+      sigBox.className = 'cf-signature-box';
+      sigBox.textContent = fn.signature;
+      review.append(sigHeading, sigBox);
+    }
+
+    const nodes = Array.isArray(currentDto.nodes) ? currentDto.nodes : [];
+    const branchCount = nodes.filter(
+      (n) => n.kind === 'condition' || n.kind === 'multiway',
+    ).length;
+    const loopCount = nodes.filter((n) => n.kind === 'loop_header').length;
+    const callCount = nodes.filter((n) => n.kind === 'call').length;
+    const stmtCount = nodes.filter((n) => n.kind === 'statement').length;
+
+    const statsGrid = document.createElement('div');
+    statsGrid.className = 'cf-review-stats';
+    for (const [val, label] of [
+      [branchCount, 'Decisions'],
+      [loopCount, 'Loops'],
+      [callCount, 'Calls'],
+      [stmtCount, 'Statements'],
+    ]) {
+      const card = document.createElement('div');
+      card.className = 'cf-stat-card';
+      const valEl = document.createElement('div');
+      valEl.className = 'cf-stat-value';
+      valEl.textContent = String(val);
+      const lblEl = document.createElement('div');
+      lblEl.className = 'cf-stat-label';
+      lblEl.textContent = String(label);
+      card.append(valEl, lblEl);
+      statsGrid.appendChild(card);
+    }
+    review.appendChild(statsGrid);
+
+    const params = Array.isArray(fn.parameters) ? fn.parameters : [];
+    const paramHeading = document.createElement('h3');
+    paramHeading.className = 'cf-detail-title';
+    paramHeading.textContent = `Inputs / Parameters (${params.length})`;
+    review.appendChild(paramHeading);
+
+    if (params.length > 0) {
+      const paramList = document.createElement('ul');
+      paramList.className = 'cf-review-list';
+      for (const p of params) {
+        const li = document.createElement('li');
+        li.className = 'cf-review-item';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'cf-review-name';
+        nameSpan.textContent = p.name || '(unnamed)';
+        const typeSpan = document.createElement('span');
+        typeSpan.className = 'cf-review-type';
+        typeSpan.textContent = `${p.type || 'auto'}${p.defaultValue ? ` = ${p.defaultValue}` : ''}`;
+        li.append(nameSpan, typeSpan);
+        paramList.appendChild(li);
+      }
+      review.appendChild(paramList);
+    } else {
+      const none = document.createElement('p');
+      none.className = 'cf-muted';
+      none.textContent = 'No input parameters.';
+      review.appendChild(none);
+    }
+
+    const retHeading = document.createElement('h3');
+    retHeading.className = 'cf-detail-title';
+    retHeading.textContent = 'Emitted Result / Returns';
+    review.appendChild(retHeading);
+
+    const dl = document.createElement('dl');
+    dl.append(...detailPair('return type', fn.returnType || 'inferred'));
+    const returns = Array.isArray(fn.returns) && fn.returns.length > 0 ? fn.returns : [];
+    if (returns.length > 0) {
+      dl.append(...detailPair('emits', returns.join(' | ')));
+    }
+    review.appendChild(dl);
+
+    const dataFlows = Array.isArray(fn.dataFlows) ? fn.dataFlows : [];
+    if (dataFlows.length > 0) {
+      const dfHeading = document.createElement('h3');
+      dfHeading.className = 'cf-detail-title';
+      dfHeading.textContent = `External & Call Data Usage (${dataFlows.length})`;
+      review.appendChild(dfHeading);
+
+      const dfList = document.createElement('ul');
+      dfList.className = 'cf-review-list';
+      for (const df of dataFlows) {
+        const li = document.createElement('li');
+        li.className = 'cf-review-item';
+        const lhs = document.createElement('span');
+        lhs.className = 'cf-review-name';
+        lhs.textContent = df.target;
+        const rhs = document.createElement('span');
+        rhs.className = 'cf-review-type';
+        rhs.textContent = df.sourceCall ? `<- ${df.sourceCall}()` : df.expression;
+        li.append(lhs, rhs);
+        dfList.appendChild(li);
+      }
+      review.appendChild(dfList);
+    }
+
+    const hint = document.createElement('p');
+    hint.className = 'cf-muted';
+    hint.textContent = 'Click any node to inspect flow paths, or hover to preview highlighted code.';
+    review.appendChild(hint);
+
+    detailBody.appendChild(review);
+    return;
+  }
+
+  const dl = document.createElement('dl');
+  dl.append(...detailPair('view', currentDto.dtoKind || 'graph'));
+  dl.append(...detailPair('nodes', String(currentDto.nodes?.length ?? 0)));
+  dl.append(...detailPair('edges', String(currentDto.edges?.length ?? 0)));
+  if (currentDto.function?.name) {
+    dl.append(...detailPair('symbol', currentDto.function.name));
+  }
+  const hint = document.createElement('p');
+  hint.className = 'cf-muted';
+  hint.textContent = 'Select any node to inspect details and code preview.';
+  detailBody.append(dl, hint);
+}
+
 function clearDetail() {
   activeNodeId = null;
-  detailBody.replaceChildren();
-  const paragraph = document.createElement('p');
-  paragraph.className = 'cf-muted';
-  paragraph.textContent = 'Select a node to inspect it.';
-  detailBody.appendChild(paragraph);
+  renderGraphOverview();
   clearExplanation();
 }
 
@@ -473,6 +627,15 @@ function showNodeDetails(nodeId, node) {
   }
   if (node.reasonCode) {
     list.append(...detailPair('reason', node.reasonCode));
+  }
+  if (node.details?.assignmentTarget) {
+    list.append(...detailPair('assigns', node.details.assignmentTarget));
+  }
+  if (node.details?.calleeName) {
+    list.append(...detailPair('calls target', node.details.calleeName));
+  }
+  if (node.details?.returnExpression) {
+    list.append(...detailPair('emits', node.details.returnExpression));
   }
   if (Array.isArray(node.calls) && node.calls.length > 0) {
     list.append(
@@ -734,7 +897,9 @@ function renderPreviewCard(node, slice) {
 
   if (!model.synthetic && !model.empty) {
     const language =
-      typeof slice?.languageId === 'string' ? slice.languageId : (node.range?.fileId ?? '');
+      typeof slice?.languageId === 'string' && slice.languageId
+        ? slice.languageId
+        : currentDto?.language || slice?.path || node.range?.fileId || '';
     const rendered = settings.syntaxHighlighting
       ? highlightLines(model.text, language)
       : highlightLines(model.text, '');
@@ -964,6 +1129,87 @@ function markStaleFiles(fileIds) {
     `Source changed for ${stale.length} node${stale.length === 1 ? '' : 's'}. Previews are stale; re-analyze before trusting them.`,
     false,
   );
+}
+
+const SHAPE_LEGEND_ITEMS = [
+  { kinds: ['entry', 'exit'], sample: 'entry', label: 'Start / end' },
+  { kinds: ['condition'], sample: 'condition', label: 'Decision' },
+  { kinds: ['multiway'], sample: 'multiway', label: 'Switch / multi-way' },
+  { kinds: ['loop_header', 'loop_latch'], sample: 'loop_header', label: 'Loop' },
+  { kinds: ['call', 'await'], sample: 'call', label: 'Call / await' },
+  { kinds: ['return', 'throw'], sample: 'return', label: 'Return / throw' },
+  { kinds: ['merge'], sample: 'merge', label: 'Merge' },
+  {
+    kinds: [
+      'statement',
+      'loop_body_entry',
+      'catch_entry',
+      'finally_entry',
+      'break',
+      'continue',
+      'unreachable',
+      'unmodeled',
+    ],
+    sample: 'statement',
+    label: 'Statement',
+  },
+];
+
+/**
+ * @param {import('../core/graph/dto.js').GraphDto} dto
+ */
+function renderShapeLegend(dto) {
+  if (!shapeLegend || !shapeLegendList) {
+    return;
+  }
+  if (dto?.dtoKind !== 'cfg') {
+    shapeLegend.hidden = true;
+    shapeLegendList.replaceChildren();
+    return;
+  }
+
+  const present = new Set((dto.nodes ?? []).map((node) => node.kind));
+  const items = SHAPE_LEGEND_ITEMS.filter((item) =>
+    item.kinds.some((kind) => present.has(kind)),
+  );
+  shapeLegendList.replaceChildren();
+  if (items.length === 0) {
+    shapeLegend.hidden = true;
+    return;
+  }
+
+  for (const item of items) {
+    const li = document.createElement('li');
+    li.className = 'cf-shape-legend-item';
+    li.append(createShapeGlyph(item.sample), document.createTextNode(item.label));
+    shapeLegendList.appendChild(li);
+  }
+  shapeLegend.hidden = false;
+}
+
+/**
+ * Miniature SVG glyph for the shape legend. It reuses the renderer's outline
+ * so the footnote can never drift from what the graph draws.
+ *
+ * @param {string} kind
+ * @returns {SVGSVGElement}
+ */
+function createShapeGlyph(kind) {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const width = 34;
+  const height = 18;
+  const glyph = /** @type {SVGSVGElement} */ (document.createElementNS(svgNs, 'svg'));
+  glyph.setAttribute('class', 'cf-shape-glyph');
+  glyph.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  glyph.setAttribute('aria-hidden', 'true');
+  const outline = shapeOutline(kind, width, height);
+  const shape = document.createElementNS(svgNs, outline.tag);
+  shape.setAttribute('class', 'cf-node-box cf-node-shape');
+  for (const [key, value] of Object.entries(outline.attrs)) {
+    shape.setAttribute(key, String(value));
+  }
+  glyph.appendChild(shape);
+  return glyph;
 }
 
 /**
