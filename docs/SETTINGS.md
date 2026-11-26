@@ -64,6 +64,11 @@ Settings can be configured interactively using the command `CodeFlow: Configure`
 - **Default:** `false`
 - **Description:** Resolve package imports through the workspace `node_modules` directory. Disabled by default so analysis stays inside workspace source.
 
+### `codeflow.javascript.includeWorkspaceGlobals`
+- **Type:** `boolean`
+- **Default:** `true`
+- **Description:** Discover sibling JavaScript files in the same directory during single-file analysis so classic non-module scripts resolve cross-file calls.
+
 ### `codeflow.javascript.maxFileBytes`
 - **Type:** `number`
 - **Default:** `2097152` (min: `65536`)
@@ -92,6 +97,21 @@ Settings can be configured interactively using the command `CodeFlow: Configure`
 - **Type:** `number`
 - **Default:** `350` (min: `100`, max: `2000`)
 - **Description:** Per-document debounce delay in milliseconds before incremental index analysis runs after an edit.
+
+### `codeflow.index.promptOnOpen`
+- **Type:** `boolean`
+- **Default:** `true`
+- **Description:** Offer optional repository-wide indexing when opening CodeFlow on an unindexed workspace.
+
+### `codeflow.index.autoUpdate`
+- **Type:** `boolean`
+- **Default:** `true`
+- **Description:** Incrementally update the repository index when workspace files change.
+
+### `codeflow.index.maxFileBytes`
+- **Type:** `number`
+- **Default:** `1048576` (min: `65536`)
+- **Description:** Maximum individual source file size in bytes included during repository-wide indexing.
 
 ---
 

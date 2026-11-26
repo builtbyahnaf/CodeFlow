@@ -108,6 +108,12 @@
         "category": "CodeFlow"
       },
       {
+        "command": "codeflow.analyzeWorkspace",
+        "title": "Analyze Entire Repository (Repo-Wide)",
+        "category": "CodeFlow",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
         "command": "codeflow.configure",
         "title": "Configure Settings",
         "category": "CodeFlow"
@@ -203,6 +209,11 @@
           "default": false,
           "description": "Resolve package imports through the workspace node_modules directory. Disabled by default so analysis stays inside workspace source."
         },
+        "codeflow.javascript.includeWorkspaceGlobals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Discover sibling JavaScript files in the same directory during single-file analysis so classic non-module scripts resolve cross-file calls."
+        },
         "codeflow.javascript.maxFileBytes": {
           "type": "number",
           "default": 2097152,
@@ -291,8 +302,43 @@
           "minimum": 100,
           "maximum": 2000,
           "description": "Per-document debounce delay in milliseconds before incremental index analysis runs after an edit."
+        },
+        "codeflow.index.promptOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer optional repository-wide indexing when opening CodeFlow on an unindexed workspace."
+        },
+        "codeflow.index.autoUpdate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Incrementally update the repository index when workspace files change."
+        },
+        "codeflow.index.maxFileBytes": {
+          "type": "number",
+          "default": 1048576,
+          "minimum": 65536,
+          "description": "Maximum individual source file size in bytes included during repository-wide indexing."
         }
       }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "codeflow.analyzeActiveFile",
+          "when": "editorLangId == javascript || editorLangId == javascriptreact || editorLangId == cpp || editorLangId == c || editorLangId == java",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "codeflow.analyzeWorkspace",
+          "group": "codeflow@1"
+        },
+        {
+          "command": "codeflow.showIndexStatus",
+          "group": "codeflow@2"
+        }
+      ]
     }
   },
   "repository": {
