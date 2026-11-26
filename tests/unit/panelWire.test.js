@@ -883,3 +883,82 @@ test('graph.load caps large runs safely instead of failing with oversized messag
     'capped overview graph should report a degradation notice',
   );
 });
+
+// ── Repo-wide analysis and indexing protocol messages ─────────────────────
+
+test('workspace.analyze responds ok when indexActions.indexWorkspace is provided', async () => {
+  let indexCalled = false;
+  const indexActions = {
+    async indexWorkspace({ rebuild }) {
+      indexCalled = true;
+      return { ok: true, rebuild, symbolCount: 42 };
+    },
+    async showIndexOptions() {},
+  };
+  const { wire } = createHarness(async () => ({ ok: true, run: createMockAnalysis() }), undefined, {
+    indexActions,
+  });
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const response = await panel.requestRaw('workspace.analyze', { rebuild: false });
+  assert.ok(response, 'expected a response');
+  assert.notEqual(response.kind, 'protocol.error', `unexpected error: ${JSON.stringify(response.payload)}`);
+  assert.equal(indexCalled, true, 'indexWorkspace was not called');
+});
+
+test('workspace.analyze returns protocol.error when no indexActions provided', async () => {
+  // createHarness with no indexActions (default = null)
+  const { wire } = createHarness();
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const response = await panel.requestRaw('workspace.analyze', {});
+  assert.ok(response, 'expected a response');
+  assert.equal(response.kind, 'protocol.error');
+});
+
+test('index.run triggers indexWorkspace rebuild', async () => {
+  let rebuildFlag = null;
+  const indexActions = {
+    async indexWorkspace({ rebuild }) {
+      rebuildFlag = rebuild;
+      return { ok: true };
+    },
+    async showIndexOptions() {},
+  };
+  const { wire } = createHarness(async () => ({ ok: true, run: createMockAnalysis() }), undefined, {
+    indexActions,
+  });
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  await panel.requestRaw('index.run', { rebuild: true });
+  assert.equal(rebuildFlag, true, 'expected rebuild:true to be forwarded');
+});
+
+test('index.configure calls showIndexOptions', async () => {
+  let optionsCalled = false;
+  const indexActions = {
+    async indexWorkspace() { return { ok: true }; },
+    async showIndexOptions() { optionsCalled = true; },
+  };
+  const { wire } = createHarness(async () => ({ ok: true, run: createMockAnalysis() }), undefined, {
+    indexActions,
+  });
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  await panel.requestRaw('index.configure', {});
+  assert.equal(optionsCalled, true, 'showIndexOptions was not called');
+});
+
+test('index.configure returns protocol.error when no indexActions provided', async () => {
+  const { wire } = createHarness();
+  const panel = createFakePanel();
+  wire(panel.target);
+
+  const response = await panel.requestRaw('index.configure', {});
+  assert.ok(response, 'expected a response');
+  assert.equal(response.kind, 'protocol.error');
+});

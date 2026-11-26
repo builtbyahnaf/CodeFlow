@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { buildCfg, checkInvariants } from '../../src/core/graph/cfg/builder.js';
 import { createQueryLayer } from '../../src/core/csr/query.js';
 import { createCapabilities } from '../../src/core/adapterRegistry.js';
+import { mapJavaScript } from '../../src/adapters/javascript/mapper.js';
 import {
   FIXTURE_CALLEE_ID,
   FIXTURE_SYMBOL_ID,
@@ -269,4 +270,83 @@ test('non-synthetic nodes keep a real source range', () => {
     assert.equal(node.range.fileId, 'file:cfg-fixture');
     assert.ok(node.range.startLine >= 0);
   }
+});
+
+// ── isKnownBuiltinCall behavioral regression ─────────────────────────────
+// isKnownBuiltinCall is an internal helper tested via observable CFG behavior:
+// well-known global/stdlib calls must NOT produce unresolved call nodes.
+
+const CFG_CAPS = createCapabilities({ generateCFG: true });
+
+function jsQueryFor(run) {
+  return createQueryLayer(run, { capabilities: CFG_CAPS });
+}
+
+function jsRun2(text, modulePath = 'src/builtins.js') {
+  return mapJavaScript({
+    runId: 'run:cfg-builtin',
+    path: modulePath,
+    text,
+    adapterId: 'js-acorn',
+    adapterVersion: '0.1.0',
+  });
+}
+
+function functionNamed2(run, name) {
+  const sym = run.symbols.find((s) => s.kind === 'function' && s.name === name);
+  assert.ok(sym, `missing function ${name}`);
+  return sym;
+}
+
+test('calls to well-known builtins do not produce unresolved call nodes', () => {
+  const src = `function demo(arr) {
+  console.log(arr.length);
+  const x = Math.max(arr[0], 0);
+  arr.forEach((item) => {
+    if (typeof item === 'string') {
+      JSON.stringify(item);
+    }
+  });
+  return x;
+}\n`;
+  const run = jsRun2(src);
+  const sym = functionNamed2(run, 'demo');
+  const cfg = buildCfg(jsQueryFor(run), sym.symbolId);
+  assert.equal(cfg.ok, true, cfg.ok ? '' : `${cfg.code}: ${cfg.message}`);
+
+  // Degradations should not contain unresolved entries for console/Math/JSON/Array.forEach
+  const builtinUnresolved = cfg.cfg.degradations.filter((d) => {
+    const text = JSON.stringify(d).toLowerCase();
+    return (
+      text.includes('unresolved') &&
+      (text.includes('console') ||
+        text.includes('math') ||
+        text.includes('json') ||
+        text.includes('foreach'))
+    );
+  });
+  assert.equal(
+    builtinUnresolved.length,
+    0,
+    `builtins should not be unresolved: ${JSON.stringify(builtinUnresolved)}`,
+  );
+});
+
+test('resolveExternalCall option is accepted and called for external callees', () => {
+  const src = `function main() { unknownExternal(); }\n`;
+  const run = jsRun2(src, 'src/ext.js');
+  const sym = functionNamed2(run, 'main');
+
+  let resolverCalled = false;
+  const cfg = buildCfg(jsQueryFor(run), sym.symbolId, {
+    resolveExternalCall: (calleeName) => {
+      resolverCalled = true;
+      return calleeName === 'unknownExternal'
+        ? { symbolId: 'symbol:external:unknownExternal', displayName: 'unknownExternal' }
+        : null;
+    },
+  });
+  assert.equal(cfg.ok, true);
+  // Resolver should have been consulted for the external call
+  assert.equal(resolverCalled, true, 'resolveExternalCall was not invoked');
 });

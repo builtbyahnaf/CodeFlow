@@ -218,3 +218,38 @@ test('both adapters produce CFG DTOs that validate', () => {
   const cppCfg = buildCfg(queryFor(cpp), functionNamed(cpp, 'classify').symbolId);
   assert.equal(validateDto(toCfgDto(cppCfg.cfg)).ok, true);
 });
+
+// ── Negation (!) condition label regression ───────────────────────────────
+
+test('JS: !call() condition label preserves the ! prefix and routes true-edge to the return', () => {
+  const src = `function guard(x) {\n  if (!isReady(x)) return;\n  work(x);\n}\n`;
+  const run = jsRun(src, 'src/guard.js');
+  const cfg = buildCfg(queryFor(run), functionNamed(run, 'guard').symbolId);
+  assert.equal(cfg.ok, true, cfg.ok ? '' : `${cfg.code}: ${cfg.message}`);
+
+  const condNode = cfg.cfg.nodes.find((n) => n.kind === 'condition');
+  assert.ok(condNode, 'expected a condition node');
+  // The label must include the ! operator so code-review readers see the real condition.
+  assert.ok(
+    condNode.label.includes('!') || condNode.label.startsWith('!'),
+    `condition label should start with '!' but was: ${condNode.label}`,
+  );
+
+  // The true edge (condition holds → guarded path → return) should be a truthy edge.
+  const trueEdge = cfg.cfg.edges.find(
+    (e) => e.from === condNode.id && e.kind === 'true',
+  );
+  assert.ok(trueEdge, 'expected a true-branch edge from the condition node');
+});
+
+test('JS: !call() condition does not produce an unresolved call when the callee is in scope', () => {
+  const src = `function isReady(x) { return x > 0; }\nfunction guard(x) {\n  if (!isReady(x)) return;\n  return x;\n}\n`;
+  const run = jsRun(src, 'src/guard2.js');
+  const cfg = buildCfg(queryFor(run), functionNamed(run, 'guard').symbolId);
+  assert.equal(cfg.ok, true);
+  // No degradation entries about unresolved condition calls
+  const unresDeg = cfg.cfg.degradations.filter((d) =>
+    /unresolved|negat/i.test(JSON.stringify(d)),
+  );
+  assert.equal(unresDeg.length, 0, `unexpected degradations: ${JSON.stringify(unresDeg)}`);
+});

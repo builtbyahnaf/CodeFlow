@@ -68,6 +68,14 @@ function createFileSystem(entries) {
         size: isFile ? Buffer.byteLength(/** @type {string} */ (value), 'utf8') : 0,
       };
     },
+    /** @type {typeof import('node:fs/promises').readdir} */
+    async readdir(dirCandidate) {
+      const dirKey = normalize(dirCandidate);
+      // Return filenames (strings) whose parent matches dirKey
+      return [...files.keys()]
+        .filter((k) => path.posix.dirname(k) === dirKey && typeof files.get(k) === 'string')
+        .map((k) => path.posix.basename(k));
+    },
   };
 }
 
@@ -89,6 +97,7 @@ function createService(fileSystem, settings = {}) {
   return createJavaScriptAnalysisService({
     registry,
     readFile: fileSystem.readFile,
+    readDir: fileSystem.readdir,
     stat: fileSystem.stat,
     settings,
     platform: PLATFORM,
@@ -387,4 +396,48 @@ test('an absolute Windows input path is normalized to workspace-relative CSR wit
   assert.equal(result.dropped, undefined);
   assert.equal(result.run.files[0].path, 'js/app.js');
   assert.ok(result.run.symbols.some((symbol) => symbol.kind === 'function' && symbol.name === 'helper'));
+});
+
+// ── collectSiblingScripts (includeWorkspaceGlobals) regression ────────────
+
+test('includeWorkspaceGlobals picks up sibling JS files in the same directory', async () => {
+  const fs = createFileSystem({
+    'D:/w/src/app.js': `
+(function () {
+  function main() { helper(); }
+  main();
+})();
+`,
+    'D:/w/src/helper.js': `function helper() { return 42; }`,
+  });
+  const service = createService(fs, { includeWorkspaceGlobals: true });
+  const result = await service.analyze(baseInput('src/app.js'));
+  assert.equal(result.ok, true);
+  // The sibling file should be part of the run
+  const helperFile = result.run.files.find((f) => f.path.includes('helper'));
+  assert.ok(helperFile, 'sibling helper.js should be included in the run');
+});
+
+test('includeWorkspaceGlobals disabled: sibling files are not included', async () => {
+  const fs = createFileSystem({
+    'D:/w/src/solo.js': `(function () { function main() { helper(); } main(); })();`,
+    'D:/w/src/helper.js': `function helper() { return 42; }`,
+  });
+  const service = createService(fs, { includeWorkspaceGlobals: false });
+  const result = await service.analyze(baseInput('src/solo.js'));
+  assert.equal(result.ok, true);
+  const helperFile = result.run.files.find((f) => f.path.includes('helper'));
+  assert.equal(helperFile, undefined, 'sibling helper.js should NOT be included when disabled');
+});
+
+test('includeWorkspaceGlobals does not include the target file itself as a sibling', async () => {
+  const fs = createFileSystem({
+    'D:/w/src/only.js': `(function () { function run() { return 1; } run(); })();`,
+  });
+  const service = createService(fs, { includeWorkspaceGlobals: true });
+  const result = await service.analyze(baseInput('src/only.js'));
+  assert.equal(result.ok, true);
+  // only.js must appear exactly once
+  const count = result.run.files.filter((f) => f.path.includes('only')).length;
+  assert.equal(count, 1, 'target file should not be duplicated');
 });
