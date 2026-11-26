@@ -220,7 +220,21 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
       };
     }
     if (expression.type === 'UnaryExpression' && expression.operator === '!') {
-      return { type: 'not', operand: expressionTree(expression.argument) };
+      const arg = expression.argument;
+      if (arg && arg.type !== 'LogicalExpression' && arg.type !== 'ConditionalExpression') {
+        const call = findCall(arg);
+        return {
+          type: 'leaf',
+          range: rangeOf(expression),
+          label: sourceOf(expression, '!condition'),
+          ...(call ? { callSite: rangeOf(call.callee ?? call) } : {}),
+        };
+      }
+      return {
+        type: 'not',
+        label: sourceOf(expression, '!condition'),
+        operand: expressionTree(arg),
+      };
     }
     if (expression.type === 'ConditionalExpression') {
       return {
