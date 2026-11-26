@@ -169,6 +169,8 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       (relationship.type === 'calls' || relationship.type === 'instantiates') &&
       relationship.from === symbolId,
   );
+  const resolveExternalCall =
+    typeof options.resolveExternalCall === 'function' ? options.resolveExternalCall : null;
 
   const maxNodes = options.allowLarge === true ? 20_000 : Math.max(2, options.maxNodes ?? 1500);
 
@@ -347,26 +349,55 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       return undefined;
     }
     const key = rangeKey(site);
-    /** @type {Array<{to: string, label: string, status: string, reasonCode?: string}>} */
-    const matches = [];
-    for (const relationship of callRelationships) {
-      if (!relationship.site) {
-        continue;
-      }
-      if (rangeKey(relationship.site) !== key) {
-        continue;
-      }
+    let exactMatches = callRelationships.filter(
+      (relationship) => relationship.site && rangeKey(relationship.site) === key,
+    );
+    if (exactMatches.length === 0) {
+      exactMatches = callRelationships.filter(
+        (relationship) => relationship.site && rangeContains(site, relationship.site),
+      );
+    }
+    if (exactMatches.length === 0) {
+      return undefined;
+    }
+    return exactMatches.map((relationship) => {
       const target = symbolById.get(relationship.to);
-      matches.push({
+      const baseLabel = target
+        ? target.name || target.qualifiedName
+        : placeholderName(relationship.to);
+      if (relationship.status === 'unresolved' && resolveExternalCall) {
+        const resolved = resolveExternalCall({
+          to: relationship.to,
+          calleeName: baseLabel,
+          relationship,
+        });
+        if (resolved && resolved.to) {
+          return {
+            to: resolved.to,
+            label: resolved.label ?? baseLabel,
+            status: resolved.status ?? 'inferred',
+            ...(resolved.reasonCode ? { reasonCode: resolved.reasonCode } : {}),
+          };
+        }
+      }
+      if (
+        relationship.status === 'unresolved' &&
+        isKnownBuiltinCall(relationship.to, baseLabel)
+      ) {
+        return {
+          to: relationship.to,
+          label: baseLabel,
+          status: 'resolved',
+          reasonCode: 'builtin_api',
+        };
+      }
+      return {
         to: relationship.to,
-        label: target
-          ? target.name || target.qualifiedName
-          : placeholderName(relationship.to),
+        label: baseLabel,
         status: relationship.status,
         ...(relationship.reasonCode ? { reasonCode: relationship.reasonCode } : {}),
-      });
-    }
-    return matches.length > 0 ? matches : undefined;
+      };
+    });
   }
 
   /**
@@ -375,7 +406,25 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
    */
   function callSummary(construct) {
     const calls = callsAt(construct);
+    const calleeName = extensionString(construct, 'calleeName');
     if (!calls) {
+      if (resolveExternalCall && calleeName) {
+        const resolved = resolveExternalCall({ to: `external:${calleeName}`, calleeName });
+        if (resolved && resolved.to) {
+          const entry = [
+            {
+              to: resolved.to,
+              label: resolved.label ?? calleeName,
+              status: resolved.status ?? 'inferred',
+              ...(resolved.reasonCode ? { reasonCode: resolved.reasonCode } : {}),
+            },
+          ];
+          return { ...summarizeCalls(entry), calls: entry };
+        }
+      }
+      if (calleeName && isKnownBuiltinCall(`external:${calleeName}`, calleeName)) {
+        return { status: 'resolved', badge: '', calls: [] };
+      }
       missingCallSites += 1;
       return { status: 'unresolved', badge: 'unresolved', calls: [] };
     }
@@ -471,6 +520,38 @@ function buildCfgUnsafe(query, symbolId, options = {}) {
       return { truthy: [...left.truthy, ...right.truthy], falsy: right.falsy };
     }
     if (type === 'not') {
+      let current = shape;
+      let inverted = false;
+      while (current && current.type === 'not') {
+        inverted = !inverted;
+        current = current.operand;
+      }
+      const leafLike =
+        current &&
+        current.type !== 'and' &&
+        current.type !== 'or' &&
+        current.type !== 'nullish' &&
+        current.type !== 'ternary';
+      if (leafLike) {
+        const innerLabel =
+          typeof current.label === 'string' && current.label ? current.label : 'condition';
+        const explicitLabel = typeof shape.label === 'string' && shape.label ? shape.label : '';
+        const finalLabel =
+          explicitLabel ||
+          (inverted ? (innerLabel.startsWith('!') ? innerLabel : `!${innerLabel}`) : innerLabel);
+        const leafRange = asRange(shape.range ?? current.range ?? fallbackRange);
+        const leafCallSite = asRange(shape.callSite ?? current.callSite);
+        return lowerCondition(
+          {
+            type: 'leaf',
+            label: finalLabel,
+            range: leafRange,
+            ...(leafCallSite ? { callSite: leafCallSite } : {}),
+          },
+          incoming,
+          fallbackRange,
+        );
+      }
       const inner = lowerCondition(shape.operand, incoming, fallbackRange);
       return { truthy: retag(inner.falsy, 'true'), falsy: retag(inner.truthy, 'false') };
     }
@@ -1629,6 +1710,223 @@ function rangeKey(range) {
     range.endLine,
     range.endColumn,
   ].join('|');
+}
+
+/**
+ * True when `outer` encloses `inner` in the same file.
+ *
+ * @param {SourceRange} outer
+ * @param {SourceRange} inner
+ * @returns {boolean}
+ */
+function rangeContains(outer, inner) {
+  if (!outer || !inner || outer.fileId !== inner.fileId) {
+    return false;
+  }
+  const startsBefore =
+    outer.startLine < inner.startLine ||
+    (outer.startLine === inner.startLine && outer.startColumn <= inner.startColumn);
+  const endsAfter =
+    outer.endLine > inner.endLine ||
+    (outer.endLine === inner.endLine && outer.endColumn >= inner.endColumn);
+  return startsBefore && endsAfter;
+}
+
+const KNOWN_BUILTIN_PREFIXES = [
+  'external:global.console.',
+  'external:global.Math.',
+  'external:global.JSON.',
+  'external:global.Object.',
+  'external:global.Array.',
+  'external:global.Promise.',
+  'external:global.Date.',
+  'external:global.Number.',
+  'external:global.String.',
+  'external:global.Boolean.',
+  'external:global.Reflect.',
+  'external:global.Map.',
+  'external:global.Set.',
+  'external:global.document.',
+  'external:global.window.',
+  'external:global.navigator.',
+  'external:global.location.',
+  'external:global.history.',
+  'external:global.localStorage.',
+  'external:global.sessionStorage.',
+  'external:global.URL.',
+  'external:global.Buffer.',
+  'external:global.process.',
+  'external:global.crypto.',
+  'external:std::',
+];
+
+const KNOWN_BUILTIN_NAMES = new Set([
+  'console',
+  'fetch',
+  'setTimeout',
+  'clearTimeout',
+  'setInterval',
+  'clearInterval',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+  'queueMicrotask',
+  'structuredClone',
+  'parseInt',
+  'parseFloat',
+  'isNaN',
+  'isFinite',
+  'encodeURIComponent',
+  'decodeURIComponent',
+  'encodeURI',
+  'decodeURI',
+  'atob',
+  'btoa',
+  'alert',
+  'confirm',
+  'prompt',
+  'String',
+  'Number',
+  'Boolean',
+  'Array',
+  'Object',
+  'Map',
+  'Set',
+  'WeakMap',
+  'WeakSet',
+  'Promise',
+  'Date',
+  'RegExp',
+  'Error',
+  'TypeError',
+  'URL',
+  'URLSearchParams',
+  'FormData',
+  'Headers',
+  'Request',
+  'Response',
+  'AbortController',
+  'WebSocket',
+  'FileReader',
+  // Common JS/DOM collection & prototype methods
+  'map',
+  'filter',
+  'reduce',
+  'forEach',
+  'find',
+  'findIndex',
+  'some',
+  'every',
+  'includes',
+  'indexOf',
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'slice',
+  'splice',
+  'concat',
+  'join',
+  'split',
+  'trim',
+  'replace',
+  'replaceAll',
+  'match',
+  'test',
+  'startsWith',
+  'endsWith',
+  'toLowerCase',
+  'toUpperCase',
+  'toFixed',
+  'toString',
+  'valueOf',
+  'json',
+  'text',
+  'then',
+  'catch',
+  'finally',
+  'addEventListener',
+  'removeEventListener',
+  'querySelector',
+  'querySelectorAll',
+  'getElementById',
+  'getElementsByClassName',
+  'getElementsByTagName',
+  'createElement',
+  'appendChild',
+  'removeChild',
+  'insertBefore',
+  'remove',
+  'focus',
+  'blur',
+  'click',
+  'preventDefault',
+  'stopPropagation',
+  'setAttribute',
+  'getAttribute',
+  'has',
+  'get',
+  'set',
+  'delete',
+  'clear',
+  'keys',
+  'values',
+  'entries',
+  'from',
+  'isArray',
+  'stringify',
+  'parse',
+  // Common C/C++ stdlib / STL methods
+  'printf',
+  'fprintf',
+  'sprintf',
+  'snprintf',
+  'scanf',
+  'puts',
+  'getchar',
+  'malloc',
+  'calloc',
+  'realloc',
+  'free',
+  'memcpy',
+  'memset',
+  'memmove',
+  'strlen',
+  'strcmp',
+  'strncmp',
+  'strcpy',
+  'strncpy',
+  'strcat',
+  'exit',
+  'abort',
+  'assert',
+  'push_back',
+  'emplace_back',
+  'pop_back',
+  'empty',
+  'size',
+  'length',
+  'begin',
+  'end',
+]);
+
+/**
+ * @param {string|null|undefined} target
+ * @param {string|null|undefined} calleeName
+ * @returns {boolean}
+ */
+function isKnownBuiltinCall(target, calleeName) {
+  const id = String(target ?? '');
+  if (KNOWN_BUILTIN_PREFIXES.some((prefix) => id.startsWith(prefix))) {
+    return true;
+  }
+  const cleanName = String(calleeName ?? '').trim();
+  if (KNOWN_BUILTIN_NAMES.has(cleanName)) {
+    return true;
+  }
+  if (id.startsWith('external:global.') && KNOWN_BUILTIN_NAMES.has(id.slice('external:global.'.length))) {
+    return true;
+  }
+  return false;
 }
 
 /**
