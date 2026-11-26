@@ -29,10 +29,12 @@ export const DEFAULT_MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_MAX_LINES = 20_000;
 export const DEFAULT_MAX_MODULES = 64;
 export const DEFAULT_MAX_DEPTH = 8;
+export const DEFAULT_INCLUDE_WORKSPACE_GLOBALS = true;
 
 /**
  * @typedef {Object} JavaScriptSettings
  * @property {boolean} [resolveNodeModules]
+ * @property {boolean} [includeWorkspaceGlobals]
  * @property {number} [maxFileBytes]
  * @property {number} [maxLines]
  * @property {number} [maxModules]
@@ -53,6 +55,7 @@ export const DEFAULT_MAX_DEPTH = 8;
  * @param {{
  *   registry: ReturnType<typeof import('../../core/adapterRegistry.js').createAdapterRegistry>,
  *   readFile?: typeof fs.readFile,
+ *   readDir?: typeof fs.readdir,
  *   stat?: typeof fs.stat,
  *   settings?: JavaScriptSettings | (() => JavaScriptSettings),
  *   logger?: {debug?: Function, warn?: Function, error?: Function},
@@ -63,6 +66,7 @@ export function createJavaScriptAnalysisService(options) {
   const {
     registry,
     readFile = fs.readFile,
+    readDir = fs.readdir,
     stat = fs.stat,
     logger = {},
     platform = process.platform,
@@ -287,6 +291,20 @@ export function createJavaScriptAnalysisService(options) {
         severity: 'warning',
         code: 'budget_exceeded',
         message: `The module graph stopped at ${settings.maxModules} files; further imports are unresolved.`,
+      });
+    }
+
+    if (
+      settings.includeWorkspaceGlobals &&
+      !syntaxOnly &&
+      modules.size < Math.min(settings.maxModules, 32)
+    ) {
+      await collectSiblingScripts({
+        dir: path.dirname(absolutePath),
+        workspaceRoot,
+        modules,
+        maxModules: Math.min(settings.maxModules, 32),
+        maxFileBytes: settings.maxFileBytes,
       });
     }
 
@@ -572,6 +590,53 @@ export function createJavaScriptAnalysisService(options) {
     }
   }
 
+  async function collectSiblingScripts({ dir, workspaceRoot, modules, maxModules, maxFileBytes }) {
+    let names;
+    try {
+      const entries = await readDir(dir, { withFileTypes: true });
+      names = entries
+        .filter((entry) => (typeof entry === 'string' ? true : entry.isFile?.()))
+        .map((entry) => (typeof entry === 'string' ? entry : entry.name))
+        .sort();
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      if (modules.size >= maxModules) {
+        break;
+      }
+      if (!/\.(js|mjs|cjs)$/i.test(name)) {
+        continue;
+      }
+      const candidateAbs = path.join(dir, name);
+      if (!isPathInside(workspaceRoot, candidateAbs, platform)) {
+        continue;
+      }
+      let candidateRel;
+      try {
+        candidateRel = toWorkspaceRelative(workspaceRoot, candidateAbs, platform);
+      } catch {
+        continue;
+      }
+      if (modules.has(candidateRel) || exclusionFor(candidateRel).excluded) {
+        continue;
+      }
+      const source = await readSource(candidateAbs, maxFileBytes);
+      if (!source.ok || isGeneratedSource(source.text)) {
+        continue;
+      }
+      const kind = await moduleKindFor(candidateAbs, workspaceRoot);
+      modules.set(candidateRel, {
+        path: candidateRel,
+        absolutePath: candidateAbs,
+        text: source.text,
+        moduleKind: kind,
+        json: false,
+        depth: 1,
+      });
+    }
+  }
+
   return { analyze, prepare };
 }
 
@@ -614,6 +679,7 @@ function countLines(text) {
 function normalizeSettings(value) {
   return {
     resolveNodeModules: value.resolveNodeModules === true,
+    includeWorkspaceGlobals: value.includeWorkspaceGlobals !== false,
     maxFileBytes:
       Number.isFinite(value.maxFileBytes) && Number(value.maxFileBytes) > 0
         ? Number(value.maxFileBytes)
