@@ -38,6 +38,8 @@ export function createPanelManager({
   analysis,
   extensionVersion,
   indexProvider = null,
+  indexActions = null,
+  onPanelOpen = null,
 }) {
   /** @type {vscode.WebviewPanel | null} */
   let panel = null;
@@ -187,6 +189,7 @@ export function createPanelManager({
     navigate: navigateToRange,
     getSettings: previewSettings,
     indexProvider,
+    indexActions,
   });
 
   /** @type {ReturnType<typeof setTimeout>|null} */
@@ -316,6 +319,9 @@ export function createPanelManager({
         bridge = null;
       }
     });
+    if (typeof onPanelOpen === 'function') {
+      void Promise.resolve(onPanelOpen()).catch(() => {});
+    }
     return created;
   }
 
