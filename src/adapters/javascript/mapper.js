@@ -1604,8 +1604,56 @@ export function mapJavaScript(options) {
     if (symbol?.kind === 'class') {
       return symbol;
     }
+    if (symbol?.extensions?.import) {
+      const imported = symbol.extensions.import;
+      const found = resolveImportedSymbol(moduleInfo, imported.source, imported.imported);
+      if (found.symbol?.kind === 'class') {
+        return found.symbol;
+      }
+    }
+    if (symbol?.extensions?.require?.importedName) {
+      const req = symbol.extensions.require;
+      const found = resolveImportedSymbol(moduleInfo, req.source, req.importedName);
+      if (found.symbol?.kind === 'class') {
+        return found.symbol;
+      }
+    }
     const candidate = moduleInfo.classes.find((entry) => entry.symbol.name === name);
     return candidate?.symbol ?? null;
+  }
+
+  /**
+   * Look up a top-level callable or class across sibling modules loaded into
+   * the same analysis run (used for classic script globals across files).
+   *
+   * @param {Record<string, any>} originModule
+   * @param {string} name
+   * @returns {import('../../core/csr/entities.js').SymbolRecord|null}
+   */
+  function findWorkspaceGlobal(originModule, name) {
+    if (!name) {
+      return null;
+    }
+    for (const candidateModule of orderedModules) {
+      if (candidateModule === originModule) {
+        continue;
+      }
+      const exported = candidateModule.exports?.get(name);
+      if (exported?.symbol) {
+        return exported.symbol;
+      }
+      const variable = candidateModule.moduleScope?.set?.get(name);
+      const sym = variable ? (symbolByVariable.get(variable) ?? null) : null;
+      if (
+        sym &&
+        (['function', 'class', 'closure'].includes(sym.kind) ||
+          sym.extensions?.initializer === 'function' ||
+          sym.extensions?.initializer === 'class')
+      ) {
+        return sym;
+      }
+    }
+    return null;
   }
 
   /**
@@ -1833,6 +1881,16 @@ export function mapJavaScript(options) {
         }
         return { kind: 'symbol', symbol, status: 'resolved' };
       }
+      const workspaceGlobal = findWorkspaceGlobal(moduleInfo, node.name);
+      if (workspaceGlobal) {
+        return {
+          kind: 'symbol',
+          symbol: workspaceGlobal,
+          status: 'inferred',
+          reasonCode: 'workspace_global',
+          note: 'resolved from sibling workspace file',
+        };
+      }
       return {
         kind: 'external',
         target: `external:global.${node.name}`,
@@ -1940,7 +1998,34 @@ export function mapJavaScript(options) {
             'Date',
             'Number',
             'String',
+            'Boolean',
             'Reflect',
+            'Map',
+            'Set',
+            'WeakMap',
+            'WeakSet',
+            'Error',
+            'RegExp',
+            'Intl',
+            'Symbol',
+            'Proxy',
+            'AbortController',
+            'Buffer',
+            'URL',
+            'URLSearchParams',
+            'FormData',
+            'Headers',
+            'Request',
+            'Response',
+            'document',
+            'window',
+            'navigator',
+            'location',
+            'history',
+            'localStorage',
+            'sessionStorage',
+            'crypto',
+            'performance',
           ].includes(object.name)
         ) {
           return {
