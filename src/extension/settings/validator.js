@@ -60,6 +60,10 @@ export const SETTING_RULES = Object.freeze({
     type: 'boolean',
     default: false,
   },
+  'codeflow.javascript.includeWorkspaceGlobals': {
+    type: 'boolean',
+    default: true,
+  },
   'codeflow.javascript.maxFileBytes': {
     type: 'number',
     min: 65536,
@@ -133,6 +137,19 @@ export const SETTING_RULES = Object.freeze({
     min: 100,
     max: 2000,
     default: 350,
+  },
+  'codeflow.index.promptOnOpen': {
+    type: 'boolean',
+    default: true,
+  },
+  'codeflow.index.autoUpdate': {
+    type: 'boolean',
+    default: true,
+  },
+  'codeflow.index.maxFileBytes': {
+    type: 'number',
+    min: 65536,
+    default: 1048576,
   },
 });
 

@@ -30,6 +30,7 @@ export const CATEGORY_DESCRIPTORS = Object.freeze([
       'codeflow.cpp.maxOutputBytes',
       'codeflow.cpp.maxFileBytes',
       'codeflow.javascript.resolveNodeModules',
+      'codeflow.javascript.includeWorkspaceGlobals',
       'codeflow.javascript.maxFileBytes',
       'codeflow.javascript.maxLines',
       'codeflow.javascript.maxModules',
@@ -39,8 +40,13 @@ export const CATEGORY_DESCRIPTORS = Object.freeze([
   {
     id: SETTINGS_CATEGORIES.INDEXING,
     label: '$(database) Project Indexing',
-    description: 'Background indexing debounce, cache location, exclusions',
-    settings: ['codeflow.index.debounceMs'],
+    description: 'Background indexing debounce, optional auto-update, prompt behavior, and file limits',
+    settings: [
+      'codeflow.index.debounceMs',
+      'codeflow.index.promptOnOpen',
+      'codeflow.index.autoUpdate',
+      'codeflow.index.maxFileBytes',
+    ],
   },
   {
     id: SETTINGS_CATEGORIES.PREVIEW,
