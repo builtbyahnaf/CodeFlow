@@ -77,6 +77,7 @@ export function createPanelWire({
   navigate = null,
   getSettings = null,
   indexProvider = null,
+  indexActions = null,
 }) {
   return function wire(target) {
     if (!target?.webview || typeof target.webview.onDidReceiveMessage !== 'function') {
@@ -235,7 +236,39 @@ export function createPanelWire({
       return { ok: true, run: current.run, query };
     }
 
+    function indexSnapshot() {
+      const stats =
+        typeof indexProvider?.stats === 'function'
+          ? indexProvider.stats()
+          : {
+              state: 'unindexed',
+              schemaVersion: 1,
+              fileCount: 0,
+              symbolCount: 0,
+              relationshipCount: 0,
+              dependencyCount: 0,
+              staleFileCount: 0,
+              scope: 'partial',
+            };
+      const health =
+        typeof indexProvider?.health === 'function'
+          ? indexProvider.health()
+          : {
+              ok: true,
+              integrity: 'ok',
+              schemaVersion: 1,
+              state: stats.state,
+              staleFileCount: 0,
+              scope: stats.scope,
+              issues: [],
+            };
+      const telemetry =
+        typeof indexProvider?.telemetry === 'function' ? indexProvider.telemetry() : null;
+      return { stats, health, telemetry };
+    }
+
     bridge.on('webview.ready', async (_payload, { requestId }) => {
+      const { stats } = indexSnapshot();
       bridge.respond(
         'capabilities.data',
         {
@@ -249,7 +282,9 @@ export function createPanelWire({
             hoverPreview: true,
             explanation: true,
             projectIndex: Boolean(indexProvider),
+            workspaceAnalysis: Boolean(indexActions),
           },
+          indexStats: stats,
           settings: getSettings ? getSettings() : {},
           demoMode: true,
         },
@@ -347,8 +382,41 @@ export function createPanelWire({
         return;
       }
       const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
+      const indexed =
+        indexProvider && typeof indexProvider.isIndexed === 'function' && indexProvider.isIndexed();
+      const resolveExternalCall =
+        indexed && typeof indexProvider.symbolsByName === 'function'
+          ? ({ to, calleeName }) => {
+              const rawName = String(calleeName || to || '')
+                .replace(/^external:(global\.|module:|require:)?/, '')
+                .split('.')
+                .pop()
+                ?.trim();
+              if (!rawName) {
+                return null;
+              }
+              const res = indexProvider.symbolsByName(rawName, { limit: 12 });
+              const items = Array.isArray(res?.items) ? res.items : [];
+              const matches = items.filter(
+                (item) =>
+                  item.name === rawName &&
+                  ['function', 'method', 'constructor', 'class'].includes(item.kind),
+              );
+              if (matches.length === 0) {
+                return null;
+              }
+              const best = matches[0];
+              return {
+                to: best.symbolId,
+                label: best.qualifiedName || best.name,
+                status: matches.length === 1 ? 'resolved' : 'inferred',
+                reasonCode: 'workspace_index',
+              };
+            }
+          : null;
       const result = buildCfg(loaded.query, symbolId, {
         allowLarge: payload.allowLarge === true,
+        ...(resolveExternalCall ? { resolveExternalCall } : {}),
       });
       if (!result.ok) {
         bridge.respond(
@@ -759,33 +827,75 @@ export function createPanelWire({
     });
 
     bridge.on('index.status', async (_payload, { requestId }) => {
-      const stats =
-        typeof indexProvider?.stats === 'function'
-          ? indexProvider.stats()
-          : {
-              state: 'unindexed',
-              schemaVersion: 1,
-              fileCount: 0,
-              symbolCount: 0,
-              relationshipCount: 0,
-              dependencyCount: 0,
-              staleFileCount: 0,
-              scope: 'partial',
-            };
-      const health =
-        typeof indexProvider?.health === 'function'
-          ? indexProvider.health()
-          : {
-              ok: true,
-              integrity: 'ok',
-              schemaVersion: 1,
-              state: stats.state,
-              staleFileCount: 0,
-              scope: stats.scope,
-              issues: [],
-            };
-      const telemetry =
-        typeof indexProvider?.telemetry === 'function' ? indexProvider.telemetry() : null;
+      const { stats, health, telemetry } = indexSnapshot();
+      bridge.respond(
+        'index.data',
+        { ok: true, stats, health, ...(telemetry ? { telemetry } : {}) },
+        requestId,
+      );
+    });
+
+    bridge.on('index.run', async (payload, { requestId }) => {
+      if (!indexActions?.indexWorkspace) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_UNSUPPORTED', 'Workspace indexing is not available.'),
+          requestId,
+        );
+        return;
+      }
+      const res = await indexActions.indexWorkspace({ rebuild: payload?.rebuild === true });
+      rebuildCallService();
+      const { stats, health, telemetry } = indexSnapshot();
+      bridge.respond(
+        'index.data',
+        {
+          ok: res?.ok !== false,
+          ...(res?.message ? { message: res.message } : {}),
+          stats,
+          health,
+          ...(telemetry ? { telemetry } : {}),
+        },
+        requestId,
+      );
+    });
+
+    bridge.on('workspace.analyze', async (payload, { requestId }) => {
+      if (!indexActions?.indexWorkspace) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_UNSUPPORTED', 'Repository-wide analysis is not available.'),
+          requestId,
+        );
+        return;
+      }
+      const res = await indexActions.indexWorkspace({ rebuild: payload?.rebuild === true });
+      rebuildCallService();
+      const { stats, health, telemetry } = indexSnapshot();
+      bridge.respond(
+        'index.data',
+        {
+          ok: res?.ok !== false,
+          ...(res?.message ? { message: res.message } : {}),
+          stats,
+          health,
+          ...(telemetry ? { telemetry } : {}),
+        },
+        requestId,
+      );
+    });
+
+    bridge.on('index.configure', async (_payload, { requestId }) => {
+      if (!indexActions?.showIndexOptions) {
+        bridge.respond(
+          'protocol.error',
+          createErrorPayload('E_UNSUPPORTED', 'Indexing configuration is not available.'),
+          requestId,
+        );
+        return;
+      }
+      await indexActions.showIndexOptions();
+      const { stats, health, telemetry } = indexSnapshot();
       bridge.respond(
         'index.data',
         { ok: true, stats, health, ...(telemetry ? { telemetry } : {}) },
