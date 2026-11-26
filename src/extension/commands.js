@@ -233,6 +233,17 @@ export function registerCommands({
     }
   });
 
+  register('codeflow.analyzeWorkspace', async () => {
+    logger.info('command.analyzeWorkspace');
+    const result = await indexService?.indexWorkspace?.();
+    if (typeof panelManager.showWorkspaceOverview === 'function') {
+      panelManager.showWorkspaceOverview();
+    } else {
+      panelManager.show();
+    }
+    return result;
+  });
+
   register('codeflow.configure', async () => {
     const items = getCategoryQuickPickItems();
     const picked = await vscode.window.showQuickPick(

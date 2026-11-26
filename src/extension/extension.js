@@ -82,6 +82,7 @@ function javascriptSettings() {
   const config = vscode.workspace.getConfiguration('codeflow');
   return {
     resolveNodeModules: config.get('javascript.resolveNodeModules', false),
+    includeWorkspaceGlobals: config.get('javascript.includeWorkspaceGlobals', true),
     maxFileBytes: config.get('javascript.maxFileBytes', 2 * 1024 * 1024),
     maxLines: config.get('javascript.maxLines', 20_000),
     maxModules: config.get('javascript.maxModules', 64),
@@ -192,6 +193,11 @@ export async function activate(context) {
     analysis,
     extensionVersion: EXTENSION_VERSION,
     indexProvider: indexService.indexProvider,
+    indexActions: {
+      indexWorkspace: indexService.indexWorkspace,
+      showIndexOptions: indexService.showIndexOptions,
+    },
+    onPanelOpen: () => indexService.evaluateFirstOpen(),
   });
 
   registerCommands({
