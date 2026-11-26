@@ -574,6 +574,7 @@ export function parseCppSource(input) {
  */
 function extractEmbeddedCalls(exprText, maskedExpr, exprBaseOffset, ctx, emitConstructs = false) {
   const created = [];
+  let firstSite = null;
   const callRegex = /([a-zA-Z_~][a-zA-Z0-9_:]*)\s*\(/g;
   let m;
   while ((m = callRegex.exec(maskedExpr)) !== null) {
@@ -585,6 +586,9 @@ function extractEmbeddedCalls(exprText, maskedExpr, exprBaseOffset, ctx, emitCon
     const parenClose = findMatchingParen(maskedExpr, parenOpen);
     const endOff = parenClose !== -1 ? parenClose + 1 : m.index + m[0].length;
     const siteRange = ctx.rangeOf(exprBaseOffset + m.index, exprBaseOffset + endOff);
+    if (!firstSite) {
+      firstSite = siteRange;
+    }
     const argsText = parenClose !== -1 ? exprText.slice(parenOpen + 1, parenClose).trim() : '';
 
     ctx.relationships.push(
@@ -613,6 +617,9 @@ function extractEmbeddedCalls(exprText, maskedExpr, exprBaseOffset, ctx, emitCon
       ctx.constructs.push(cc);
       created.push(cc);
     }
+  }
+  if (!emitConstructs) {
+    created.firstSite = firstSite;
   }
   return created;
 }
@@ -675,13 +682,14 @@ function parseBodyStatementsInternal(ctx) {
           const condRange = rangeOf(condStart, condEnd);
           const condMasked = remaining.slice(parenOpen + 1, parenClose);
 
-          extractEmbeddedCalls(
+          const condCalls = extractEmbeddedCalls(
             origRemaining.slice(parenOpen + 1, parenClose),
             condMasked,
             condStart,
             ctx,
             false,
           );
+          const condCallSite = condCalls.firstSite ?? null;
 
           // Find then body
           let afterParen = parenClose + 1;
@@ -738,7 +746,12 @@ function parseBodyStatementsInternal(ctx) {
             condition: condRange,
             sourceRange: rangeOf(baseOffset + cursor, baseOffset + nextCursor),
             extensions: {
-              expression: { type: 'leaf', range: condRange, label: condText },
+              expression: {
+                type: 'leaf',
+                range: condRange,
+                label: condText,
+                ...(condCallSite ? { callSite: condCallSite } : {}),
+              },
               conditionText: condText,
               label: condText,
             },
