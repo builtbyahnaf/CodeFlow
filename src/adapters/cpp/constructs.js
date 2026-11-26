@@ -160,7 +160,16 @@ export function collectFunctionConstructs({ functionNode, symbol, locator, file 
       };
     }
     if (node.kind === 'UnaryOperator' && node.opcode === '!') {
-      return { type: 'not', operand: expressionTree(inner(node)[0]) };
+      const operand = expressionTree(inner(node)[0]);
+      if (operand.type === 'leaf') {
+        const base = typeof operand.label === 'string' && operand.label ? operand.label : 'condition';
+        return {
+          ...operand,
+          range: rangeOf(node) ?? operand.range,
+          label: base.startsWith('!') ? base : `!${base}`,
+        };
+      }
+      return { type: 'not', operand };
     }
     if (node.kind === 'ConditionalOperator') {
       const items = inner(node);
