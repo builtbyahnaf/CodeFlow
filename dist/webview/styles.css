@@ -1102,3 +1102,30 @@ body.cf-full-window {
   background: var(--cf-bg);
   position: relative;
 }
+
+.cf-index-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 10px;
+  border: 1px solid var(--cf-border);
+  color: var(--cf-muted);
+  background: var(--cf-bg);
+  white-space: nowrap;
+}
+
+.cf-index-badge.is-indexed {
+  color: var(--cf-fg);
+  border-color: var(--vscode-terminal-ansiGreen, #4ec9b0);
+}
+
+.cf-button-primary {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #ffffff);
+  border-color: var(--vscode-button-background, #0e639c);
+}
+
+.cf-button-primary:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+}
