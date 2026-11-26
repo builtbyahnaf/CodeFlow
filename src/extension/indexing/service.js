@@ -154,7 +154,18 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
           }),
         logger,
       });
-      const debounceMs = vscode.workspace.getConfiguration('codeflow').get('index.debounceMs', 350);
+      const config = vscode.workspace.getConfiguration('codeflow');
+      const debounceMs = config.get('index.debounceMs', 350);
+      const autoUpdate = config.get('index.autoUpdate', true);
+      const maxFileBytes = config.get('index.maxFileBytes', DEFAULT_INDEX_CONFIG.maxFileBytes);
+      store.open();
+      if (Number.isFinite(maxFileBytes) && maxFileBytes >= 65536) {
+        try {
+          store.updateConfig({ maxFileBytes });
+        } catch {
+          // Optional config update if store supports it
+        }
+      }
       coordinator = createIncrementalCoordinator({
         store,
         listWorkspaceFiles: () => walkWorkspaceFiles(root),
@@ -169,20 +180,22 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
           }),
         debounceMs,
       });
-      watcherSubscription = registerIncrementalWatchers({
-        workspaceRoot: () => workspaceRoot(),
-        isTrusted: () => Boolean(vscode.workspace.isTrusted),
-        coordinator,
-        hostEvents: {
-          onDidChangeTextDocument: vscode.workspace.onDidChangeTextDocument,
-          onDidSaveTextDocument: vscode.workspace.onDidSaveTextDocument,
-          onDidCloseTextDocument: vscode.workspace.onDidCloseTextDocument,
-          onDidCreateFiles: vscode.workspace.onDidCreateFiles,
-          onDidDeleteFiles: vscode.workspace.onDidDeleteFiles,
-          onDidRenameFiles: vscode.workspace.onDidRenameFiles,
-          onDidChangeConfiguration: vscode.workspace.onDidChangeConfiguration,
-        },
-      });
+      if (autoUpdate) {
+        watcherSubscription = registerIncrementalWatchers({
+          workspaceRoot: () => workspaceRoot(),
+          isTrusted: () => Boolean(vscode.workspace.isTrusted),
+          coordinator,
+          hostEvents: {
+            onDidChangeTextDocument: vscode.workspace.onDidChangeTextDocument,
+            onDidSaveTextDocument: vscode.workspace.onDidSaveTextDocument,
+            onDidCloseTextDocument: vscode.workspace.onDidCloseTextDocument,
+            onDidCreateFiles: vscode.workspace.onDidCreateFiles,
+            onDidDeleteFiles: vscode.workspace.onDidDeleteFiles,
+            onDidRenameFiles: vscode.workspace.onDidRenameFiles,
+            onDidChangeConfiguration: vscode.workspace.onDidChangeConfiguration,
+          },
+        });
+      }
     }
     return store;
   }
@@ -388,13 +401,22 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
     return { ok: true, stats, health };
   }
 
+  let promptEvaluatedThisSession = false;
+
   /**
    * Evaluate the first-open workflow lazily when requested. Never touches disk
    * in Restricted Mode.
    */
   async function evaluateFirstOpen() {
+    if (promptEvaluatedThisSession) {
+      return { action: FIRST_OPEN_ACTIONS.NONE };
+    }
+    promptEvaluatedThisSession = true;
     if (!vscode.workspace.isTrusted) {
       return decideFirstOpenAction({ trusted: false });
+    }
+    if (vscode.workspace.getConfiguration('codeflow').get('index.promptOnOpen', true) === false) {
+      return { action: FIRST_OPEN_ACTIONS.NONE };
     }
     const root = workspaceRoot();
     if (!root) {
@@ -565,12 +587,68 @@ export function createWorkspaceIndexService({ context, logger, analysis, extensi
     statusBarItem?.dispose();
   }
 
+  async function showIndexOptions() {
+    const stats = store ? store.stats() : { state: 'unindexed', fileCount: 0, symbolCount: 0 };
+    const picked = await vscode.window.showQuickPick(
+      [
+        {
+          id: 'index',
+          label: '$(sync) Index / Update Repository',
+          description: `Current state: ${stats.state} (${stats.fileCount} files, ${stats.symbolCount} symbols)`,
+        },
+        {
+          id: 'rebuild',
+          label: '$(refresh) Rebuild Repository Index',
+          description: 'Discard cached .codeflow/ index and re-analyze all workspace files',
+        },
+        {
+          id: 'repair',
+          label: '$(wrench) Repair Index Integrity',
+          description: 'Prune orphaned records and verify stored CSR shards',
+        },
+        {
+          id: 'exclusions',
+          label: '$(exclude) Configure Index Exclusions (.codeflow/config.json)',
+          description: 'Edit excludeGlobs, file limits, and .gitignore handling',
+        },
+        {
+          id: 'settings',
+          label: '$(gear) Open Indexing Settings',
+          description: 'Configure auto-update, promptOnOpen, debounce, and file size caps',
+        },
+        {
+          id: 'clear',
+          label: '$(trash) Clear Index',
+          description: 'Remove local .codeflow/ index data',
+        },
+      ],
+      {
+        title: 'CodeFlow: Repository Indexing Options',
+        placeHolder: 'Choose an indexing action or configuration option',
+      },
+    );
+    if (!picked) {
+      return { ok: false, cancelled: true };
+    }
+    if (picked.id === 'index') return indexWorkspace({ rebuild: false });
+    if (picked.id === 'rebuild') return rebuildIndex();
+    if (picked.id === 'repair') return repairIndex();
+    if (picked.id === 'exclusions') return openIndexConfiguration();
+    if (picked.id === 'settings') {
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'codeflow.index');
+      return { ok: true };
+    }
+    if (picked.id === 'clear') return clearIndex();
+    return { ok: true };
+  }
+
   return {
     indexWorkspace,
     cancelIndexing,
     rebuildIndex,
     repairIndex,
     showIndexStatus,
+    showIndexOptions,
     clearIndex,
     openIndexConfiguration,
     evaluateFirstOpen,
