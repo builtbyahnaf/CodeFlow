@@ -38,6 +38,15 @@ const fullWindowButton = /** @type {HTMLButtonElement|null} */ (
 const zoomFitButton = /** @type {HTMLButtonElement|null} */ (
   document.getElementById('cf-zoom-fit')
 );
+const indexStatusBadge = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-index-status')
+);
+const repoAnalyzeButton = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-repo-analyze')
+);
+const indexOptionsButton = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-index-options')
+);
 const functionPicker = /** @type {HTMLSelectElement|null} */ (
   document.getElementById('cf-function')
 );
@@ -1262,12 +1271,39 @@ function renderFunctionPicker(list) {
   }
 }
 
+/**
+ * @param {Record<string, any>|null|undefined} stats
+ */
+function updateIndexBadge(stats) {
+  if (!indexStatusBadge) {
+    return;
+  }
+  const state = stats?.state ?? 'unindexed';
+  const files = Number(stats?.fileCount ?? 0);
+  const symbols = Number(stats?.symbolCount ?? 0);
+  if (state === 'indexing') {
+    indexStatusBadge.textContent = 'Repo: Indexing…';
+    indexStatusBadge.classList.remove('is-indexed');
+  } else if ((state === 'complete' || state === 'partial') && files > 0) {
+    indexStatusBadge.textContent = `Repo: ${files} files`;
+    indexStatusBadge.title = `${files} files, ${symbols} symbols indexed (${state})`;
+    indexStatusBadge.classList.add('is-indexed');
+  } else {
+    indexStatusBadge.textContent = 'Repo: Unindexed';
+    indexStatusBadge.title = 'Click Analyze Repo for repo-wide cross-file resolution';
+    indexStatusBadge.classList.remove('is-indexed');
+  }
+}
+
 function showCapabilities(payload) {
   const adapters = Array.isArray(payload.adapters) ? payload.adapters : [];
   const names = adapters.map((adapter) => adapter.id).join(', ') || 'none';
   meta.textContent = `Mock data · adapters: ${names} · protocol v${payload.protocolVersion ?? '?'}`;
   if (payload?.settings && typeof payload.settings === 'object') {
     applySettings(payload.settings);
+  }
+  if (payload?.indexStats) {
+    updateIndexBadge(payload.indexStats);
   }
 }
 
@@ -1604,6 +1640,48 @@ reloadButton.addEventListener('click', () => {
 
 zoomFitButton?.addEventListener('click', () => {
   renderer.zoomToFit();
+});
+
+repoAnalyzeButton?.addEventListener('click', async () => {
+  if (repoAnalyzeButton.disabled) {
+    return;
+  }
+  repoAnalyzeButton.disabled = true;
+  updateIndexBadge({ state: 'indexing' });
+  setStatus('Indexing repository for repo-wide analysis…');
+  setBanner('');
+  try {
+    const res = await bridge.request('workspace.analyze', {}, { timeoutMs: 120_000 });
+    updateIndexBadge(res.payload?.stats);
+    if (res.payload?.ok === false && res.payload?.message) {
+      setBanner(res.payload.message, true);
+    } else {
+      await loadGraph();
+    }
+  } catch (error) {
+    setBanner(`Repository analysis failed: ${error?.message ?? String(error)}`, true);
+    updateIndexBadge(null);
+  } finally {
+    repoAnalyzeButton.disabled = false;
+  }
+});
+
+indexOptionsButton?.addEventListener('click', async () => {
+  try {
+    const res = await bridge.request('index.configure', {}, { timeoutMs: 120_000 });
+    if (res.payload?.stats) {
+      updateIndexBadge(res.payload.stats);
+      await loadGraph();
+    }
+  } catch (error) {
+    setBanner(`Could not open index options: ${error?.message ?? String(error)}`, true);
+  }
+});
+
+bridge.on('index.data', (payload) => {
+  if (payload?.stats) {
+    updateIndexBadge(payload.stats);
+  }
 });
 
 fullWindowButton?.addEventListener('click', () => {

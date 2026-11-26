@@ -64,6 +64,15 @@ export function renderPanelHtml({
         <button id="cf-switch-perspective" type="button" class="cf-button" title="Switch perspective for the selected function" hidden>
           Show in Call Graph
         </button>
+        <span id="cf-index-status" class="cf-index-badge" title="Repository indexing status">
+          Repo: Unindexed
+        </span>
+        <button id="cf-repo-analyze" type="button" class="cf-button cf-button-primary" title="Index entire repository and resolve cross-file functions/calls">
+          Analyze Repo
+        </button>
+        <button id="cf-index-options" type="button" class="cf-button" title="Repository indexing options, exclusions, and rebuild controls">
+          Index Options
+        </button>
         <button id="cf-zoom-fit" type="button" class="cf-button" title="Zoom graph to fit viewport">
           Fit
         </button>
