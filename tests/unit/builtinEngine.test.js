@@ -139,6 +139,66 @@ void run() {
   assert.equal(ccs.length, 0);
 });
 
+test('comments never merge following statements or hide a conditional', () => {
+  const code = `
+int classify(int x) {
+  int y = 1; // trailing ; if (fake) { } else { }
+  // branch on the sign
+  if (x > 0) { // positive
+    y = 2;
+  }
+  /* block
+     comment between branches */
+  else {
+    y = 3;
+  }
+  // done
+  int z = y * 2;
+  return z;
+}
+`;
+  const run = parseCppSource({ runId: 'run:comments-flow', path: 'src/comments.cpp', text: code });
+  const fn = run.symbols.find((symbol) => symbol.name === 'classify' && symbol.kind === 'function');
+  assert.ok(fn);
+  const constructs = run.controlConstructs.filter((cc) => cc.symbolId === fn.symbolId);
+  const kinds = constructs.map((cc) => cc.kind);
+  assert.ok(kinds.includes('if'), 'the if after a comment must stay a conditional');
+  assert.ok(kinds.includes('else'), 'the else after a block comment must stay attached');
+
+  const ifConstruct = constructs.find((cc) => cc.kind === 'if');
+  assert.equal(ifConstruct.extensions?.label, 'x > 0');
+
+  const labels = constructs.map((cc) => cc.extensions?.label).filter(Boolean);
+  assert.ok(labels.includes('int y = 1;'));
+  assert.ok(labels.includes('int z = y * 2;'));
+  for (const label of labels) {
+    assert.ok(!label.includes('//'), `line comment leaked into "${label}"`);
+    assert.ok(!label.includes('/*'), `block comment leaked into "${label}"`);
+  }
+});
+
+test('comments between a condition and its block do not merge the branch body', () => {
+  const code = `
+int pick(int x) {
+  if (/* positive */ x > 0) // then
+  {
+    return 1;
+  }
+  // otherwise
+  return 0;
+}
+`;
+  const run = parseCppSource({ runId: 'run:comments-branch', path: 'src/branch.cpp', text: code });
+  const fn = run.symbols.find((symbol) => symbol.name === 'pick' && symbol.kind === 'function');
+  assert.ok(fn);
+  const constructs = run.controlConstructs.filter((cc) => cc.symbolId === fn.symbolId);
+  const ifConstruct = constructs.find((cc) => cc.kind === 'if');
+  assert.ok(ifConstruct);
+  assert.equal(ifConstruct.extensions?.label, 'x > 0');
+  assert.ok(constructs.some((cc) => cc.kind === 'return' && cc.extensions?.label === 'return 1'));
+  assert.ok(constructs.some((cc) => cc.kind === 'return' && cc.extensions?.label === 'return 0'));
+});
+
 import { validateAnalysisRun } from '../../src/core/csr/entities.js';
 
 test('built-in engine run passes strict CSR validation', () => {
