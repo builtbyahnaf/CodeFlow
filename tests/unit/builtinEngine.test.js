@@ -317,3 +317,50 @@ test('parseCppSource converts absolute Windows paths to workspace-relative CSR p
   const validation = validateAnalysisRun(run, { mode: 'strict' });
   assert.equal(validation.issues.length, 0);
 });
+
+test('parseCppSource keeps comments separate from subsequent if/else statements and emits real conditional branches', () => {
+  const code = `
+#include <vector>
+int check(int x) {
+  std::vector<int> dp(5, 0);
+  // Check positive values first
+  if (x > 0) {
+    return dp[0];
+  } /* negative check */ else if (x < 0) {
+    return -1;
+  }
+  return 0;
+}
+`;
+  const run = parseCppSource({ runId: 'run:comment-if', path: 'src/comment_if.cpp', text: code });
+  const fn = run.symbols.find((s) => s.name === 'check');
+  assert.ok(fn);
+
+  // std::vector<int> dp(5, 0) is a constructor declaration, not a call to `dp`
+  assert.equal(
+    run.relationships.some((r) => r.to.includes(':dp') || r.to === 'external:dp'),
+    false,
+    'variable constructor declaration must not emit a fake call to variable name',
+  );
+
+  const query = createQueryLayer(run, { capabilities: cppAdapter.capabilities });
+  const built = buildCfg(query, fn.symbolId);
+  assert.equal(built.ok, true);
+
+  const condNodes = built.cfg.nodes.filter((n) => n.kind === 'condition');
+  assert.ok(
+    condNodes.some((n) => n.label === 'x > 0'),
+    `expected x > 0 condition node after line comment, got: ${JSON.stringify(condNodes.map((n) => n.label))}`,
+  );
+  assert.ok(
+    condNodes.some((n) => n.label === 'x < 0'),
+    `expected x < 0 condition node after block comment`,
+  );
+  assert.ok(built.cfg.edges.some((e) => e.kind === 'true'));
+  assert.ok(built.cfg.edges.some((e) => e.kind === 'false'));
+
+  for (const node of built.cfg.nodes) {
+    assert.ok(!node.label.includes('//'), `node label leaked line comment: ${node.label}`);
+    assert.ok(!node.label.includes('/*'), `node label leaked block comment: ${node.label}`);
+  }
+});
