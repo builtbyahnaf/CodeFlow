@@ -681,18 +681,22 @@ export function calleeNameFromTarget(target) {
 }
 
 /**
- * Normalize a single relationship so a known builtin call is no longer counted
- * as an unresolved user target.
+ * Normalize a single relationship so a known builtin or STL call/instantiation
+ * is no longer counted as an unresolved user target.
  *
- * Only `calls` relationships are touched, and only when they are currently
- * `unresolved`. Everything else is returned unchanged.
+ * Only `calls` and `instantiates` relationships are touched, and only when they
+ * are currently `unresolved`. Everything else is returned unchanged.
  *
  * @template {Record<string, any>} T
  * @param {T} rel
  * @returns {T}
  */
 export function normalizeBuiltinCallRelationship(rel) {
-  if (!rel || rel.type !== 'calls' || rel.status !== 'unresolved') {
+  if (
+    !rel ||
+    (rel.type !== 'calls' && rel.type !== 'instantiates') ||
+    rel.status !== 'unresolved'
+  ) {
     return rel;
   }
   const calleeName = rel.calleeName ?? rel.extensions?.calleeName ?? calleeNameFromTarget(rel.to);
