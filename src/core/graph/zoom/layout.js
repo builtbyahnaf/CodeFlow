@@ -22,6 +22,53 @@ const GRID_GAP_X = 220;
 const GRID_GAP_Y = 100;
 
 /**
+ * Compute dynamic node box dimensions from wrapped label lines and badges so
+ * long file paths, directory names, and symbol names never overflow their box.
+ *
+ * @param {Record<string, any>} node
+ * @returns {{width: number, height: number}}
+ */
+function zoomSizeFor(node) {
+  if (
+    Number.isFinite(node?.position?.width) &&
+    Number.isFinite(node?.position?.height)
+  ) {
+    return {
+      width: Number(node.position.width),
+      height: Number(node.position.height),
+    };
+  }
+  if (Number.isFinite(node?.width) && Number.isFinite(node?.height)) {
+    return {
+      width: Number(node.width),
+      height: Number(node.height),
+    };
+  }
+  const lines =
+    Array.isArray(node?.labelLines) && node.labelLines.length > 0
+      ? node.labelLines.map(String)
+      : String(node?.label ?? node?.id ?? '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
+  const longest = lines.reduce((max, l) => Math.max(max, l.length), 0);
+  const badgeText =
+    typeof node?.badge === 'string' && node.badge.length > 0
+      ? node.badge
+      : Array.isArray(node?.badges) && node.badges.length > 0
+        ? node.badges.join(' · ')
+        : '';
+  const hasBadges = badgeText.length > 0;
+  const contentChars = Math.max(longest, Math.ceil(badgeText.length * 0.78));
+  const width = Math.min(440, Math.max(DEFAULT_NODE_WIDTH, Math.round(contentChars * 8.2 + 44)));
+  const height = Math.min(
+    320,
+    Math.max(DEFAULT_NODE_HEIGHT, Math.max(1, lines.length) * 17 + (hasBadges ? 16 : 0) + 30),
+  );
+  return { width, height };
+}
+
+/**
  * Compute an anchored incremental layout that preserves existing node
  * coordinates across refreshes and cluster expansions.
  *
@@ -58,11 +105,18 @@ export function computeAnchoredIncrementalLayout({
     anchorPosition ??
     (anchorNodeId && prevById.has(anchorNodeId) ? prevById.get(anchorNodeId) : { x: 0, y: 0 });
 
+  const sizes = nextNodes.map((node) => zoomSizeFor(node));
+  const maxWidth = sizes.reduce((m, s) => Math.max(m, s.width), DEFAULT_NODE_WIDTH);
+  const maxHeight = sizes.reduce((m, s) => Math.max(m, s.height), DEFAULT_NODE_HEIGHT);
+  const stepX = Math.max(GRID_GAP_X, maxWidth + 44);
+  const stepY = Math.max(GRID_GAP_Y, maxHeight + 36);
+
   const safeCols = Math.max(1, Math.trunc(Number(columns) || 4));
   let reusedCount = 0;
   let placedNewCount = 0;
 
   const positionedNodes = nextNodes.map((node, index) => {
+    const size = sizes[index];
     const existing = prevById.get(node.id);
     if (existing) {
       reusedCount += 1;
@@ -76,6 +130,22 @@ export function computeAnchoredIncrementalLayout({
       };
     }
 
+    if (
+      node.position &&
+      Number.isFinite(node.position.x) &&
+      Number.isFinite(node.position.y)
+    ) {
+      placedNewCount += 1;
+      return {
+        ...node,
+        x: Number(node.position.x),
+        y: Number(node.position.y),
+        width: size.width,
+        height: size.height,
+        animated: !reducedMotion,
+      };
+    }
+
     const col = placedNewCount % safeCols;
     const row = Math.floor(placedNewCount / safeCols);
     placedNewCount += 1;
@@ -83,15 +153,15 @@ export function computeAnchoredIncrementalLayout({
     const x =
       node.id === anchorNodeId
         ? anchorCoords.x
-        : anchorCoords.x + col * GRID_GAP_X + (index === 0 ? 0 : 40);
-    const y = node.id === anchorNodeId ? anchorCoords.y : anchorCoords.y + row * GRID_GAP_Y;
+        : anchorCoords.x + col * stepX + (index === 0 ? 0 : 40);
+    const y = node.id === anchorNodeId ? anchorCoords.y : anchorCoords.y + row * stepY;
 
     return {
       ...node,
       x,
       y,
-      width: Number(node.width ?? DEFAULT_NODE_WIDTH),
-      height: Number(node.height ?? DEFAULT_NODE_HEIGHT),
+      width: size.width,
+      height: size.height,
       animated: !reducedMotion,
     };
   });
