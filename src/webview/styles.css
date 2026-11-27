@@ -464,10 +464,31 @@ body {
 }
 
 .cf-node-badge {
-  fill: var(--cf-status-unresolved);
+  fill: var(--cf-muted);
   font-family: var(--cf-font);
   font-size: 9px;
   pointer-events: none;
+}
+
+.cf-node--unresolved .cf-node-badge,
+.cf-node--stale .cf-node-badge {
+  fill: var(--cf-status-unresolved);
+}
+
+.cf-node--resolved .cf-node-badge {
+  fill: var(--cf-status-resolved);
+}
+
+.cf-zoom-panel {
+  border-top: 1px solid var(--cf-border);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.cf-zoom-minimap {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--cf-muted);
 }
 
 .cf-edge-label {
