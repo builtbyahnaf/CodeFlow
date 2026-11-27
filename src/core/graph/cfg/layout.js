@@ -235,22 +235,35 @@ function sizeFor(node) {
     Array.isArray(node?.labelLines) && node.labelLines.length > 0
       ? node.labelLines
       : [];
+  const badges = Array.isArray(node?.badges) ? node.badges.filter(Boolean) : [];
+  const badgeText = badges.length > 0 ? badges.join(' · ') : (node?.badge ? String(node.badge) : '');
+  const badgeClearance = badgeText ? 16 : 0;
+  const badgeMinWidth = badgeText ? Math.ceil(badgeText.length * 6.4 + 28) : 0;
+
   if (lines.length === 0) {
-    return base;
+    return {
+      width: Math.max(base.width, badgeMinWidth),
+      height: base.height + badgeClearance,
+    };
   }
   const metrics = metricsFor(kind);
   const longest = Math.max(...lines.map((line) => String(line).length));
-  // Never clamp: the node must always be large enough to contain every wrapped
-  // line. `labelLines()` already bounds each line length, so width stays
-  // reasonable while height grows with the number of lines instead of letting
-  // text spill into neighbouring nodes.
+  // Sloped shapes (diamonds, hexagons, parallelograms) narrow toward top/bottom edges
+  // as line count grows, so widen slightly with multi-line labels to stay inside the outline.
+  const multiLineFactor =
+    kind === 'condition'
+      ? 1 + Math.max(0, lines.length - 1) * 0.14
+      : kind === 'multiway' || kind === 'loop_header'
+        ? 1 + Math.max(0, lines.length - 1) * 0.06
+        : 1;
   const width = Math.max(
     base.width,
-    Math.ceil(longest * LABEL_CHAR_WIDTH * metrics.textScale + metrics.horizontalPadding),
+    badgeMinWidth,
+    Math.ceil(longest * LABEL_CHAR_WIDTH * metrics.textScale * multiLineFactor + metrics.horizontalPadding),
   );
   const height = Math.max(
-    base.height,
-    Math.ceil(lines.length * LABEL_LINE_HEIGHT + metrics.verticalPadding),
+    base.height + badgeClearance,
+    Math.ceil(lines.length * LABEL_LINE_HEIGHT + metrics.verticalPadding + badgeClearance),
   );
   return { width, height };
 }
