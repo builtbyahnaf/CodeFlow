@@ -21,6 +21,32 @@ export const LAYOUT_DEFAULTS = Object.freeze({
 });
 
 /**
+ * Compute dynamic node box size from `labelLines` / `label` / `badges` so
+ * nodes in overview and call graphs wrap all text without fixed-width clipping.
+ *
+ * @param {Record<string, any>|undefined} node
+ * @param {typeof LAYOUT_DEFAULTS} config
+ * @returns {{width: number, height: number}}
+ */
+function nodeSize(node, config) {
+  const lines =
+    Array.isArray(node?.labelLines) && node.labelLines.length > 0
+      ? node.labelLines
+      : node?.label
+        ? [String(node.label)]
+        : [];
+  const longest = lines.length > 0 ? Math.max(...lines.map((l) => String(l).length)) : 0;
+  const badgeText = Array.isArray(node?.badges) && node.badges.length > 0
+    ? node.badges.join(' · ')
+    : (node?.badge ? String(node.badge) : '');
+  const badgeHeight = badgeText ? 14 : 0;
+  const badgeWidth = badgeText ? Math.ceil(badgeText.length * 6.4 + 24) : 0;
+  const width = Math.max(config.nodeWidth, badgeWidth, Math.ceil(longest * 8.2 + 32));
+  const height = Math.max(config.nodeHeight, Math.ceil(Math.max(1, lines.length) * 16 + 22 + badgeHeight));
+  return { width, height };
+}
+
+/**
  * @param {Graph} graph
  * @param {Partial<typeof LAYOUT_DEFAULTS>} [options]
  * @returns {{positions: Record<string, Position>, width: number, height: number, layers: string[][]}}
@@ -28,6 +54,7 @@ export const LAYOUT_DEFAULTS = Object.freeze({
 export function computeLayout(graph, options = {}) {
   const config = { ...LAYOUT_DEFAULTS, ...options };
   const nodeIds = graph.nodes.map((node) => node.id);
+  const byNodeId = new Map(graph.nodes.map((node) => [node.id, node]));
   /** @type {Map<string, number>} */
   const layerOf = new Map();
 
@@ -96,27 +123,34 @@ export function computeLayout(graph, options = {}) {
   const positions = {};
   /** @type {string[][]} */
   const layers = [];
-  let tallest = 0;
+  let currentX = 0;
+  let maxExtentY = 0;
 
   for (const layer of [...byLayer.keys()].sort((a, b) => a - b)) {
     const ids = byLayer.get(layer) ?? [];
     layers.push(ids);
-    ids.forEach((id, index) => {
+    let colWidth = config.nodeWidth;
+    let currentY = 0;
+    for (const id of ids) {
+      const size = nodeSize(byNodeId.get(id), config);
+      colWidth = Math.max(colWidth, size.width);
       positions[id] = {
-        x: layer * (config.nodeWidth + config.horizontalGap),
-        y: index * (config.nodeHeight + config.verticalGap),
-        width: config.nodeWidth,
-        height: config.nodeHeight,
+        x: currentX,
+        y: currentY,
+        width: size.width,
+        height: size.height,
         layer,
       };
-    });
-    tallest = Math.max(tallest, ids.length);
+      currentY += size.height + config.verticalGap;
+    }
+    currentX += colWidth + config.horizontalGap;
+    maxExtentY = Math.max(maxExtentY, currentY);
   }
 
   return {
     positions,
-    width: Math.max(1, layers.length) * (config.nodeWidth + config.horizontalGap),
-    height: Math.max(1, tallest) * (config.nodeHeight + config.verticalGap),
+    width: Math.max(config.nodeWidth + config.horizontalGap, currentX),
+    height: Math.max(config.nodeHeight + config.verticalGap, maxExtentY),
     layers,
   };
 }
