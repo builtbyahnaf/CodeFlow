@@ -28,6 +28,7 @@ import {
   computeDirectionalHighlight,
 } from './search.js';
 import { computeAnchoredIncrementalLayout } from './layout.js';
+import { toCfgDto } from '../cfg/dto.js';
 import { buildMinimapModel } from './minimap.js';
 import { serializeZoomNavigationState, restoreZoomNavigationState } from './persistence.js';
 import { buildCfg } from '../cfg/builder.js';
@@ -92,7 +93,23 @@ export function createSemanticZoomSession(options = {}) {
           dtoKind: 'semantic_zoom',
           level: ZOOM_LEVELS.L3_SYMBOL,
           scopeId: state.scopeId,
-          nodes: opened.dto.nodes,
+          nodes: opened.dto.nodes.map((n) => {
+            const isCallable =
+              n.isCenter === true ||
+              ['function', 'method', 'constructor', 'closure'].includes(n.kind);
+            const isDescendable =
+              !n.external &&
+              n.kind !== 'unresolved_bucket' &&
+              !String(n.id).startsWith('bucket:') &&
+              isCallable;
+            return {
+              ...n,
+              level: ZOOM_LEVELS.L3_SYMBOL,
+              scopeId: n.id,
+              targetLevel: isDescendable ? ZOOM_LEVELS.L4_FUNCTION : null,
+              expandable: isDescendable,
+            };
+          }),
           edges: opened.dto.edges,
           membersByClusterId: new Map(),
         };
@@ -108,7 +125,33 @@ export function createSemanticZoomSession(options = {}) {
         ? buildCfg(options.query, state.scopeId, { allowLarge: true })
         : null;
       const cfg = cfgRes?.ok ? cfgRes.cfg : { symbolId: state.scopeId, nodes: [], edges: [] };
-      return buildFunctionView({ cfg });
+      const view = buildFunctionView({ cfg });
+      if (!view.clusteredConstructs && cfgRes?.ok) {
+        const laidOut = toCfgDto(cfg);
+        const byId = new Map((laidOut.nodes ?? []).map((n) => [n.id, n]));
+        view.nodes = view.nodes.map((n) => {
+          const laid = byId.get(n.id);
+          if (!laid?.position) {
+            return n;
+          }
+          return {
+            ...n,
+            label: laid.label ?? n.label,
+            labelLines: laid.labelLines ?? n.labelLines,
+            badges: laid.badges ?? n.badges,
+            badge: laid.badge ?? n.badge,
+            position: laid.position,
+            x: laid.position.x,
+            y: laid.position.y,
+            width: laid.position.width,
+            height: laid.position.height,
+            layer: laid.position.layer,
+            targetLevel: n.constructId ? ZOOM_LEVELS.L5_STATEMENT : null,
+          };
+        });
+        view.edges = laidOut.edges ?? view.edges;
+      }
+      return view;
     }
     if (state.level === ZOOM_LEVELS.L5_STATEMENT) {
       const fnCrumb = [...navStack.breadcrumbs()]
