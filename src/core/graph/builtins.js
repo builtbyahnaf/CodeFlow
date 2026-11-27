@@ -45,7 +45,13 @@ export const KNOWN_BUILTIN_PREFIXES = Object.freeze([
   'external:global.Buffer.',
   'external:global.process.',
   'external:global.crypto.',
+  'external:global.performance.',
+  'external:global.localStorage.',
+  'external:global.sessionStorage.',
   'external:std::',
+  'external:std::__1::',
+  'external:std::__cxx11::',
+  'external:__gnu_cxx::',
 ]);
 
 /**
