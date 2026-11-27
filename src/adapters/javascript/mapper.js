@@ -2019,13 +2019,17 @@ export function mapJavaScript(options) {
             'Response',
             'document',
             'window',
+            'globalThis',
+            'self',
             'navigator',
             'location',
             'history',
+            'screen',
             'localStorage',
             'sessionStorage',
             'crypto',
             'performance',
+            'fetch',
           ].includes(object.name)
         ) {
           return {
@@ -2064,9 +2068,12 @@ export function mapJavaScript(options) {
       }
       // fn.call / fn.apply / fn.bind are classified before the generic member
       // path so they keep their `inferred` status.
+      // Preserve the method name on chained member calls (e.g.
+      // `document.getElementById('x').addEventListener(...)` or `arr.filter(...).map(...)`)
+      // so builtin/DOM classifiers can still recognize standard API methods.
       return {
         kind: 'external',
-        target: 'external:member',
+        target: name ? `external:member.${name}` : 'external:member',
         status: 'unresolved',
         reasonCode: 'unknown_receiver',
       };
