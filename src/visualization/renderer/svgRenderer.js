@@ -452,7 +452,12 @@ function appendNodeShape(group, node) {
         })
       );
 
-      appendNodeShape(group, node);
+      const shapeEl = appendNodeShape(group, node);
+
+      const badgeText =
+        Array.isArray(node.badges) && node.badges.length > 0
+          ? node.badges.join(' · ')
+          : node.badge || (node.status !== 'resolved' ? node.status : '');
 
       const rawLines =
         Array.isArray(node.labelLines) && node.labelLines.length > 0
@@ -518,6 +523,45 @@ function appendNodeShape(group, node) {
       }${node.reasonCode ? `\nreason: ${node.reasonCode}` : ''}${callText}`;
       group.appendChild(title);
 
+      viewport.appendChild(group);
+
+      // In a real browser DOM, verify rendered text fits comfortably inside the
+      // box shape outline; expand the outline if any glyph metric exceeds budget.
+      if (typeof label.getBBox === 'function' && shapeEl) {
+        try {
+          const textBBox = label.getBBox();
+          const badgeBBox = badgeEl && typeof badgeEl.getBBox === 'function' ? badgeEl.getBBox() : null;
+          const shapePadX =
+            node.kind === 'condition' ? 56 : node.kind === 'call' ? 48 : 30;
+          boxWidth = Math.max(
+            boxWidth,
+            Math.ceil((textBBox?.width ?? 0) + shapePadX),
+            badgeBBox ? Math.ceil(badgeBBox.width + 24) : 0,
+          );
+          boxHeight = Math.max(
+            boxHeight,
+            Math.ceil((textBBox?.y ?? 0) + (textBBox?.height ?? 0) + 12),
+          );
+        } catch {
+          // Safe fallback when getBBox is unsupported (e.g. detached SVG)
+        }
+      }
+      if (shapeEl && (boxWidth > node.position.width || boxHeight > node.position.height)) {
+        const nextOutline = shapeOutline(node.kind, boxWidth, boxHeight);
+        if (nextOutline.tag === shapeEl.tagName) {
+          for (const [k, v] of Object.entries(nextOutline.attrs)) {
+            shapeEl.setAttribute(k, String(v));
+          }
+        }
+        label.setAttribute('x', String(boxWidth / 2));
+        for (const tspan of label.children) {
+          tspan.setAttribute('x', String(boxWidth / 2));
+        }
+        if (badgeEl) {
+          badgeEl.setAttribute('x', String(boxWidth - 8));
+        }
+      }
+
       group.addEventListener('click', (event) => {
         event.stopPropagation();
         select(node.id);
@@ -558,7 +602,6 @@ function appendNodeShape(group, node) {
         }
       });
 
-      viewport.appendChild(group);
       nodeElements.set(node.id, group);
     }
 
