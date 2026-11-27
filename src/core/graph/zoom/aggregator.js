@@ -22,6 +22,7 @@
 import { ZOOM_LEVELS, LEVEL_CAPS } from './levels.js';
 import { createStatusDistribution } from './distributions.js';
 import { bundleClusterEdges } from './edgeBundles.js';
+import { normalizeBuiltinCalls } from '../builtins.js';
 
 /**
  * Extract top-level directory segment (`src/core/a.js` -> `src`, `root.js` -> `.`).
@@ -117,12 +118,13 @@ export function buildWorkspaceOverview(input = {}) {
   const indexRelationships =
     typeof input.index?.allRelationships === 'function' ? input.index.allRelationships() : [];
   const queryRelationships = input.query?.allRelationships?.();
-  const relationships =
+  const relationships = normalizeBuiltinCalls(
     Array.isArray(indexRelationships) && indexRelationships.length > 0
       ? indexRelationships
       : queryRelationships?.ok
         ? queryRelationships.value
-        : [];
+        : [],
+  );
 
   /** @type {Map<string, string>} */
   const fileIdToDir = new Map();
@@ -320,12 +322,13 @@ export function buildModuleView(input) {
 
   const indexRelationships = input?.index?.allRelationships?.() ?? [];
   const queryRelationships = input?.query?.allRelationships?.();
-  const relationships =
+  const relationships = normalizeBuiltinCalls(
     indexRelationships.length > 0
       ? indexRelationships
       : queryRelationships?.ok
         ? queryRelationships.value
-        : [];
+        : [],
+  );
 
   /** @type {Map<string, {id: string, scopeId: string, label: string, isDirectory: boolean, files: Array<Record<string, any>>, rels: Array<Record<string, any>>}>} */
   const groups = new Map();
@@ -440,12 +443,13 @@ export function buildFileView(input) {
     (s) => s.kind !== 'file',
   );
 
-  const relationships =
+  const relationships = normalizeBuiltinCalls(
     typeof input?.index?.allRelationships === 'function'
       ? input.index.allRelationships()
       : input?.query?.allRelationships?.()?.ok
         ? input.query.allRelationships().value
-        : [];
+        : [],
+  );
 
   /** @type {Map<string, Array<Record<string, any>>>} */
   const membersByClusterId = new Map();

@@ -18,6 +18,7 @@ import { buildCandidateBuckets, buildUnresolvedBucket } from './buckets.js';
 import { mergeEvidenceSources } from './merge.js';
 import { createAdapterEvidenceSource } from './sources.js';
 import { detectCallCycles } from './cycles.js';
+import { normalizeBuiltinCalls } from '../builtins.js';
 
 export { encodeCallCursor, decodeCallCursor };
 
@@ -79,7 +80,15 @@ export function createCallGraphQueryService(options = {}) {
         activeSources.push(snap);
       }
     }
-    return mergeEvidenceSources(activeSources, {
+    // Adapters honestly report calls they cannot resolve inside the file as
+    // `unresolved`/`out_of_scope`. Known builtin and standard-library targets
+    // are not unknown user code, so normalize them before merging: they must
+    // never inflate the unresolved bucket.
+    const normalizedSources = activeSources.map((source) => ({
+      ...source,
+      relationships: normalizeBuiltinCalls(source.relationships),
+    }));
+    return mergeEvidenceSources(normalizedSources, {
       staleFiles: options.staleFiles,
       diskHashes: options.diskHashes,
       logger: options.logger,
