@@ -43,8 +43,6 @@ const NODE_SIZES = Object.freeze({
 
 const LABEL_CHAR_WIDTH = 7;
 const LABEL_LINE_HEIGHT = 15;
-const MAX_NODE_WIDTH = 560;
-const MAX_NODE_HEIGHT = 240;
 
 const SHAPE_METRICS = Object.freeze({
   entry: { textScale: 1.18, horizontalPadding: 34, verticalPadding: 18 },
@@ -242,19 +240,17 @@ function sizeFor(node) {
   }
   const metrics = metricsFor(kind);
   const longest = Math.max(...lines.map((line) => String(line).length));
-  const width = Math.min(
-    MAX_NODE_WIDTH,
-    Math.max(
-      base.width,
-      Math.ceil(longest * LABEL_CHAR_WIDTH * metrics.textScale + metrics.horizontalPadding),
-    ),
+  // Never clamp: the node must always be large enough to contain every wrapped
+  // line. `labelLines()` already bounds each line length, so width stays
+  // reasonable while height grows with the number of lines instead of letting
+  // text spill into neighbouring nodes.
+  const width = Math.max(
+    base.width,
+    Math.ceil(longest * LABEL_CHAR_WIDTH * metrics.textScale + metrics.horizontalPadding),
   );
-  const height = Math.min(
-    MAX_NODE_HEIGHT,
-    Math.max(
-      base.height,
-      Math.ceil(lines.length * LABEL_LINE_HEIGHT + metrics.verticalPadding),
-    ),
+  const height = Math.max(
+    base.height,
+    Math.ceil(lines.length * LABEL_LINE_HEIGHT + metrics.verticalPadding),
   );
   return { width, height };
 }
