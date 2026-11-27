@@ -460,12 +460,25 @@ export function buildFileView(input) {
     (s) => s.kind !== 'file',
   );
 
-  const relationships = normalizeBuiltinCalls(
-    typeof input?.index?.allRelationships === 'function'
-      ? input.index.allRelationships()
-      : input?.query?.allRelationships?.()?.ok
-        ? input.query.allRelationships().value
-        : [],
+  const indexAllSyms =
+    typeof input?.index?.allSymbols === 'function' ? input.index.allSymbols() : [];
+  const queryAllSyms = input?.query?.allSymbols?.()?.ok ? input.query.allSymbols().value : [];
+  const resolvePool =
+    Array.isArray(indexAllSyms) && indexAllSyms.length > 0
+      ? indexAllSyms
+      : Array.isArray(queryAllSyms) && queryAllSyms.length > 0
+        ? queryAllSyms
+        : symbols;
+
+  const relationships = resolveExternalCallsWithSymbols(
+    normalizeBuiltinCalls(
+      typeof input?.index?.allRelationships === 'function'
+        ? input.index.allRelationships()
+        : input?.query?.allRelationships?.()?.ok
+          ? input.query.allRelationships().value
+          : [],
+    ),
+    resolvePool,
   );
 
   /** @type {Map<string, Array<Record<string, any>>>} */
@@ -513,9 +526,12 @@ export function buildFileView(input) {
         id: clusterId,
         kind: 'file_symbol_cluster',
         level: ZOOM_LEVELS.L2_FILE,
+        targetLevel: null,
+        expandClusterOnly: true,
         scopeId: clusterId,
         label: `${kindSyms.length} ${kind}s`,
         symbolCount: kindSyms.length,
+        status: statusMix.displayStatus,
         statusMix,
         displayStatus: statusMix.displayStatus,
         completeness: statusMix.completeness,
@@ -539,18 +555,25 @@ export function buildFileView(input) {
   const nodes = symbols.map((sym) => {
     const outRels = relationships.filter((r) => r.from === sym.symbolId);
     const statusMix = createStatusDistribution(outRels);
+    const isCallable =
+      sym.kind === 'function' ||
+      sym.kind === 'method' ||
+      sym.kind === 'constructor' ||
+      sym.kind === 'closure';
     return {
       id: sym.symbolId,
       kind: sym.kind,
       level: ZOOM_LEVELS.L2_FILE,
+      targetLevel: isCallable ? ZOOM_LEVELS.L3_SYMBOL : null,
       scopeId: sym.symbolId,
       label: sym.qualifiedName || sym.name,
       range: sym.declaration,
+      status: statusMix.displayStatus,
       statusMix,
       displayStatus: statusMix.displayStatus,
       completeness: statusMix.completeness,
       badges: statusMix.badges,
-      expandable: sym.kind === 'function' || sym.kind === 'method',
+      expandable: isCallable,
     };
   });
 
