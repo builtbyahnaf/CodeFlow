@@ -165,3 +165,66 @@ test('filtering by status and focusing a node dims non-neighborhood while keepin
     'possible edge target is hidden when filtering for resolved only',
   );
 });
+
+test('STL and standard library calls resolve cleanly instead of populating unresolvedBucket', () => {
+  const syms = [
+    createSymbol({
+      symbolId: 'sym:solve',
+      kind: 'function',
+      name: 'solve',
+      qualifiedName: 'solve',
+      language: 'cpp',
+      declaration: r(1),
+    }),
+  ];
+  const rels = [
+    'external:std::sort',
+    'external:std::__1::vector<int>::push_back',
+    'external:std::make_unique<Node>',
+    'external:operator<<',
+    'external:printf',
+    'external:std::getline',
+  ].map((target, idx) =>
+    createRelationship({
+      relationshipId: `rel:stl:${idx}`,
+      type: 'calls',
+      from: 'sym:solve',
+      to: target,
+      status: 'unresolved',
+      reasonCode: 'out_of_scope',
+      site: r(idx + 2),
+    }),
+  );
+
+  const run = createAnalysisRun({
+    runId: 'run:stl-ego',
+    adapterId: 'cpp-builtin',
+    adapterVersion: '1.0.0',
+    language: 'cpp',
+    completeness: 'full',
+    files: [
+      createFileRecord({
+        fileId: 'file:a',
+        path: 'src/solve.cpp',
+        language: 'cpp',
+        lineCount: 25,
+      }),
+    ],
+    symbols: syms,
+    relationships: rels,
+  });
+
+  const query = createQueryLayer(run, { capabilities: CAPS });
+  const queryService = createCallGraphQueryService({ query });
+  const session = createCallGraphSession({ queryService });
+  const opened = session.open('sym:solve');
+  assert.equal(opened.ok, true);
+  assert.equal(validateDto(opened.dto).ok, true);
+  assert.equal(
+    opened.dto.unresolvedBucket.count,
+    0,
+    'C/C++ STL and stdlib calls should not go to unresolvedBucket',
+  );
+  assert.ok(opened.dto.nodes.some((n) => n.label.includes('std::sort')));
+  assert.ok(opened.dto.nodes.every((n) => n.status === 'resolved'));
+});
