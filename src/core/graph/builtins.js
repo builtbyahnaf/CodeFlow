@@ -639,15 +639,22 @@ export function isKnownBuiltinCall(target, calleeName) {
   if (KNOWN_BUILTIN_PREFIXES.some((prefix) => id.startsWith(prefix))) {
     return true;
   }
-  const cleanName = String(calleeName ?? '').trim();
-  if (KNOWN_BUILTIN_NAMES.has(cleanName)) {
+  const nameParts = stripTemplateAndNamespace(calleeName);
+  if (KNOWN_BUILTIN_NAMES.has(nameParts.whole) || KNOWN_BUILTIN_NAMES.has(nameParts.leaf)) {
     return true;
   }
-  if (
-    id.startsWith('external:global.') &&
-    KNOWN_BUILTIN_NAMES.has(id.slice('external:global.'.length))
-  ) {
+  if (/^operator\s*(?:<<|>>|\[\]|\(\)|->|==|!=|<=|>=|<|>|\+|-|\*|\/|=)$/.test(nameParts.leaf)) {
     return true;
+  }
+  if (id.startsWith('external:')) {
+    const rawTarget = id.replace(/^external:(?:global\.|member\.)?/, '');
+    const targetParts = stripTemplateAndNamespace(rawTarget);
+    if (KNOWN_BUILTIN_NAMES.has(targetParts.whole) || KNOWN_BUILTIN_NAMES.has(targetParts.leaf)) {
+      return true;
+    }
+    if (/^(?:std::|__1::|__cxx11::|__gnu_cxx::)/.test(targetParts.whole)) {
+      return true;
+    }
   }
   return false;
 }
@@ -709,4 +716,89 @@ export function normalizeBuiltinCalls(relationships) {
   return (Array.isArray(relationships) ? relationships : []).map(
     normalizeBuiltinCallRelationship,
   );
+}
+
+const CALLABLE_SYMBOL_KINDS = new Set([
+  'function',
+  'method',
+  'constructor',
+  'class',
+  'closure',
+]);
+
+/**
+ * Resolve `external:...` call/instantiation relationships against a cross-file
+ * symbol table (such as the project index or multi-module run) after builtin
+ * normalization. Only symbols declared outside `rel.from`'s external placeholder
+ * are matched; genuine ambiguous or unindexed targets keep their status.
+ *
+ * @template {Record<string, any>} T
+ * @param {T[]|null|undefined} relationships
+ * @param {Array<Record<string, any>>|null|undefined} symbols
+ * @returns {T[]}
+ */
+export function resolveExternalCallsWithSymbols(relationships, symbols) {
+  const relList = Array.isArray(relationships) ? relationships : [];
+  const symList = Array.isArray(symbols) ? symbols : [];
+  if (symList.length === 0 || relList.length === 0) {
+    return relList;
+  }
+  /** @type {Map<string, Array<Record<string, any>>>} */
+  const byName = new Map();
+  /** @type {Map<string, Array<Record<string, any>>>} */
+  const byQualified = new Map();
+
+  for (const sym of symList) {
+    if (!sym || typeof sym.symbolId !== 'string' || !CALLABLE_SYMBOL_KINDS.has(sym.kind)) {
+      continue;
+    }
+    if (sym.name) {
+      const list = byName.get(sym.name) ?? [];
+      list.push(sym);
+      byName.set(sym.name, list);
+    }
+    if (sym.qualifiedName) {
+      const qList = byQualified.get(sym.qualifiedName) ?? [];
+      qList.push(sym);
+      byQualified.set(sym.qualifiedName, qList);
+    }
+  }
+
+  return relList.map((rel) => {
+    if (
+      !rel ||
+      (rel.type !== 'calls' && rel.type !== 'instantiates') ||
+      rel.status !== 'unresolved' ||
+      typeof rel.to !== 'string' ||
+      !rel.to.startsWith('external:')
+    ) {
+      return rel;
+    }
+    const rawTarget = rel.to
+      .replace(/^external:(?:global\.|member\.|module:|require:)?/, '')
+      .trim();
+    const { whole, leaf } = stripTemplateAndNamespace(rawTarget);
+    const qualifiedMatches = whole ? (byQualified.get(whole) ?? []) : [];
+    const nameMatches = qualifiedMatches.length > 0 ? qualifiedMatches : (byName.get(leaf) ?? []);
+    if (nameMatches.length === 0) {
+      return rel;
+    }
+    const best = nameMatches[0];
+    const nextStatus = nameMatches.length === 1 ? 'resolved' : 'inferred';
+    return {
+      ...rel,
+      to: best.symbolId,
+      status: nextStatus,
+      strongestStatus: nextStatus,
+      reasonCode: 'workspace_index',
+      ...(nameMatches.length > 1
+        ? {
+            extensions: {
+              ...(rel.extensions ?? {}),
+              candidates: nameMatches.map((m) => m.symbolId),
+            },
+          }
+        : {}),
+    };
+  });
 }
