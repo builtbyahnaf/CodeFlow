@@ -332,19 +332,55 @@ export function createSvgRenderer(options) {
     applyTransform();
   }
 
-  /**
-   * @param {SVGGElement} group
-   * @param {DtoNode} node
-   */
-  function appendNodeShape(group, node) {
-    const outline = shapeOutline(node.kind, node.position.width, node.position.height);
-    group.appendChild(
-      svgEl(outline.tag, {
-        class: 'cf-node-box cf-node-shape',
-        ...outline.attrs,
-      }),
-    );
+/**
+ * Wrap any raw single-line text exceeding `maxChars` into readable multi-line chunks
+ * so un-prewrapped labels (such as long identifiers or call chains) still wrap
+ * cleanly inside their box outline.
+ *
+ * @param {string} value
+ * @param {number} [maxChars]
+ * @returns {string[]}
+ */
+function wrapTextFallback(value, maxChars = 40) {
+  const lines = [];
+  for (const para of String(value ?? '').split(/\r?\n/)) {
+    let rest = para.replace(/[ \t]+/g, ' ').trim();
+    if (!rest) continue;
+    while (rest.length > maxChars) {
+      let split = rest.lastIndexOf(' ', maxChars);
+      if (split <= 0) {
+        let punct = -1;
+        for (let i = Math.min(maxChars - 1, rest.length - 1); i >= Math.floor(maxChars * 0.35); i -= 1) {
+          const ch = rest[i];
+          if (ch === ',' || ch === ';' || ch === '(' || ch === '.' || ch === '&' || ch === '|') {
+            punct = i + 1;
+            break;
+          }
+        }
+        split = punct > 0 ? punct : maxChars;
+      }
+      const head = rest.slice(0, split).trimEnd();
+      if (head) lines.push(head);
+      rest = rest.slice(split).trimStart();
+    }
+    if (rest) lines.push(rest);
   }
+  return lines.length > 0 ? lines : [''];
+}
+
+/**
+ * @param {SVGGElement} group
+ * @param {DtoNode} node
+ */
+function appendNodeShape(group, node) {
+  const outline = shapeOutline(node.kind, node.position.width, node.position.height);
+  const el = svgEl(outline.tag, {
+    class: 'cf-node-box cf-node-shape',
+    ...outline.attrs,
+  });
+  group.appendChild(el);
+  return el;
+}
 
   /**
    * @param {GraphDto} nextDto
@@ -426,23 +462,33 @@ export function createSvgRenderer(options) {
         (node.label && String(node.label).trim()) ||
         (node.kind && String(node.kind).trim()) ||
         node.id;
-      const lines = rawLines.length > 0 ? rawLines : [fallbackLabel];
-      const lineHeight = 15;
+      const lines =
+        rawLines.length > 0
+          ? rawLines.flatMap((line) => (line.length > 44 ? wrapTextFallback(line, 40) : [line]))
+          : wrapTextFallback(fallbackLabel, 40);
+      const lineHeight = 16;
       const blockHeight = lines.length * lineHeight;
+      const topClearance = badgeText ? 22 : lineHeight;
       const firstBaseline = Math.max(
-        lineHeight,
-        node.position.height / 2 - blockHeight / 2 + lineHeight * 0.75,
+        topClearance,
+        (badgeText ? 12 : 0) + node.position.height / 2 - blockHeight / 2 + lineHeight * 0.75,
+      );
+
+      let boxWidth = node.position.width;
+      let boxHeight = Math.max(
+        node.position.height,
+        Math.ceil(firstBaseline + (lines.length - 1) * lineHeight + 12),
       );
 
       const label = svgEl('text', {
         class: 'cf-node-label',
-        x: node.position.width / 2,
+        x: boxWidth / 2,
         y: firstBaseline,
         'text-anchor': 'middle',
       });
       for (const [index, text] of lines.entries()) {
         const span = svgEl('tspan', {
-          x: node.position.width / 2,
+          x: boxWidth / 2,
           ...(index === 0 ? {} : { dy: lineHeight }),
         });
         span.textContent = text;
@@ -450,19 +496,16 @@ export function createSvgRenderer(options) {
       }
       group.appendChild(label);
 
-      const badgeText =
-        Array.isArray(node.badges) && node.badges.length > 0
-          ? node.badges.join(' · ')
-          : node.badge || (node.status !== 'resolved' ? node.status : '');
+      let badgeEl = null;
       if (badgeText) {
-        const badge = svgEl('text', {
+        badgeEl = svgEl('text', {
           class: 'cf-node-badge',
-          x: node.position.width - 8,
+          x: boxWidth - 8,
           y: 13,
           'text-anchor': 'end',
         });
-        badge.textContent = truncate(badgeText, 24);
-        group.appendChild(badge);
+        badgeEl.textContent = truncate(badgeText, 28);
+        group.appendChild(badgeEl);
       }
 
       const title = svgEl('title');
