@@ -82,6 +82,94 @@ test('CFG labels keep the whole statement and wrap instead of truncating', () =>
   assert.ok(!node.label.includes('…'));
 });
 
+test('node boxes grow to contain every wrapped label line instead of clamping', () => {
+  const statement = Array.from({ length: 100 }, (_, index) => `segment${index}`).join(' ');
+  const { query, symbolId } = buildProgram({
+    id: 'very-long-label',
+    root: entry([{ kind: 'statement', extensions: { label: statement } }]),
+  });
+  const built = buildCfg(query, symbolId);
+  assert.equal(built.ok, true);
+  const dto = toCfgDto(built.cfg);
+  const node = dto.nodes.find((entry) => entry.label === statement);
+  assert.ok(node);
+  assert.ok(node.labelLines.length > 16, 'expected enough lines to exceed the old 240px clamp');
+
+  const longestLine = Math.max(...node.labelLines.map((line) => line.length));
+  assert.ok(
+    node.position.width >= longestLine * 7,
+    'node width must fit its longest wrapped line',
+  );
+  assert.ok(
+    node.position.height >= node.labelLines.length * 15,
+    'node height must fit every wrapped line',
+  );
+});
+
+test('JavaScript statements after comments keep their own labels and conditionals', () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:js-comments',
+    path: 'src/comments.js',
+    text: [
+      'function demo(x) {',
+      '  // branch on the sign',
+      '  if (x > 0) { // positive',
+      '    return 1;',
+      '  }',
+      '  /* next',
+      '     statement */',
+      '  const z = x * 2;',
+      '  return z;',
+      '}',
+    ].join('\n'),
+  });
+  const query = createQueryLayer(run, { capabilities: javascriptAdapter.capabilities });
+  const fn = run.symbols.find((symbol) => symbol.name === 'demo' && symbol.kind === 'function');
+  assert.ok(fn);
+  const built = buildCfg(query, fn.symbolId);
+  assert.equal(built.ok, true);
+  const dto = toCfgDto(built.cfg);
+
+  const condition = dto.nodes.find((node) => node.kind === 'condition');
+  assert.ok(condition);
+  assert.equal(condition.label, 'x > 0');
+  assert.ok(dto.edges.some((edge) => edge.kind === 'true'));
+  assert.ok(dto.edges.some((edge) => edge.kind === 'false'));
+
+  const statement = dto.nodes.find((node) => node.label === 'const z = x * 2;');
+  assert.ok(statement, 'the statement after the block comment must keep its own label');
+  for (const node of dto.nodes) {
+    assert.ok(!node.label.includes('//'), `comment text leaked into ${node.label}`);
+    assert.ok(!node.label.includes('/*'), `comment text leaked into ${node.label}`);
+  }
+});
+
+test('JavaScript multi-line labels drop inline comments instead of gluing arguments', () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:js-inline-comments',
+    path: 'src/inline.js',
+    text: [
+      'function demo(a, b) {',
+      '  const total = compute(',
+      '    a, // first',
+      '    b, // second',
+      '  );',
+      '  return total;',
+      '}',
+    ].join('\n'),
+  });
+  const query = createQueryLayer(run, { capabilities: javascriptAdapter.capabilities });
+  const fn = run.symbols.find((symbol) => symbol.name === 'demo' && symbol.kind === 'function');
+  const built = buildCfg(query, fn.symbolId);
+  assert.equal(built.ok, true);
+  const dto = toCfgDto(built.cfg);
+  const statement = dto.nodes.find((node) => node.label.includes('compute('));
+  assert.ok(statement);
+  assert.ok(!statement.label.includes('//'));
+  assert.ok(statement.label.includes('a,'));
+  assert.ok(statement.label.includes('b,'));
+});
+
 test('JavaScript CFG nodes show real source, named functions and parameter metadata', () => {
   const run = javascriptAdapter.analyze({
     runId: 'run:js-cfg-labels',
