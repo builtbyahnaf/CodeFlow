@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import { ZOOM_LEVELS } from '../../src/core/graph/zoom/levels.js';
 import { createSemanticZoomSession } from '../../src/core/graph/zoom/session.js';
+import { createCallGraphQueryService } from '../../src/core/graph/calls/query.js';
+import { createCallGraphSession } from '../../src/core/graph/calls/ego.js';
 import { validateDto } from '../../src/core/graph/dto.js';
 import { GRAPH_DTO_VERSION } from '../../src/core/graph/dto.js';
 import { javascriptAdapter } from '../../src/adapters/javascript/index.js';
@@ -97,4 +99,47 @@ test('semantic zoom session navigates L0 Workspace -> L1 Module -> L2 File -> L3
     assert.equal(exp.ok, true);
   }
   assert.ok(session.expansionService.cacheSize() <= 128);
+});
+
+test('semantic zoom L3 with callSession keeps callable nodes descendable to L4 with real CFG layout', () => {
+  const run = javascriptAdapter.analyze({
+    runId: 'run:zoom-l3-l4',
+    path: 'src/flow.js',
+    text: 'export function outer(n) {\n  if (n > 0) return helper(n);\n  return 0;\n}\nfunction helper(x) { return x + 1; }\n',
+  });
+  const query = createQueryLayer(run, { capabilities: javascriptAdapter.capabilities });
+  const outerSym = run.symbols.find((s) => s.name === 'outer');
+  const queryService = createCallGraphQueryService({ query });
+  const callSession = createCallGraphSession({ queryService });
+
+  const session = createSemanticZoomSession({
+    runId: run.runId,
+    query,
+    files: run.files,
+    callSession,
+    reducedMotion: true,
+  });
+
+  session.open();
+  const l3 = session.descend({
+    level: ZOOM_LEVELS.L3_SYMBOL,
+    scopeId: outerSym.symbolId,
+    label: outerSym.name,
+  });
+  assert.equal(l3.dto.level, ZOOM_LEVELS.L3_SYMBOL);
+
+  const centerNode = l3.dto.nodes.find((n) => n.id === outerSym.symbolId);
+  assert.ok(centerNode);
+  assert.equal(centerNode.expandable, true, 'L3 center symbol must be descendable to L4');
+  assert.equal(centerNode.targetLevel, ZOOM_LEVELS.L4_FUNCTION);
+
+  const l4 = session.descend({
+    level: centerNode.targetLevel,
+    scopeId: centerNode.scopeId,
+    label: centerNode.label,
+  });
+  assert.equal(l4.dto.level, ZOOM_LEVELS.L4_FUNCTION);
+  assert.ok(l4.dto.nodes.length >= 3);
+  const ys = new Set(l4.dto.nodes.map((n) => n.y));
+  assert.ok(ys.size >= 2, 'L4 CFG view should use layered vertical coordinates');
 });
