@@ -51,6 +51,21 @@ export function offsetToPos(lineStarts, offset) {
 }
 
 /**
+ * Return true when `index` is preceded on its line only by spaces or tabs.
+ *
+ * @param {string[]} chars
+ * @param {number} index
+ * @returns {boolean}
+ */
+function isAtLineStart(chars, index) {
+  for (let j = index - 1; j >= 0; j -= 1) {
+    if (chars[j] === '\n') return true;
+    if (chars[j] !== ' ' && chars[j] !== '\t' && chars[j] !== '\r') return false;
+  }
+  return true;
+}
+
+/**
  * Mask comments and strings to spaces, preserving exact character positions and newlines.
  *
  * @param {string} text
@@ -65,12 +80,95 @@ export function maskCommentsAndStrings(text) {
     const c = chars[i];
     const next = i + 1 < len ? chars[i + 1] : '';
 
-    if (c === '#' && (i === 0 || chars[i - 1] === '\n')) {
-      while (i < len && chars[i] !== '\n') {
-        chars[i] = ' ';
+    if (c === '#' && isAtLineStart(chars, i)) {
+      while (i < len) {
+        if (chars[i] === '\n') {
+          break;
+        }
+        // Handle preprocessor line continuations (`\` before optional `\r` + `\n`)
+        if (chars[i] === '\\' && i + 1 < len && (chars[i + 1] === '\n' || (chars[i + 1] === '\r' && chars[i + 2] === '\n'))) {
+          chars[i] = ' ';
+          i += 1;
+          if (chars[i] === '\r') {
+            chars[i] = ' ';
+            i += 1;
+          }
+          i += 1; // keep '\n'
+          continue;
+        }
+        if (chars[i] !== '\r') {
+          chars[i] = ' ';
+        }
         i += 1;
       }
     } else if (c === '/' && next === '/') {
+      chars[i] = ' ';
+      chars[i + 1] = ' ';
+      i += 2;
+      while (i < len && chars[i] !== '\n') {
+        if (chars[i] !== '\r') {
+          chars[i] = ' ';
+        }
+        i += 1;
+      }
+    } else if (c === '/' && next === '*') {
+      chars[i] = ' ';
+      chars[i + 1] = ' ';
+      i += 2;
+      while (i < len && !(chars[i] === '*' && i + 1 < len && chars[i + 1] === '/')) {
+        if (chars[i] !== '\n' && chars[i] !== '\r') {
+          chars[i] = ' ';
+        }
+        i += 1;
+      }
+      if (i < len) {
+        chars[i] = ' ';
+        if (i + 1 < len) chars[i + 1] = ' ';
+        i += 2;
+      }
+    } else if (c === '"' || c === "'") {
+      const quote = c;
+      chars[i] = ' ';
+      i += 1;
+      while (i < len && chars[i] !== quote) {
+        if (chars[i] === '\\' && i + 1 < len) {
+          chars[i] = ' ';
+          i += 1;
+        }
+        if (chars[i] !== '\n' && chars[i] !== '\r') {
+          chars[i] = ' ';
+        }
+        i += 1;
+      }
+      if (i < len && chars[i] === quote) {
+        chars[i] = ' ';
+        i += 1;
+      }
+    } else {
+      i += 1;
+    }
+  }
+
+  return chars.join('');
+}
+
+/**
+ * Strip C/C++ comments from a source snippet while keeping string/char literals
+ * and normalizing runs of whitespace so inline comments inside expressions never
+ * glue onto neighboring statements.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripComments(text) {
+  const chars = String(text ?? '').split('');
+  const len = chars.length;
+  let i = 0;
+
+  while (i < len) {
+    const c = chars[i];
+    const next = i + 1 < len ? chars[i + 1] : '';
+    if (c === '/' && next === '/') {
       chars[i] = ' ';
       chars[i + 1] = ' ';
       i += 2;
@@ -95,28 +193,21 @@ export function maskCommentsAndStrings(text) {
       }
     } else if (c === '"' || c === "'") {
       const quote = c;
-      chars[i] = ' ';
       i += 1;
       while (i < len && chars[i] !== quote) {
         if (chars[i] === '\\' && i + 1 < len) {
-          chars[i] = ' ';
-          i += 1;
-        }
-        if (chars[i] !== '\n') {
-          chars[i] = ' ';
+          i += 2;
+          continue;
         }
         i += 1;
       }
-      if (i < len && chars[i] === quote) {
-        chars[i] = ' ';
-        i += 1;
-      }
+      if (i < len) i += 1;
     } else {
       i += 1;
     }
   }
 
-  return chars.join('');
+  return chars.join('').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -510,15 +601,31 @@ export function parseCppSource(input) {
     });
   }
 
-  // Resolve internal call relationships
+  // Resolve internal call relationships (supporting both qualified names and
+  // unambiguous short method/function names within the same file).
+  const shortFnCounts = new Map();
+  const shortFnMap = new Map();
+  for (const [qualified, sym] of functionSymbolsByName.entries()) {
+    const shortName = qualified.split('::').pop();
+    if (shortName) {
+      shortFnCounts.set(shortName, (shortFnCounts.get(shortName) ?? 0) + 1);
+      shortFnMap.set(shortName, sym);
+    }
+  }
   for (const rel of relationships) {
     if (functionSymbolsByName.has(rel.to)) {
       rel.to = functionSymbolsByName.get(rel.to).symbolId;
       rel.status = 'resolved';
     } else {
-      rel.to = `external:${rel.to}`;
-      rel.status = 'unresolved';
-      rel.reasonCode = 'out_of_scope';
+      const shortName = String(rel.to ?? '').split('::').pop();
+      if (shortName && shortFnCounts.get(shortName) === 1) {
+        rel.to = shortFnMap.get(shortName).symbolId;
+        rel.status = 'resolved';
+      } else {
+        rel.to = `external:${rel.to}`;
+        rel.status = 'unresolved';
+        rel.reasonCode = 'out_of_scope';
+      }
     }
   }
 
@@ -572,24 +679,55 @@ export function parseCppSource(input) {
  * @param {boolean} [emitConstructs]
  * @returns {any[]} created call constructs if emitConstructs is true
  */
+const NON_CALL_PREFIX_TYPES = new Set([
+  'int', 'long', 'short', 'char', 'float', 'double', 'bool', 'void', 'auto',
+  'unsigned', 'signed', 'size_t', 'ssize_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t',
+  'int8_t', 'int16_t', 'int32_t', 'int64_t', 'string', 'wstring', 'vector', 'map',
+  'unordered_map', 'set', 'unordered_set', 'deque', 'list', 'queue', 'stack',
+  'priority_queue', 'pair', 'tuple', 'array', 'unique_ptr', 'shared_ptr', 'ifstream',
+  'ofstream', 'fstream', 'stringstream', 'istringstream', 'ostringstream',
+]);
+
+const CPP_CAST_KEYWORDS = new Set([
+  'static_cast', 'dynamic_cast', 'const_cast', 'reinterpret_cast',
+  'decltype', 'noexcept', 'alignof', 'sizeof',
+]);
+
 function extractEmbeddedCalls(exprText, maskedExpr, exprBaseOffset, ctx, emitConstructs = false) {
   const created = [];
   let firstSite = null;
-  const callRegex = /([a-zA-Z_~][a-zA-Z0-9_:]*)\s*\(/g;
+  const callRegex = /([a-zA-Z_~][a-zA-Z0-9_:]*)(?:\s*<[^;{}()<>]*>)?\s*\(/g;
   let m;
   while ((m = callRegex.exec(maskedExpr)) !== null) {
     const calleeName = m[1];
-    if (CPP_KEYWORDS.has(calleeName)) {
+    const shortCallee = calleeName.split('::').pop() || calleeName;
+    if (CPP_KEYWORDS.has(calleeName) || CPP_CAST_KEYWORDS.has(shortCallee)) {
       continue;
     }
-    const parenOpen = m.index + m[0].length - 1;
+    // Skip C++ variable direct-initialization (`int x(5);`, `std::vector<int> v(n);`)
+    const beforeSlice = maskedExpr.slice(0, m.index).replace(/\s+$/, '');
+    if (beforeSlice.length > 0 && !beforeSlice.endsWith('.') && !beforeSlice.endsWith('->') && !beforeSlice.endsWith('::')) {
+      const prevTokMatch = beforeSlice.match(/(?:>|([a-zA-Z_][a-zA-Z0-9_:]*))$/);
+      const isDeclAfterType =
+        beforeSlice.endsWith('>') ||
+        beforeSlice.endsWith('*') ||
+        beforeSlice.endsWith('&') ||
+        (prevTokMatch?.[1] && NON_CALL_PREFIX_TYPES.has(prevTokMatch[1].split('::').pop()));
+      if (isDeclAfterType) {
+        continue;
+      }
+    }
+    const parenOpen = maskedExpr.indexOf('(', m.index + m[1].length);
+    if (parenOpen === -1 || parenOpen >= m.index + m[0].length) {
+      continue;
+    }
     const parenClose = findMatchingParen(maskedExpr, parenOpen);
     const endOff = parenClose !== -1 ? parenClose + 1 : m.index + m[0].length;
     const siteRange = ctx.rangeOf(exprBaseOffset + m.index, exprBaseOffset + endOff);
     if (!firstSite) {
       firstSite = siteRange;
     }
-    const argsText = parenClose !== -1 ? exprText.slice(parenOpen + 1, parenClose).trim() : '';
+    const argsText = parenClose !== -1 ? stripComments(exprText.slice(parenOpen + 1, parenClose)) : '';
 
     ctx.relationships.push(
       createRelationship({
@@ -660,11 +798,18 @@ function parseBodyStatementsInternal(ctx) {
   const len = body.length;
 
   while (cursor < len && levelConstructs.length < maxStatements) {
-    // Skip whitespace
-    while (cursor < len && /\s/.test(body[cursor])) {
+    // Skip whitespace AND masked comments/preprocessor directives so a comment
+    // never merges onto the following statement or breaks `if` detection.
+    while (cursor < len && /\s/.test(maskedBody[cursor])) {
       cursor += 1;
     }
     if (cursor >= len) break;
+
+    // Ignore empty stray semicolons
+    if (maskedBody[cursor] === ';') {
+      cursor += 1;
+      continue;
+    }
 
     const remaining = maskedBody.slice(cursor);
     const origRemaining = body.slice(cursor);
@@ -676,7 +821,7 @@ function parseBodyStatementsInternal(ctx) {
       if (parenOpen !== -1) {
         const parenClose = findMatchingParen(remaining, parenOpen);
         if (parenClose !== -1) {
-          const condText = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const condText = stripComments(origRemaining.slice(parenOpen + 1, parenClose));
           const condStart = baseOffset + cursor + parenOpen + 1;
           const condEnd = baseOffset + cursor + parenClose;
           const condRange = rangeOf(condStart, condEnd);
@@ -778,16 +923,16 @@ function parseBodyStatementsInternal(ctx) {
           });
           thenConstruct.children = thenChildren.map((c) => c.constructId);
 
-          // Check for ELSE
+          // Check for ELSE (skip comments between `}` / `;` and `else` using maskedBody)
           let elseConstruct = null;
           let checkElseIdx = nextCursor;
-          while (checkElseIdx < len && /\s/.test(body[checkElseIdx])) {
+          while (checkElseIdx < len && /\s/.test(maskedBody[checkElseIdx])) {
             checkElseIdx += 1;
           }
 
           if (maskedBody.slice(checkElseIdx).match(/^else\b/)) {
             let afterElse = checkElseIdx + 4;
-            while (afterElse < len && /\s/.test(body[afterElse])) {
+            while (afterElse < len && /\s/.test(maskedBody[afterElse])) {
               afterElse += 1;
             }
 
@@ -819,7 +964,7 @@ function parseBodyStatementsInternal(ctx) {
               let elseOffset = 0;
               let elseRange = null;
 
-              if (body[afterElse] === '{') {
+              if (maskedBody[afterElse] === '{') {
                 const openBrace = afterElse;
                 const closeBrace = findMatchingBrace(maskedBody, openBrace);
                 if (closeBrace !== -1) {
@@ -829,12 +974,24 @@ function parseBodyStatementsInternal(ctx) {
                   nextCursor = closeBrace + 1;
                 }
               } else {
+                const innerElse = parseBodyStatementsInternal({
+                  ...ctx,
+                  body: body.slice(afterElse),
+                  maskedBody: maskedBody.slice(afterElse),
+                  baseOffset: baseOffset + afterElse,
+                  parentConstructId: null,
+                  maxStatements: 1,
+                });
                 const semi = maskedBody.indexOf(';', afterElse);
-                if (semi !== -1) {
-                  elseBody = body.slice(afterElse, semi + 1);
-                  elseOffset = baseOffset + afterElse;
-                  elseRange = rangeOf(baseOffset + afterElse, baseOffset + semi + 1);
-                  nextCursor = semi + 1;
+                const fallbackEnd = semi !== -1 ? semi + 1 : afterElse + 1;
+                const singleEnd = innerElse.consumed > 0 ? afterElse + innerElse.consumed : fallbackEnd;
+                elseBody = body.slice(afterElse, singleEnd);
+                elseOffset = baseOffset + afterElse;
+                elseRange = rangeOf(elseOffset, baseOffset + singleEnd);
+                nextCursor = singleEnd;
+                for (const tmp of innerElse.list) {
+                  const idx = constructs.indexOf(tmp);
+                  if (idx !== -1) constructs.splice(idx, 1);
                 }
               }
 
@@ -877,7 +1034,7 @@ function parseBodyStatementsInternal(ctx) {
       if (parenOpen !== -1) {
         const parenClose = findMatchingParen(remaining, parenOpen);
         if (parenClose !== -1) {
-          const condText = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const condText = stripComments(origRemaining.slice(parenOpen + 1, parenClose));
           const condRange = rangeOf(
             baseOffset + cursor + parenOpen + 1,
             baseOffset + cursor + parenClose,
@@ -961,6 +1118,82 @@ function parseBodyStatementsInternal(ctx) {
       }
     }
 
+    // 2b. DO-WHILE LOOP: do { ... } while (...);
+    const doMatch = remaining.match(/^do\b/);
+    if (doMatch) {
+      let afterDo = 2;
+      while (afterDo < remaining.length && /\s/.test(remaining[afterDo])) {
+        afterDo += 1;
+      }
+      if (remaining[afterDo] === '{') {
+        const openBrace = afterDo;
+        const closeBrace = findMatchingBrace(remaining, openBrace);
+        if (closeBrace !== -1) {
+          let afterBrace = closeBrace + 1;
+          while (afterBrace < remaining.length && /\s/.test(remaining[afterBrace])) {
+            afterBrace += 1;
+          }
+          if (remaining.slice(afterBrace).match(/^while\b/)) {
+            const wParenOpen = remaining.indexOf('(', afterBrace);
+            const wParenClose = wParenOpen !== -1 ? findMatchingParen(remaining, wParenOpen) : -1;
+            if (wParenClose !== -1) {
+              const endSemi = remaining.indexOf(';', wParenClose);
+              const nextCursor = cursor + (endSemi !== -1 ? endSemi + 1 : wParenClose + 1);
+              const condText = stripComments(origRemaining.slice(wParenOpen + 1, wParenClose));
+              const condRange = rangeOf(
+                baseOffset + cursor + wParenOpen + 1,
+                baseOffset + cursor + wParenClose,
+              );
+              const bodyText = origRemaining.slice(openBrace + 1, closeBrace);
+              const bodyOffset = baseOffset + cursor + openBrace + 1;
+              const bodyRange = rangeOf(
+                baseOffset + cursor + openBrace,
+                baseOffset + cursor + closeBrace + 1,
+              );
+
+              const doConstruct = createControlConstruct({
+                constructId: nextId('do_while'),
+                kind: 'do_while',
+                symbolId: fnSymbolId,
+                condition: condRange,
+                sourceRange: rangeOf(baseOffset + cursor, baseOffset + nextCursor),
+                extensions: {
+                  expression: { type: 'leaf', range: condRange, label: condText },
+                  conditionText: condText,
+                  label: condText,
+                },
+                ...(parentConstructId ? { parentId: parentConstructId } : {}),
+              });
+              constructs.push(doConstruct);
+              levelConstructs.push(doConstruct);
+
+              const bodyBlock = createControlConstruct({
+                constructId: nextId('block'),
+                kind: 'block',
+                symbolId: fnSymbolId,
+                sourceRange: bodyRange,
+                parentId: doConstruct.constructId,
+              });
+              constructs.push(bodyBlock);
+
+              const doChildren = parseBodyStatements({
+                ...ctx,
+                body: bodyText,
+                maskedBody: maskedBody.slice(bodyOffset - baseOffset, bodyOffset - baseOffset + bodyText.length),
+                baseOffset: bodyOffset,
+                parentConstructId: bodyBlock.constructId,
+              });
+              bodyBlock.children = doChildren.map((c) => c.constructId);
+              doConstruct.children = [bodyBlock.constructId];
+
+              cursor = nextCursor;
+              continue;
+            }
+          }
+        }
+      }
+    }
+
     // 3. FOR LOOP: for (init; cond; update) { ... }
     const forMatch = remaining.match(/^for\b/);
     if (forMatch) {
@@ -969,10 +1202,23 @@ function parseBodyStatementsInternal(ctx) {
         const parenClose = findMatchingParen(remaining, parenOpen);
         if (parenClose !== -1) {
           const headerText = origRemaining.slice(parenOpen + 1, parenClose);
-          const parts = headerText.split(';');
-          const initText = (parts[0] || '').trim();
-          const condText = (parts[1] || '').trim();
-          const updateText = (parts[2] || '').trim();
+          const headerMasked = remaining.slice(parenOpen + 1, parenClose);
+          const semiPositions = [];
+          for (let hi = 0; hi < headerMasked.length; hi += 1) {
+            if (headerMasked[hi] === ';') semiPositions.push(hi);
+          }
+          const isRangeFor = semiPositions.length === 0 && headerMasked.includes(':');
+          const initText = semiPositions.length >= 1
+            ? stripComments(headerText.slice(0, semiPositions[0]))
+            : '';
+          const condText = isRangeFor
+            ? stripComments(headerText)
+            : semiPositions.length >= 2
+              ? stripComments(headerText.slice(semiPositions[0] + 1, semiPositions[1]))
+              : stripComments(headerText.slice((semiPositions[0] ?? -1) + 1));
+          const updateText = semiPositions.length >= 2
+            ? stripComments(headerText.slice(semiPositions[1] + 1))
+            : '';
           const condRange = rangeOf(
             baseOffset + cursor + parenOpen + 1,
             baseOffset + cursor + parenClose,
@@ -1072,7 +1318,7 @@ function parseBodyStatementsInternal(ctx) {
       if (parenOpen !== -1) {
         const parenClose = findMatchingParen(remaining, parenOpen);
         if (parenClose !== -1) {
-          const exprText = origRemaining.slice(parenOpen + 1, parenClose).trim();
+          const exprText = stripComments(origRemaining.slice(parenOpen + 1, parenClose));
           const condRange = rangeOf(
             baseOffset + cursor + parenOpen + 1,
             baseOffset + cursor + parenClose,
@@ -1116,7 +1362,7 @@ function parseBodyStatementsInternal(ctx) {
               while ((cm = caseRegex.exec(switchMasked)) !== null) {
                 caseIndices.push({
                   index: cm.index,
-                  test: cm[2] ? cm[2].trim() : 'default',
+                  test: cm[2] ? stripComments(cm[2]) : 'default',
                   headerEnd: caseRegex.lastIndex,
                 });
               }
@@ -1167,7 +1413,7 @@ function parseBodyStatementsInternal(ctx) {
     const returnMatch = remaining.match(/^return\b/);
     if (returnMatch) {
       const semi = remaining.indexOf(';');
-      const retExpr = semi !== -1 ? origRemaining.slice(6, semi).trim() : '';
+      const retExpr = semi !== -1 ? stripComments(origRemaining.slice(6, semi)) : '';
       const endOff = semi !== -1 ? semi + 1 : 6;
       const retLabel = retExpr ? `return ${retExpr}` : 'return';
       const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + endOff);
@@ -1238,21 +1484,20 @@ function parseBodyStatementsInternal(ctx) {
       continue;
     }
 
-    // 7. CALL WITH ASSIGNMENT: let a = getData(); / int a = getData(); / a = getData();
+    // 7. CALL WITH ASSIGNMENT: let a = getData(); / int a = getData(); / a = obj.getData();
     const callAssignMatch = remaining.match(
-      /^(?:(?:const|let|var|auto|int|float|double|char|string|std::string|bool|size_t|uint32_t|int32_t)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([a-zA-Z_~][a-zA-Z0-9_:]*)\s*\(/,
+      /^(?:(?:const|let|var|auto|int|long|float|double|char|string|std::string|bool|size_t|uint32_t|int32_t)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:([a-zA-Z_][a-zA-Z0-9_:]*)(?:\.|->))?([a-zA-Z_~][a-zA-Z0-9_:]*)(?:\s*<[^;{}()<>]*>)?\s*\(/,
     );
     if (callAssignMatch) {
       const varName = callAssignMatch[1];
-      const calleeName = callAssignMatch[2];
-      if (!CPP_KEYWORDS.has(calleeName)) {
-        const parenOpen = remaining.indexOf('(');
-        const parenClose = findMatchingParen(remaining, parenOpen);
+      const calleeName = callAssignMatch[3];
+      if (!CPP_KEYWORDS.has(calleeName) && !CPP_CAST_KEYWORDS.has(calleeName.split('::').pop())) {
+        const parenOpen = remaining.indexOf('(', callAssignMatch[0].length - 1);
+        const parenClose = parenOpen !== -1 ? findMatchingParen(remaining, parenOpen) : -1;
         if (parenClose !== -1) {
           const semi = remaining.indexOf(';', parenClose);
           const endOff = semi !== -1 ? semi + 1 : parenClose + 1;
-          const callArgs = origRemaining.slice(parenOpen + 1, parenClose).trim();
-          const fullLabel = `${varName} = ${calleeName}(${callArgs})`;
+          const fullLabel = stripComments(origRemaining.slice(0, endOff));
           const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + endOff);
 
           const callConstruct = createControlConstruct({
@@ -1302,18 +1547,19 @@ function parseBodyStatementsInternal(ctx) {
       }
     }
 
-    // 8. DIRECT CALL: callee(args);
-    const directCallMatch = remaining.match(/^([a-zA-Z_~][a-zA-Z0-9_:]*)\s*\(/);
+    // 8. DIRECT OR MEMBER CALL: callee(args); / obj.method(args); / obj->method(args);
+    const directCallMatch = remaining.match(
+      /^(?:([a-zA-Z_][a-zA-Z0-9_:]*)(?:\.|->))?([a-zA-Z_~][a-zA-Z0-9_:]*)(?:\s*<[^;{}()<>]*>)?\s*\(/,
+    );
     if (directCallMatch) {
-      const calleeName = directCallMatch[1];
-      if (!CPP_KEYWORDS.has(calleeName)) {
-        const parenOpen = remaining.indexOf('(');
-        const parenClose = findMatchingParen(remaining, parenOpen);
+      const calleeName = directCallMatch[2];
+      if (!CPP_KEYWORDS.has(calleeName) && !CPP_CAST_KEYWORDS.has(calleeName.split('::').pop())) {
+        const parenOpen = remaining.indexOf('(', directCallMatch[0].length - 1);
+        const parenClose = parenOpen !== -1 ? findMatchingParen(remaining, parenOpen) : -1;
         if (parenClose !== -1) {
           const semi = remaining.indexOf(';', parenClose);
           const endOff = semi !== -1 ? semi + 1 : parenClose + 1;
-          const callArgs = origRemaining.slice(parenOpen + 1, parenClose).trim();
-          const fullLabel = `${calleeName}(${callArgs})`;
+          const fullLabel = stripComments(origRemaining.slice(0, endOff));
           const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + endOff);
 
           const callConstruct = createControlConstruct({
@@ -1350,8 +1596,8 @@ function parseBodyStatementsInternal(ctx) {
     // 9. GENERAL STATEMENT ENDING WITH SEMICOLON
     const semi = remaining.indexOf(';');
     if (semi !== -1) {
-      const stmtText = origRemaining.slice(0, semi + 1).trim();
-      if (stmtText.length > 0) {
+      const stmtText = stripComments(origRemaining.slice(0, semi + 1));
+      if (stmtText.length > 0 && stmtText !== ';') {
         const stmtRange = rangeOf(baseOffset + cursor, baseOffset + cursor + semi + 1);
         const stmtConstruct = createControlConstruct({
           constructId: nextId('statement'),
