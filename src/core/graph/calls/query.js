@@ -18,7 +18,7 @@ import { buildCandidateBuckets, buildUnresolvedBucket } from './buckets.js';
 import { mergeEvidenceSources } from './merge.js';
 import { createAdapterEvidenceSource } from './sources.js';
 import { detectCallCycles } from './cycles.js';
-import { normalizeBuiltinCalls } from '../builtins.js';
+import { normalizeBuiltinCalls, resolveExternalCallsWithSymbols } from '../builtins.js';
 
 export { encodeCallCursor, decodeCallCursor };
 
@@ -80,13 +80,22 @@ export function createCallGraphQueryService(options = {}) {
         activeSources.push(snap);
       }
     }
+    // Collect all known symbols across active sources so cross-file external
+    // calls from single-file adapters resolve against indexed workspace symbols.
+    const allKnownSymbols = activeSources.flatMap((source) =>
+      Array.isArray(source.symbols) ? source.symbols : [],
+    );
+
     // Adapters honestly report calls they cannot resolve inside the file as
-    // `unresolved`/`out_of_scope`. Known builtin and standard-library targets
-    // are not unknown user code, so normalize them before merging: they must
-    // never inflate the unresolved bucket.
+    // `unresolved`/`out_of_scope`. Known builtin/STL targets and workspace
+    // indexed targets are normalized before merging so they never inflate the
+    // unresolved bucket.
     const normalizedSources = activeSources.map((source) => ({
       ...source,
-      relationships: normalizeBuiltinCalls(source.relationships),
+      relationships: resolveExternalCallsWithSymbols(
+        normalizeBuiltinCalls(source.relationships),
+        allKnownSymbols,
+      ),
     }));
     return mergeEvidenceSources(normalizedSources, {
       staleFiles: options.staleFiles,
