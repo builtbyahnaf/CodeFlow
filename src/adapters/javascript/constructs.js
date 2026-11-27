@@ -36,6 +36,60 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
   }
 
   /**
+   * Strip JS comments outside string/template literals so an inline comment inside
+   * a multi-line expression never glues onto the code immediately after it when
+   * collapsed for single-line label display.
+   *
+   * @param {string} raw
+   * @returns {string}
+   */
+  function stripJsComments(raw) {
+    const chars = String(raw ?? '').split('');
+    const len = chars.length;
+    let i = 0;
+    while (i < len) {
+      const c = chars[i];
+      const next = i + 1 < len ? chars[i + 1] : '';
+      if (c === '/' && next === '/') {
+        chars[i] = ' ';
+        chars[i + 1] = ' ';
+        i += 2;
+        while (i < len && chars[i] !== '\n') {
+          chars[i] = ' ';
+          i += 1;
+        }
+      } else if (c === '/' && next === '*') {
+        chars[i] = ' ';
+        chars[i + 1] = ' ';
+        i += 2;
+        while (i < len && !(chars[i] === '*' && i + 1 < len && chars[i + 1] === '/')) {
+          if (chars[i] !== '\n') chars[i] = ' ';
+          i += 1;
+        }
+        if (i < len) {
+          chars[i] = ' ';
+          if (i + 1 < len) chars[i + 1] = ' ';
+          i += 2;
+        }
+      } else if (c === '"' || c === "'" || c === '`') {
+        const quote = c;
+        i += 1;
+        while (i < len && chars[i] !== quote) {
+          if (chars[i] === '\\' && i + 1 < len) {
+            i += 2;
+            continue;
+          }
+          i += 1;
+        }
+        if (i < len) i += 1;
+      } else {
+        i += 1;
+      }
+    }
+    return chars.join('');
+  }
+
+  /**
    * Literal source text for a node, with runs of whitespace collapsed so a
    * multi-line statement can be shown as one graph label without losing code.
    *
@@ -48,7 +102,8 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
       return fallback;
     }
     try {
-      const text = sliceRange(locator.lineIndex, rangeOf(node)).replace(/\s+/g, ' ').trim();
+      const raw = stripJsComments(sliceRange(locator.lineIndex, rangeOf(node)));
+      const text = raw.replace(/\s+/g, ' ').trim();
       return text.length > 0 ? text : fallback;
     } catch {
       return fallback;
@@ -490,8 +545,43 @@ export function collectFunctionConstructs({ moduleInfo, functionNode, symbol }) 
             fallbackLabel = declarationLabel(init, statement.kind ?? 'const');
             continue;
           }
-          const child = expressionConstruct(init);
-          if (child && child.kind !== 'statement') {
+          // Expand multi-call ObjectExpression/ArrayExpression initializers (e.g.
+          // `const dom = { a: document.getElementById('a'), b: ... }`) into one
+          // call node per element so all calls never stack into a single huge box.
+          if (init.type === 'ObjectExpression' || init.type === 'ArrayExpression') {
+            const targetBase = sourceOf(declaration.id);
+            const entries =
+              init.type === 'ObjectExpression'
+                ? (init.properties ?? [])
+                    .filter((p) => p?.type === 'Property' && (p.value?.type === 'CallExpression' || p.value?.type === 'NewExpression'))
+                    .map((p) => ({
+                      key: sourceOf(p.key, 'item'),
+                      callNode: p.value,
+                    }))
+                : (init.elements ?? [])
+                    .map((el, idx) => ({ key: String(idx), callNode: el }))
+                    .filter((item) => item.callNode?.type === 'CallExpression' || item.callNode?.type === 'NewExpression');
+            if (entries.length >= 2) {
+              for (const entry of entries) {
+                const target =
+                  init.type === 'ObjectExpression'
+                    ? `${targetBase}.${entry.key}`
+                    : `${targetBase}[${entry.key}]`;
+                const callCc = make('call', entry.callNode, {
+                  extensions: {
+                    calleeName: calleeName(entry.callNode.callee),
+                    callSite: rangeOf(entry.callNode.callee ?? entry.callNode),
+                    label: `${target} = ${sourceOf(entry.callNode, 'call')}`,
+                    assignmentTarget: target,
+                  },
+                });
+                children.push(callCc);
+              }
+              continue;
+            }
+          }
+          const child = branchyExpression(init);
+          if (child) {
             const declarationText = sourceOf(declaration, fallbackLabel);
             const assignmentTarget = sourceOf(declaration.id);
             child.extensions = {
