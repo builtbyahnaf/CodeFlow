@@ -22,7 +22,7 @@
 import { ZOOM_LEVELS, LEVEL_CAPS } from './levels.js';
 import { createStatusDistribution } from './distributions.js';
 import { bundleClusterEdges } from './edgeBundles.js';
-import { normalizeBuiltinCalls } from '../builtins.js';
+import { normalizeBuiltinCalls, resolveExternalCallsWithSymbols } from '../builtins.js';
 
 /**
  * Extract top-level directory segment (`src/core/a.js` -> `src`, `root.js` -> `.`).
@@ -118,12 +118,15 @@ export function buildWorkspaceOverview(input = {}) {
   const indexRelationships =
     typeof input.index?.allRelationships === 'function' ? input.index.allRelationships() : [];
   const queryRelationships = input.query?.allRelationships?.();
-  const relationships = normalizeBuiltinCalls(
-    Array.isArray(indexRelationships) && indexRelationships.length > 0
-      ? indexRelationships
-      : queryRelationships?.ok
-        ? queryRelationships.value
-        : [],
+  const relationships = resolveExternalCallsWithSymbols(
+    normalizeBuiltinCalls(
+      Array.isArray(indexRelationships) && indexRelationships.length > 0
+        ? indexRelationships
+        : queryRelationships?.ok
+          ? queryRelationships.value
+          : [],
+    ),
+    symbols,
   );
 
   /** @type {Map<string, string>} */
@@ -207,10 +210,12 @@ export function buildWorkspaceOverview(input = {}) {
       id: clusterId,
       kind: 'directory_cluster',
       level: ZOOM_LEVELS.L0_WORKSPACE,
+      targetLevel: ZOOM_LEVELS.L1_MODULE,
       scopeId: bucket.dir,
       label: `${bucket.dir} (${bucket.files.length} files)`,
       fileCount: bucket.files.length,
       symbolCount: bucket.symbolCount,
+      status: statusMix.displayStatus,
       statusMix,
       displayStatus: statusMix.displayStatus,
       completeness: statusMix.completeness,
@@ -245,10 +250,13 @@ export function buildWorkspaceOverview(input = {}) {
       id: overflowId,
       kind: 'directory_cluster',
       level: ZOOM_LEVELS.L0_WORKSPACE,
+      targetLevel: null,
+      expandClusterOnly: true,
       scopeId: '__other__',
       label: `Other directories (${overflowBuckets.length} dirs, ${allOverflowFiles.length} files)`,
       fileCount: allOverflowFiles.length,
       symbolCount: totalSyms,
+      status: statusMix.displayStatus,
       statusMix,
       displayStatus: statusMix.displayStatus,
       completeness: statusMix.completeness,
