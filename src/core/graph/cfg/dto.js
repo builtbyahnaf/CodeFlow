@@ -46,6 +46,7 @@ export function toCfgDto(cfg, options = {}) {
       kind: node.kind,
       unreachable: node.unreachable,
       labelLines: node.labelLines,
+      badges: node.badges,
     })),
     edges,
   });
