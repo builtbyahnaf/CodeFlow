@@ -966,16 +966,22 @@ export function createPanelWire({
       // The zoom layout emits flat x/y/width/height. The renderer consumes a
       // nested `position`, so normalize here, at the host/webview boundary.
       const nodes = rawNodes.map((node) => {
-        const width = Number(node.position?.width ?? node.width ?? 180);
-        const height = Number(node.position?.height ?? node.height ?? 64);
-        const x = Number(node.position?.x ?? node.x ?? 0);
-        const y = Number(node.position?.y ?? node.y ?? 0);
         const label = String(node.label ?? node.id ?? '');
         const labelLines =
           Array.isArray(node.labelLines) && node.labelLines.length > 0
             ? node.labelLines
             : wrapZoomLabel(label);
         const badges = Array.isArray(node.badges) ? node.badges : [];
+        const longest = labelLines.reduce((m, l) => Math.max(m, String(l).length), 0);
+        const computedW = Math.min(440, Math.max(180, Math.round(longest * 8.2 + 44)));
+        const computedH = Math.min(
+          320,
+          Math.max(64, Math.max(1, labelLines.length) * 17 + (badges.length > 0 ? 16 : 0) + 30),
+        );
+        const width = Number(node.position?.width ?? node.width ?? computedW);
+        const height = Number(node.position?.height ?? node.height ?? computedH);
+        const x = Number(node.position?.x ?? node.x ?? 0);
+        const y = Number(node.position?.y ?? node.y ?? 0);
         return {
           ...node,
           label,
