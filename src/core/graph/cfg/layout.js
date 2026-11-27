@@ -13,52 +13,52 @@
 import { BACK_EDGE_KINDS } from './kinds.js';
 
 export const CFG_LAYOUT_DEFAULTS = Object.freeze({
-  horizontalGap: 64,
-  verticalGap: 52,
-  padding: 32,
+  horizontalGap: 72,
+  verticalGap: 56,
+  padding: 36,
   maxRank: 400,
 });
 
 const NODE_SIZES = Object.freeze({
   entry: { width: 150, height: 48 },
   exit: { width: 130, height: 48 },
-  condition: { width: 160, height: 52 },
-  multiway: { width: 180, height: 56 },
+  condition: { width: 170, height: 56 },
+  multiway: { width: 185, height: 58 },
   merge: { width: 120, height: 44 },
-  loop_header: { width: 170, height: 52 },
-  loop_latch: { width: 160, height: 44 },
+  loop_header: { width: 175, height: 56 },
+  loop_latch: { width: 160, height: 48 },
   loop_body_entry: { width: 160, height: 48 },
-  catch_entry: { width: 140, height: 48 },
-  finally_entry: { width: 140, height: 48 },
-  return: { width: 170, height: 48 },
-  throw: { width: 150, height: 48 },
-  call: { width: 200, height: 56 },
-  await: { width: 160, height: 48 },
-  unmodeled: { width: 200, height: 56 },
-  unreachable: { width: 200, height: 52 },
+  catch_entry: { width: 145, height: 48 },
+  finally_entry: { width: 145, height: 48 },
+  return: { width: 175, height: 50 },
+  throw: { width: 155, height: 50 },
+  call: { width: 210, height: 58 },
+  await: { width: 165, height: 50 },
+  unmodeled: { width: 205, height: 58 },
+  unreachable: { width: 205, height: 54 },
   break: { width: 140, height: 44 },
   continue: { width: 150, height: 44 },
-  statement: { width: 190, height: 52 },
+  statement: { width: 195, height: 54 },
 });
 
-const LABEL_CHAR_WIDTH = 7;
-const LABEL_LINE_HEIGHT = 15;
+const LABEL_CHAR_WIDTH = 8.4;
+const LABEL_LINE_HEIGHT = 17;
 
 const SHAPE_METRICS = Object.freeze({
-  entry: { textScale: 1.18, horizontalPadding: 34, verticalPadding: 18 },
-  exit: { textScale: 1.18, horizontalPadding: 34, verticalPadding: 18 },
-  condition: { textScale: 1.72, horizontalPadding: 54, verticalPadding: 30 },
-  multiway: { textScale: 1.32, horizontalPadding: 44, verticalPadding: 24 },
-  loop_header: { textScale: 1.28, horizontalPadding: 42, verticalPadding: 24 },
-  loop_latch: { textScale: 1.18, horizontalPadding: 36, verticalPadding: 20 },
-  loop_body_entry: { textScale: 1.08, horizontalPadding: 28, verticalPadding: 20 },
-  return: { textScale: 1.34, horizontalPadding: 46, verticalPadding: 22 },
-  throw: { textScale: 1.34, horizontalPadding: 46, verticalPadding: 22 },
-  call: { textScale: 1.12, horizontalPadding: 38, verticalPadding: 22 },
-  await: { textScale: 1.12, horizontalPadding: 38, verticalPadding: 22 },
-  merge: { textScale: 1.12, horizontalPadding: 30, verticalPadding: 18 },
-  unmodeled: { textScale: 1.05, horizontalPadding: 28, verticalPadding: 22 },
-  unreachable: { textScale: 1.05, horizontalPadding: 28, verticalPadding: 22 },
+  entry: { textScale: 1.18, horizontalPadding: 40, verticalPadding: 22 },
+  exit: { textScale: 1.18, horizontalPadding: 40, verticalPadding: 22 },
+  condition: { textScale: 1.85, horizontalPadding: 64, verticalPadding: 38 },
+  multiway: { textScale: 1.38, horizontalPadding: 52, verticalPadding: 28 },
+  loop_header: { textScale: 1.34, horizontalPadding: 48, verticalPadding: 28 },
+  loop_latch: { textScale: 1.24, horizontalPadding: 40, verticalPadding: 24 },
+  loop_body_entry: { textScale: 1.12, horizontalPadding: 34, verticalPadding: 22 },
+  return: { textScale: 1.38, horizontalPadding: 54, verticalPadding: 26 },
+  throw: { textScale: 1.38, horizontalPadding: 54, verticalPadding: 26 },
+  call: { textScale: 1.16, horizontalPadding: 52, verticalPadding: 26 },
+  await: { textScale: 1.16, horizontalPadding: 48, verticalPadding: 26 },
+  merge: { textScale: 1.14, horizontalPadding: 34, verticalPadding: 20 },
+  unmodeled: { textScale: 1.08, horizontalPadding: 34, verticalPadding: 24 },
+  unreachable: { textScale: 1.08, horizontalPadding: 34, verticalPadding: 24 },
 });
 
 /**
@@ -67,9 +67,9 @@ const SHAPE_METRICS = Object.freeze({
  */
 function metricsFor(kind) {
   return SHAPE_METRICS[kind ?? 'statement'] ?? {
-    textScale: 1,
-    horizontalPadding: 24,
-    verticalPadding: 20,
+    textScale: 1.05,
+    horizontalPadding: 32,
+    verticalPadding: 24,
   };
 }
 
