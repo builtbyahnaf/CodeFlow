@@ -133,6 +133,7 @@ export function createPanelWire({
     const dfgCache = createDfgCache(buildDfg);
     /** @type {import('../core/graph/dfg/model.js').Dfg | null} */
     let lastDfg = null;
+    let lastIndexedState = null;
 
     function activeIndexSource() {
       if (!indexProvider) {
@@ -144,15 +145,21 @@ export function createPanelWire({
       return createIndexEvidenceSource(indexProvider);
     }
 
+    function isIndexActive() {
+      return Boolean(indexProvider && (typeof indexProvider.isIndexed !== 'function' || indexProvider.isIndexed()));
+    }
+
     function rebuildCallService() {
       if (!current) {
         callQueryService = null;
         callSession = null;
         zoomSession = null;
         lastDfg = null;
+        lastIndexedState = null;
         dfgCache.clear();
         return;
       }
+      lastIndexedState = isIndexActive();
       callQueryService = createCallGraphQueryService({
         query: current.query,
         indexSource: activeIndexSource(),
@@ -502,7 +509,7 @@ export function createPanelWire({
         );
         return;
       }
-      if (!callSession) {
+      if (!callSession || isIndexActive() !== lastIndexedState) {
         rebuildCallService();
       }
       const symbolId = typeof payload.symbolId === 'string' ? payload.symbolId : '';
@@ -908,7 +915,7 @@ export function createPanelWire({
       if (!loaded.ok) {
         return loaded;
       }
-      if (!zoomSession) {
+      if (!zoomSession || isIndexActive() !== lastIndexedState) {
         rebuildCallService();
       }
       return { ok: true, session: zoomSession };
