@@ -326,7 +326,7 @@ export function createCallGraphSession({ queryService }) {
       return {
         id: node.id,
         label: node.label,
-        labelLines: [node.label],
+        labelLines: node.labelLines ?? [node.label],
         qualifiedName: node.qualifiedName,
         kind: node.kind,
         status: node.status,
