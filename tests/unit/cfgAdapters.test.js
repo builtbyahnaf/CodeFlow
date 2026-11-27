@@ -253,3 +253,31 @@ test('JS: !call() condition does not produce an unresolved call when the callee 
   );
   assert.equal(unresDeg.length, 0, `unexpected degradations: ${JSON.stringify(unresDeg)}`);
 });
+
+test('JS: multi-call object initializer splits DOM calls across wrapped boxes without overflow', () => {
+  const src = `function wireDom() {
+  const ui = {
+    a: document.getElementById('a'),
+    b: document.getElementById('b'),
+    c: document.getElementById('c'),
+    d: document.getElementById('d'),
+  };
+  return ui;
+}
+`;
+  const run = jsRun(src, 'src/dom.js');
+  const cfg = buildCfg(queryFor(run), functionNamed(run, 'wireDom').symbolId);
+  assert.equal(cfg.ok, true);
+  const dto = toCfgDto(cfg.cfg);
+  assert.equal(validateDto(dto).ok, true);
+
+  const getElNodes = dto.nodes.filter((n) => n.label.includes('getElementById'));
+  assert.ok(
+    getElNodes.length >= 4,
+    `expected multi-call object initializer to split into separate call steps, got ${getElNodes.length}`,
+  );
+  for (const node of getElNodes) {
+    assert.ok(node.position.width >= 180);
+    assert.ok(node.labelLines.length >= 1);
+  }
+});
