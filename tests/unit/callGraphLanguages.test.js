@@ -206,9 +206,17 @@ function run(receiver, key, cb) {
   const out = service.outgoing(runSym.symbolId);
   assert.equal(out.ok, true);
 
-  // Only `localTarget(1)` may be `resolved`; dynamic/indirect calls must be possible or unresolved.
+  // `localTarget(1)` is a real in-file target and `setTimeout` is a known
+  // runtime builtin, so both resolve. Dynamic/indirect calls must stay possible
+  // or unresolved and must never invent a resolved edge.
   const resolvedItems = out.items.filter((item) => item.status === 'resolved');
-  assert.equal(resolvedItems.length, 1);
-  assert.equal(resolvedItems[0].name, 'localTarget');
-  assert.ok(out.unresolvedBucket.count >= 2);
+  assert.deepEqual(
+    resolvedItems.map((item) => item.name).sort(),
+    ['localTarget', 'setTimeout'],
+  );
+  assert.equal(out.unresolvedBucket.count, 2);
+  assert.deepEqual(
+    out.unresolvedBucket.reasons.map((entry) => entry.reasonCode).sort(),
+    ['computed_member', 'unknown_receiver'],
+  );
 });
