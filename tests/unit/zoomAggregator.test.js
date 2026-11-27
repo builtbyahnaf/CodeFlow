@@ -190,3 +190,111 @@ test('unindexed runs fall back to run files and L1 file nodes keep a valid fileI
   assert.equal(fileNode.scopeId, 'file:src/a.js');
   assert.equal(fileNode.expandable, true);
 });
+
+test('builtin and standard-library calls do not create unresolved zoom badges', () => {
+  const files = [
+    { fileId: 'file:src/app.js', path: 'src/app.js', language: 'javascript' },
+    { fileId: 'file:lib/util.js', path: 'lib/util.js', language: 'javascript' },
+  ];
+  const symbols = [
+    { symbolId: 'sym:app', name: 'app', qualifiedName: 'app', kind: 'function', fileId: 'file:src/app.js' },
+    { symbolId: 'sym:util', name: 'util', qualifiedName: 'util', kind: 'function', fileId: 'file:lib/util.js' },
+  ];
+  const relationships = [
+    {
+      relationshipId: 'rel:console',
+      from: 'sym:app',
+      to: 'external:global.console.log',
+      type: 'calls',
+      status: 'unresolved',
+      reasonCode: 'out_of_scope',
+    },
+    {
+      relationshipId: 'rel:document',
+      from: 'sym:app',
+      to: 'external:global.document.getElementById',
+      type: 'calls',
+      status: 'unresolved',
+      reasonCode: 'out_of_scope',
+    },
+    {
+      relationshipId: 'rel:stl',
+      from: 'sym:util',
+      to: 'external:std::vector::push_back',
+      type: 'calls',
+      status: 'unresolved',
+      reasonCode: 'out_of_scope',
+    },
+    {
+      relationshipId: 'rel:unknown',
+      from: 'sym:util',
+      to: 'external:mysteryService.run',
+      type: 'calls',
+      status: 'unresolved',
+      reasonCode: 'unknown_receiver',
+    },
+  ];
+
+  const overview = buildWorkspaceOverview({
+    index: {
+      filesUnder: () => ({ items: files }),
+      allSymbols: () => symbols,
+      allRelationships: () => relationships,
+    },
+  });
+
+  const srcCluster = overview.nodes.find((node) => node.scopeId === 'src');
+  const libCluster = overview.nodes.find((node) => node.scopeId === 'lib');
+  assert.ok(srcCluster && libCluster);
+
+  // Only DOM/runtime builtins live in src: the cluster is fully resolved and
+  // must not advertise an unresolved badge.
+  assert.equal(srcCluster.displayStatus, 'resolved');
+  assert.deepEqual(srcCluster.badges, []);
+
+  // lib still contains one genuinely unknown target next to the normalized STL
+  // call, so the honest unresolved badge survives and the aggregate stays mixed
+  // instead of collapsing to a single status.
+  assert.equal(libCluster.displayStatus, 'mixed');
+  assert.ok(libCluster.badges.includes('1 unresolved'));
+});
+
+test('L1 root module view scopes to root files and L2 file view resolves STL calls', () => {
+  const files = [
+    { fileId: 'file:index.js', path: 'index.js', language: 'javascript' },
+    { fileId: 'file:src/main.cpp', path: 'src/main.cpp', language: 'cpp' },
+  ];
+  const symbols = [
+    { symbolId: 'sym:main', name: 'main', qualifiedName: 'main', kind: 'function', fileId: 'file:src/main.cpp' },
+  ];
+  const relationships = [
+    {
+      relationshipId: 'rel:sort',
+      from: 'sym:main',
+      to: 'external:std::sort',
+      type: 'calls',
+      status: 'unresolved',
+      reasonCode: 'out_of_scope',
+    },
+  ];
+  const fakeIndex = {
+    filesUnder: () => ({ items: files }),
+    allSymbols: () => symbols,
+    allRelationships: () => relationships,
+    symbolsInFile: (fid) => ({ items: symbols.filter((s) => s.fileId === fid) }),
+  };
+
+  const rootMod = buildModuleView({ modulePrefix: '.', index: fakeIndex, files });
+  assert.ok(rootMod.nodes.some((n) => n.scopeId === 'file:index.js'));
+  assert.equal(
+    rootMod.nodes.some((n) => n.scopeId === 'file:src/main.cpp'),
+    false,
+    'root L1 view should not dump nested src files as direct root files',
+  );
+
+  const fileView = buildFileView({ fileId: 'file:src/main.cpp', index: fakeIndex });
+  const mainNode = fileView.nodes.find((n) => n.id === 'sym:main');
+  assert.ok(mainNode);
+  assert.equal(mainNode.displayStatus, 'resolved');
+  assert.deepEqual(mainNode.badges, []);
+});
