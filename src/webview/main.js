@@ -98,6 +98,19 @@ const zoomSearch = /** @type {HTMLInputElement|null} */ (
 const zoomChips = /** @type {HTMLElement|null} */ (
   document.getElementById('cf-zoom-chips')
 );
+const zoomPanel = /** @type {HTMLElement|null} */ (document.getElementById('cf-zoom-panel'));
+const zoomMembersTitle = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-zoom-members-title')
+);
+const zoomMembersList = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-zoom-members-list')
+);
+const zoomMembersMore = /** @type {HTMLButtonElement|null} */ (
+  document.getElementById('cf-zoom-members-more')
+);
+const zoomMinimap = /** @type {HTMLElement|null} */ (
+  document.getElementById('cf-zoom-minimap')
+);
 const scopeBanner = /** @type {HTMLElement|null} */ (document.getElementById('cf-scope-banner'));
 const callsPanel = /** @type {HTMLElement|null} */ (document.getElementById('cf-calls-panel'));
 const callsFilterStatus = /** @type {HTMLSelectElement|null} */ (
@@ -660,6 +673,38 @@ function showNodeDetails(nodeId, node) {
   }
 
   detailBody.replaceChildren(list);
+
+  if (currentDto?.dtoKind === 'semantic_zoom') {
+    const actions = document.createElement('div');
+    actions.className = 'cf-detail-actions';
+    actions.style.display = 'flex';
+    actions.style.gap = '6px';
+    actions.style.marginTop = '8px';
+
+    if (node.expandClusterOnly || node.kind === 'file_symbol_cluster' || node.id === 'cluster:dir:__other__') {
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.className = 'cf-button';
+      expandBtn.textContent = 'Show Members';
+      expandBtn.addEventListener('click', () => {
+        void expandZoomCluster(node);
+      });
+      actions.appendChild(expandBtn);
+    } else if (node.expandable !== false && !node.external && node.kind !== 'unresolved_bucket') {
+      const drillBtn = document.createElement('button');
+      drillBtn.type = 'button';
+      drillBtn.className = 'cf-button';
+      drillBtn.textContent = 'Drill Down';
+      drillBtn.addEventListener('click', () => {
+        void descendSemanticZoom(nodeId, node);
+      });
+      actions.appendChild(drillBtn);
+    }
+
+    if (actions.childElementCount > 0) {
+      detailBody.appendChild(actions);
+    }
+  }
 
   if (edges.length > 0) {
     const heading = document.createElement('h3');
@@ -1455,49 +1500,137 @@ window.addEventListener('keydown', (event) => {
  * @param {Record<string, any>} dto
  */
 function updateZoomBar(dto) {
-  if (!zoomBar) {
+  if (zoomBar) {
+    if (dto.dtoKind !== 'semantic_zoom') {
+      zoomBar.hidden = true;
+    } else {
+      zoomBar.hidden = false;
+      if (zoomLevelBadge) {
+        zoomLevelBadge.textContent = dto.level
+          ? (LEVEL_LABELS[dto.level] ?? String(dto.level))
+          : 'Semantic Zoom';
+      }
+      if (zoomBreadcrumbs && Array.isArray(dto.breadcrumbs)) {
+        zoomBreadcrumbs.replaceChildren();
+        for (const [index, crumb] of dto.breadcrumbs.entries()) {
+          const li = document.createElement('li');
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'cf-button';
+          btn.style.padding = '2px 8px';
+          btn.style.fontSize = '11px';
+          btn.textContent = crumb.label || crumb.scopeId || `Level ${index}`;
+          btn.addEventListener('click', async () => {
+            try {
+              const res = await bridge.request('zoom.breadcrumb', { index });
+              handleGraph(res.payload);
+            } catch (e) {
+              setBanner(`Could not navigate breadcrumb: ${e?.message ?? e}`, true);
+            }
+          });
+          li.appendChild(btn);
+          zoomBreadcrumbs.appendChild(li);
+        }
+      }
+      if (zoomChips && Array.isArray(dto.filterChips)) {
+        zoomChips.replaceChildren();
+        for (const chip of dto.filterChips) {
+          const span = document.createElement('span');
+          span.className = 'cf-badge';
+          span.textContent = `${chip.label || chip.kind} (${chip.count ?? 0})`;
+          zoomChips.appendChild(span);
+        }
+      }
+    }
+  }
+
+  if (zoomPanel) {
+    if (dto.dtoKind !== 'semantic_zoom') {
+      zoomPanel.hidden = true;
+    } else {
+      zoomPanel.hidden = false;
+      if (zoomMembersTitle) {
+        zoomMembersTitle.textContent = 'Cluster Members';
+      }
+      if (zoomMembersList) {
+        zoomMembersList.replaceChildren();
+      }
+      if (zoomMembersMore) {
+        zoomMembersMore.hidden = true;
+      }
+      if (zoomMinimap) {
+        const miniNodes = dto.minimap?.nodes ?? [];
+        zoomMinimap.hidden = miniNodes.length === 0;
+        if (miniNodes.length > 0) {
+          zoomMinimap.textContent = `Minimap: ${miniNodes.length} node${miniNodes.length === 1 ? '' : 's'}`;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Expand a cluster node in semantic zoom and populate the sidebar member list.
+ *
+ * @param {Record<string, any>} clusterNode
+ * @param {string|null} [cursor]
+ */
+async function expandZoomCluster(clusterNode, cursor = null) {
+  if (!clusterNode || !zoomPanel || !zoomMembersList) {
     return;
   }
-  if (dto.dtoKind !== 'semantic_zoom') {
-    zoomBar.hidden = true;
-    return;
-  }
-  zoomBar.hidden = false;
-  if (zoomLevelBadge) {
-    zoomLevelBadge.textContent = dto.level
-      ? (LEVEL_LABELS[dto.level] ?? String(dto.level))
-      : 'Semantic Zoom';
-  }
-  if (zoomBreadcrumbs && Array.isArray(dto.breadcrumbs)) {
-    zoomBreadcrumbs.replaceChildren();
-    for (const [index, crumb] of dto.breadcrumbs.entries()) {
+  try {
+    const res = await bridge.request('zoom.expand', {
+      clusterId: clusterNode.id,
+      what: 'members',
+      limit: 25,
+      ...(cursor ? { cursor } : {}),
+    });
+    const payload = res.payload ?? {};
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    zoomPanel.hidden = false;
+    if (zoomMembersTitle) {
+      zoomMembersTitle.textContent = `Members · ${clusterNode.label ?? clusterNode.id}`;
+    }
+    if (!cursor) {
+      zoomMembersList.replaceChildren();
+    }
+    for (const item of items) {
       const li = document.createElement('li');
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cf-button';
-      btn.style.padding = '2px 8px';
-      btn.style.fontSize = '11px';
-      btn.textContent = crumb.label || crumb.scopeId || `Level ${index}`;
-      btn.addEventListener('click', async () => {
-        try {
-          const res = await bridge.request('zoom.breadcrumb', { index });
-          handleGraph(res.payload);
-        } catch (e) {
-          setBanner(`Could not navigate breadcrumb: ${e?.message ?? e}`, true);
+      btn.style.width = '100%';
+      btn.style.textAlign = 'left';
+      btn.textContent = item.label || item.id;
+      btn.addEventListener('click', () => {
+        const targetLevel =
+          item.targetLevel ??
+          (item.kind === 'directory_cluster'
+            ? 'module'
+            : item.kind === 'file'
+              ? 'file'
+              : item.kind === 'function' || item.kind === 'method'
+                ? 'symbol'
+                : null);
+        if (targetLevel) {
+          void descendSemanticZoom(item.id, { ...item, targetLevel, expandable: true });
         }
       });
       li.appendChild(btn);
-      zoomBreadcrumbs.appendChild(li);
+      zoomMembersList.appendChild(li);
     }
-  }
-  if (zoomChips && Array.isArray(dto.filterChips)) {
-    zoomChips.replaceChildren();
-    for (const chip of dto.filterChips) {
-      const span = document.createElement('span');
-      span.className = 'cf-badge';
-      span.textContent = `${chip.label || chip.kind} (${chip.count ?? 0})`;
-      zoomChips.appendChild(span);
+    if (zoomMembersMore) {
+      const nextCursor = payload.nextCursor ?? null;
+      zoomMembersMore.hidden = !nextCursor;
+      zoomMembersMore.onclick = nextCursor
+        ? () => {
+            void expandZoomCluster(clusterNode, nextCursor);
+          }
+        : null;
     }
+  } catch (error) {
+    setBanner(`Could not expand cluster: ${error?.message ?? String(error)}`, true);
   }
 }
 
@@ -1509,10 +1642,32 @@ async function descendSemanticZoom(nodeId, node = nodeById(nodeId)) {
   if (!node) {
     return;
   }
+  if (
+    node.expandClusterOnly ||
+    node.kind === 'file_symbol_cluster' ||
+    node.id === 'cluster:dir:__other__'
+  ) {
+    await expandZoomCluster(node);
+    return;
+  }
+  if (
+    node.expandable === false ||
+    node.targetLevel === null ||
+    node.external ||
+    node.kind === 'unresolved_bucket' ||
+    String(node.id).startsWith('bucket:')
+  ) {
+    showNodeDetails(nodeId, node);
+    return;
+  }
   const currentLevel = currentDto?.level;
   const currentIndex = LEVEL_ORDER.indexOf(String(currentLevel ?? ''));
   const nextLevel =
-    currentIndex >= 0 ? LEVEL_ORDER[currentIndex + 1] : LEVEL_ORDER[1];
+    typeof node.targetLevel === 'string' && node.targetLevel.length > 0
+      ? node.targetLevel
+      : currentIndex >= 0
+        ? LEVEL_ORDER[currentIndex + 1]
+        : LEVEL_ORDER[1];
   if (!nextLevel) {
     setStatus('Already at the most detailed level.');
     return;
