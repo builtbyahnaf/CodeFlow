@@ -324,3 +324,24 @@ test('the truncation notice is stable across a JSON round trip', () => {
   assert.equal(roundTrip.truncated, true);
   assert.ok(roundTrip.degradations.some((entry) => entry.code === 'truncated'));
 });
+
+test('unbroken chained DOM calls wrap across multiple lines and expand box width cleanly', () => {
+  const statement =
+    "domRefs=document.getElementById('alpha'),document.getElementById('beta'),document.getElementById('gamma'),document.getElementById('delta')";
+  const { query, symbolId } = buildProgram({
+    id: 'chained-dom',
+    root: entry([{ kind: 'statement', extensions: { label: statement } }]),
+  });
+  const built = buildCfg(query, symbolId);
+  assert.equal(built.ok, true);
+  const dto = toCfgDto(built.cfg);
+  const node = dto.nodes.find((entry) => entry.label === statement);
+  assert.ok(node);
+  assert.ok(node.labelLines.length >= 2, 'long unbroken chain should wrap onto multiple lines');
+  const longestLine = Math.max(...node.labelLines.map((line) => line.length));
+  assert.ok(
+    node.position.width >= longestLine * 8,
+    `box width ${node.position.width} too small for ${longestLine}-char wrapped line`,
+  );
+  assert.ok(!node.label.includes('…'));
+});
