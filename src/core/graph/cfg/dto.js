@@ -159,27 +159,21 @@ function toEdge(edge) {
 }
 
 /**
- * Wrap a label without dropping any of it. Shapes that are not rectangles
- * (diamonds, hexagons, parallelograms) get a narrower wrap width so the text
- * stays inside the outline.
+ * Wrap a single paragraph without losing any characters. Prefers spaces first;
+ * when an expression has long unbroken call chains (like repeated
+ * `document.getElementById(...)` calls separated by commas or dots), breaks
+ * cleanly after punctuation delimiters inside `maxChars` instead of letting a
+ * single line grow oversized.
  *
- * @param {string} label
- * @param {string} [kind]
+ * @param {string} paragraph
+ * @param {number} maxChars
  * @returns {string[]}
  */
-function labelLines(label, kind = 'statement') {
-  const text = String(label ?? '').replace(/\s+/g, ' ').trim();
+function wrapParagraph(paragraph, maxChars) {
+  const text = paragraph.replace(/[ \t]+/g, ' ').trim();
   if (text.length === 0) {
-    return [''];
+    return [];
   }
-  const maxChars =
-    kind === 'condition'
-      ? 30
-      : kind === 'multiway' || kind === 'loop_header'
-        ? 36
-        : kind === 'entry' || kind === 'exit' || kind === 'return' || kind === 'throw'
-          ? 42
-          : 48;
   if (text.length <= maxChars) {
     return [text];
   }
@@ -190,19 +184,66 @@ function labelLines(label, kind = 'statement') {
   while (rest.length > maxChars) {
     let split = rest.lastIndexOf(' ', maxChars);
     if (split <= 0) {
-      // No break opportunity inside the limit. Prefer the next space so a
-      // long identifier stays whole; fall back to a hard split only when the
-      // token itself is longer than the widest allowed line.
-      const next = rest.indexOf(' ', maxChars);
-      split = next > 0 && next <= Math.floor(maxChars * 1.6) ? next : maxChars;
+      const nextSpace = rest.indexOf(' ', maxChars);
+      if (nextSpace > 0 && nextSpace <= Math.floor(maxChars * 1.75)) {
+        split = nextSpace;
+      } else {
+        // Long unbroken expression (e.g. chained DOM calls with no spaces):
+        // break cleanly right after a delimiter so text still wraps inside box.
+        const windowLimit = Math.min(rest.length - 1, Math.floor(maxChars * 1.4));
+        let punctSplit = -1;
+        for (let i = windowLimit; i >= Math.floor(maxChars * 0.35); i -= 1) {
+          const ch = rest[i];
+          if (ch === ',' || ch === ';' || ch === '(' || ch === '.' || ch === '&' || ch === '|') {
+            punctSplit = i + 1;
+            break;
+          }
+        }
+        split = punctSplit > 0 ? punctSplit : Math.max(maxChars, Math.floor(maxChars * 1.3));
+      }
     }
-    lines.push(rest.slice(0, split).trimEnd());
+    const head = rest.slice(0, split).trimEnd();
+    if (head.length > 0) {
+      lines.push(head);
+    }
     rest = rest.slice(split).trimStart();
   }
   if (rest.length > 0) {
     lines.push(rest);
   }
   return lines;
+}
+
+/**
+ * Wrap a label without dropping any of it. Shapes that are not rectangles
+ * (diamonds, hexagons, parallelograms) get a narrower wrap width so the text
+ * stays inside the outline. Explicit newlines separate paragraphs cleanly.
+ *
+ * @param {string} label
+ * @param {string} [kind]
+ * @returns {string[]}
+ */
+export function labelLines(label, kind = 'statement') {
+  const raw = String(label ?? '').trim();
+  if (raw.length === 0) {
+    return [''];
+  }
+  const maxChars =
+    kind === 'condition'
+      ? 28
+      : kind === 'multiway' || kind === 'loop_header'
+        ? 34
+        : kind === 'entry' || kind === 'exit' || kind === 'return' || kind === 'throw'
+          ? 36
+          : 40;
+
+  const paragraphs = raw.split(/\r?\n/);
+  /** @type {string[]} */
+  const lines = [];
+  for (const para of paragraphs) {
+    lines.push(...wrapParagraph(para, maxChars));
+  }
+  return lines.length > 0 ? lines : [''];
 }
 
 /**
