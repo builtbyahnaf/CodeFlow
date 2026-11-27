@@ -315,13 +315,17 @@ export function buildModuleView(input) {
   const cap = Math.max(4, Math.trunc(Number(input?.cap) || LEVEL_CAPS[ZOOM_LEVELS.L1_MODULE]));
   const indexedFiles = input?.index?.filesUnder?.(prefix === '.' ? '' : prefix)?.items ?? [];
   const allFiles = Array.isArray(input?.files) ? input.files : [];
-  const files =
+  const rawFiles =
     indexedFiles.length > 0
       ? indexedFiles
       : allFiles.filter((file) => {
           const normalized = String(file.path ?? '').replace(/\\/g, '/').replace(/^\/+/, '');
           return prefix === '.' || prefix === '' || normalized.startsWith(`${prefix}/`);
         });
+  const files =
+    prefix === '.' || prefix === ''
+      ? rawFiles.filter((file) => topDirectoryOf(file.path) === '.')
+      : rawFiles;
 
   const indexSymbols = input?.index?.allSymbols?.() ?? [];
   const querySymbols = input?.query?.allSymbols?.();
@@ -330,12 +334,15 @@ export function buildModuleView(input) {
 
   const indexRelationships = input?.index?.allRelationships?.() ?? [];
   const queryRelationships = input?.query?.allRelationships?.();
-  const relationships = normalizeBuiltinCalls(
-    indexRelationships.length > 0
-      ? indexRelationships
-      : queryRelationships?.ok
-        ? queryRelationships.value
-        : [],
+  const relationships = resolveExternalCallsWithSymbols(
+    normalizeBuiltinCalls(
+      indexRelationships.length > 0
+        ? indexRelationships
+        : queryRelationships?.ok
+          ? queryRelationships.value
+          : [],
+    ),
+    symbols,
   );
 
   /** @type {Map<string, {id: string, scopeId: string, label: string, isDirectory: boolean, files: Array<Record<string, any>>, rels: Array<Record<string, any>>}>} */
@@ -398,9 +405,11 @@ export function buildModuleView(input) {
       id: grp.id,
       kind: grp.isDirectory ? 'directory_cluster' : 'file',
       level: ZOOM_LEVELS.L1_MODULE,
+      targetLevel: grp.isDirectory ? ZOOM_LEVELS.L1_MODULE : ZOOM_LEVELS.L2_FILE,
       scopeId: grp.scopeId,
       label: grp.isDirectory ? `${grp.label} (${grp.files.length} files)` : grp.label,
       fileCount: grp.files.length,
+      status: statusMix.displayStatus,
       statusMix,
       displayStatus: statusMix.displayStatus,
       completeness: statusMix.completeness,
