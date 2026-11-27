@@ -670,6 +670,9 @@ export function calleeNameFromTarget(target) {
   if (id.startsWith('external:global.')) {
     return id.slice('external:global.'.length);
   }
+  if (id.startsWith('external:member.')) {
+    return id.slice('external:member.'.length);
+  }
   if (id.startsWith('external:')) {
     return id.slice('external:'.length);
   }
