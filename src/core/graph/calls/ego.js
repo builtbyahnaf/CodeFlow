@@ -9,8 +9,10 @@
 
 import { computeLayout } from '../layout.js';
 import { GRAPH_DTO_VERSION } from '../dto.js';
+import { labelLines as wrapCfgLabelLines } from '../cfg/dto.js';
 import { CALL_LIMITS, callEdgeDash, callEdgeGlyph, formatScopeBanner } from './kinds.js';
 import { detectCallCycles } from './cycles.js';
+import { isKnownBuiltinCall } from '../builtins.js';
 
 /**
  * Create an interactive call-graph session backed by a `CallGraphQueryService`.
@@ -154,17 +156,27 @@ export function createCallGraphSession({ queryService }) {
     const rawNodes = [];
     for (const nodeId of [...activeNodeIds].sort()) {
       const sym = symbolById.get(nodeId);
+      const rawExternalName = String(nodeId).startsWith('external:')
+        ? String(nodeId)
+            .slice('external:'.length)
+            .replace(/^(?:global\.|member\.|module:|require:)/, '')
+        : '';
       const label =
         sym?.name ||
         sym?.qualifiedName ||
-        String(nodeId)
-          .split(/[.:/#]/)
-          .filter(Boolean)
-          .pop() ||
+        (rawExternalName && rawExternalName.includes('::')
+          ? rawExternalName
+          : String(nodeId)
+              .split(/[.:/#]/)
+              .filter(Boolean)
+              .pop()) ||
         nodeId;
-      const incomingEdgeStatuses = [...activeEdges.values()]
-        .filter((e) => e.to === nodeId || e.from === nodeId)
-        .map((e) => e.status);
+      const incomingEdges = [...activeEdges.values()].filter(
+        (e) => e.to === nodeId || e.from === nodeId,
+      );
+      const incomingEdgeStatuses = incomingEdges.map((e) => e.status);
+      const isBuiltin = !sym && isKnownBuiltinCall(nodeId, label);
+      const hasWorkspaceMatch = incomingEdges.some((e) => e.reasonCode === 'workspace_index');
       const status =
         nodeId === centerSymbolId
           ? sym?.stale
@@ -172,16 +184,23 @@ export function createCallGraphSession({ queryService }) {
             : 'resolved'
           : sym?.stale
             ? 'stale'
-            : incomingEdgeStatuses.includes('resolved')
+            : incomingEdgeStatuses.includes('resolved') || isBuiltin
               ? 'resolved'
               : (incomingEdgeStatuses[0] ?? (sym ? 'resolved' : 'unresolved'));
+      const nodeBadge = isBuiltin
+        ? 'stdlib'
+        : !sym && hasWorkspaceMatch
+          ? 'indexed'
+          : '';
 
       rawNodes.push({
         id: nodeId,
         label,
-        qualifiedName: sym?.qualifiedName || label,
-        kind: sym?.kind ?? 'unknown',
+        labelLines: wrapCfgLabelLines(label, 'statement'),
+        qualifiedName: sym?.qualifiedName || (rawExternalName || label),
+        kind: sym?.kind ?? (isBuiltin ? 'function' : 'unknown'),
         status,
+        badge: nodeBadge,
         range: sym?.declaration ?? null,
         fileId: sym?.declaration?.fileId ?? null,
         external: !sym,
