@@ -12,6 +12,8 @@
   --cf-status-possible: var(--vscode-charts-yellow, #d7ba7d);
   --cf-status-unresolved: var(--vscode-errorForeground, #f14c4c);
   --cf-status-stale: var(--vscode-disabledForeground, #8a8a8a);
+  --cf-status-mixed: var(--vscode-charts-orange, #d18616);
+  --cf-status-empty: var(--vscode-descriptionForeground, #9d9d9d);
 
   --cf-font: var(--vscode-font-family, 'Segoe UI', sans-serif);
   --cf-mono: var(--vscode-editor-font-family, 'Consolas', monospace);
@@ -373,6 +375,16 @@ body {
   stroke-dasharray: 1 4;
 }
 
+.cf-edge--mixed {
+  stroke: var(--cf-status-mixed);
+  stroke-dasharray: 6 3;
+}
+
+.cf-edge--empty {
+  stroke: var(--cf-status-empty);
+  stroke-dasharray: 2 4;
+}
+
 .cf-edge.is-active {
   stroke-width: 2.6;
 }
@@ -413,6 +425,19 @@ body {
   stroke-dasharray: 1 4;
 }
 
+/* Aggregates never collapse to a single member status. `mixed` means the
+   cluster contains more than one status; `empty` means it has no relationship
+   evidence at all (for example a variable symbol). */
+.cf-node--mixed .cf-node-box {
+  stroke: var(--cf-status-mixed);
+  stroke-dasharray: 6 3;
+}
+
+.cf-node--empty .cf-node-box {
+  stroke: var(--cf-status-empty);
+  stroke-dasharray: 2 4;
+}
+
 .cf-node--external .cf-node-box {
   fill: transparent;
   stroke-dasharray: 2 4;
@@ -439,10 +464,31 @@ body {
 }
 
 .cf-node-badge {
-  fill: var(--cf-status-unresolved);
+  fill: var(--cf-muted);
   font-family: var(--cf-font);
   font-size: 9px;
   pointer-events: none;
+}
+
+.cf-node--unresolved .cf-node-badge,
+.cf-node--stale .cf-node-badge {
+  fill: var(--cf-status-unresolved);
+}
+
+.cf-node--resolved .cf-node-badge {
+  fill: var(--cf-status-resolved);
+}
+
+.cf-zoom-panel {
+  border-top: 1px solid var(--cf-border);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.cf-zoom-minimap {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--cf-muted);
 }
 
 .cf-edge-label {
